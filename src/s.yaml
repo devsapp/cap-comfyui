@@ -1,0 +1,66 @@
+edition: 3.0.0 #  命令行YAML规范版本，遵循语义化版本（Semantic Versioning）规范
+name: cap-comfyui
+access: '{{ access }}'
+vars:
+  region: '{{ region }}'
+  name: '{{ name }}'
+  imageUrl: "registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:fc-comfyui-{{ if type==='纯净版' }}lite-v2{{ else if type==='黏土风格' }}clay-v1{{ else if type === '冰冻一切' }}ice-v1{{ else if type === 'flux' }}flux-v1{{ else }}sd1.5-v2{{ /if }}"
+  logConfig: false
+
+resources:
+  comfyui:
+    component: model
+    props:
+      region: ${vars.region}
+      name: '${vars.name}'
+      description: 'ComfyUI 函数'
+      logConfig: '${vars.logConfig}'
+      modelConfig:
+        sourceType: custom-container
+
+      # 实例规格
+      timeout: 600
+      diskSize: 512
+      cpu: 8
+      memorySize: 32768
+      instanceConcurrency: 200
+      gpuConfig:
+        gpuMemorySize: 16384
+        gpuType: fc.gpu.tesla.1
+
+      # 运行时
+      runtime: custom-container
+      customContainerConfig:
+        port: 9000
+        image: ${vars.imageUrl} 
+        instanceConcurrency: 200
+
+      httpTrigger: auto
+
+
+  gateway:
+    component: fc3
+    actions:
+    props:
+      region: '${vars.region}'
+      functionName: '${vars.name}__gateway'
+      description: '网关函数'
+      timeout: 3600
+      diskSize: 512
+      runtime: custom
+      cpu: 1
+      memorySize: 1024
+      instanceConcurrency: 200
+      code: dist
+      customRuntimeConfig:
+        port: 9000
+        command:
+          - ./gateway
+      environmentVariables:
+        ENDPOINT: '${resources.comfyui.info.urlInternet}'
+      customDomain:
+        protocol: "HTTP"
+        route:
+          path: "/*"
+          qualifier: "LATEST"
+        domainName: auto

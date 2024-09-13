@@ -1,0 +1,51 @@
+Edition: 3.0.0
+Type: Project
+Name: cap-comfyui
+Provider:
+  - 阿里云 
+Version: dev 
+Description: 部署 ComfyUI 到阿里云云应用开发平台
+HomePage: https://github.com/OhYee/fc-comfyui
+Tags: 
+  - 部署函数
+Category: 人工智能
+Service:
+  函数计算:
+    Runtime: custom
+  日志服务:
+    Authorities:
+      - AliyunFCServerlessDevsRolePolicy 
+    Description: 收集函数日志
+Effective: Public
+Parameters:
+  type: object
+  additionalProperties: false # 不允许增加其他属性
+  required: # 必填项
+    - region
+    - name
+    - type
+  properties:
+    region:
+      title: 地域
+      type: string
+      default: cn-hangzhou
+      description: 创建应用所在的地区。由于当前模板涉及 Github 以及 HuggingFace 等网站访问，国内部分地区可能无法直接使用
+      enum:
+        - cn-hangzhou
+        - cn-shanghai
+    name:
+      title: 名称
+      type: string
+      default: comfyui-${default-suffix}
+      description: 所有服务将会基于该名称附加不同的随机后缀
+    type:
+      title: 内置模型
+      type: string
+      default: flux
+      description: 内置的模型选择
+      enum:
+        - sd1.5
+        - 纯净版
+        - 黏土风格
+        - 冰冻一切
+        - flux

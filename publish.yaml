@@ -3,7 +3,7 @@ Type: Project
 Name: cap-comfyui
 Provider:
   - 阿里云 
-Version: dev 
+Version: 0.0.1
 Description: 部署 ComfyUI 到阿里云云应用开发平台
 HomePage: https://github.com/OhYee/fc-comfyui
 Tags: 
@@ -49,3 +49,12 @@ Parameters:
         - 黏土风格
         - 冰冻一切
         - flux
+    gpu:
+      title: 显卡类型
+      type: string
+      default: fc.gpu.tesla.1
+      description: 显卡类型（默认会为您选择对应规格最大配置的机器）
+      enum:
+        - fc.gpu.tesla.1
+        # - fc.gpu.ampere.1
+        # - fc.gpu.ada.1

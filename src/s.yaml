@@ -26,7 +26,7 @@ resources:
       instanceConcurrency: 200
       gpuConfig:
         gpuMemorySize: 16384
-        gpuType: fc.gpu.tesla.1
+        gpuType: '{{gpu}}'
 
       # 运行时
       runtime: custom-container

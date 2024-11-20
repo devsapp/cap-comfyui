@@ -6,6 +6,7 @@ vars:
   name: '{{ name }}'
   imageUrl: "registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:fc-comfyui-{{ if type==='纯净版' }}lite-v2{{ else if type==='黏土风格' }}clay-v1{{ else if type === '冰冻一切' }}ice-v1{{ else if type === 'flux' }}flux-v1{{ else }}sd1.5-v2{{ /if }}"
   logConfig: false
+  role: "acs:ram::${config('AccountID')}:role/aliyundevsdefaultrole"
 
 resources:
   comfyui:
@@ -17,6 +18,7 @@ resources:
       logConfig: '${vars.logConfig}'
       modelConfig:
         sourceType: custom-container
+      role: '${vars.role}'
 
       # 实例规格
       timeout: 600

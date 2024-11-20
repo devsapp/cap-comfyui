@@ -3,7 +3,7 @@ Type: Project
 Name: cap-comfyui
 Provider:
   - 阿里云 
-Version: 0.0.1
+Version: 0.0.2
 Description: 部署 ComfyUI 到阿里云云应用开发平台
 HomePage: https://github.com/OhYee/fc-comfyui
 Tags: 

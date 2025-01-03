@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 特定目录
+# 文件目录总览
 # - /built-in: 内置文件目录
 # -- models: 内置模型，/root/comfyui/models/checkpoints/xxx.safetensors -> /built-in/models/checkpoints/xxx.safetensors
 # -- snapshot.tar: 包含comfyui目录 + venv目录
@@ -32,9 +32,25 @@ if [ "${IMAGE_TAG}" != "${IMAGE_TAG_MNT}" ]; then
   echo -n ${IMAGE_TAG} > ${MNT_DIR}/IMAGE_TAG
 fi
 
-set_start_time
-tar -xf ${BUILT_IN_DIR}/snapshot.tar
-show_cost_time
+if [ -e "${MNT_DIR}/snapshots/snapshot.tar" ]; then
+  # 优先使用用户挂载的存储中的快照
+  echo "Downloading snapshot..."
+  set_start_time
+  cp ${MNT_DIR}/snapshots/snapshot.tar .
+  show_cost_time
+
+  echo "Unpacking snapshot..."
+  set_start_time
+  tar -xf snapshot.tar
+  show_cost_time
+  rm snapshot.tar
+else
+  # 否则使用内置的快照
+  echo "Unpacking snapshot..."
+  set_start_time
+  tar -xf ${BUILT_IN_DIR}/snapshot.tar
+  show_cost_time
+fi
 
 mkdir -p ${MNT_DIR}/input
 mkdir -p ${MNT_DIR}/output

@@ -65,9 +65,9 @@ ENV COMFYUI_DIR="/root/comfyui"
 ARG IMAGE_TAG="${IMAGE_TAG}"
 ENV IMAGE_TAG=${IMAGE_TAG}
 
-COPY built-in/ ${BUILT_IN_DIR}/
 COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=snapshots /root/snapshot.tar ${BUILT_IN_DIR}/snapshot.tar
+COPY built-in/ ${BUILT_IN_DIR}/
 
 RUN chmod +x ${BUILT_IN_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "${BUILT_IN_DIR}/entrypoint.bash" ]

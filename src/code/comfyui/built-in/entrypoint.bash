@@ -7,8 +7,8 @@
 # - /root: 工作目录
 # -- comfyui
 # -- venv: 依赖目录
-# - /mnt: 挂载目录，NAS or OSS
-# -- models: 用户模型，/root/comfyui/models -> /mnt/models
+# - /mnt/auto: 挂载目录，NAS or OSS
+# -- models: 用户模型，/root/comfyui/models -> /mnt/auto/models
 # -- snapshots: (comfyui+venv)的快照目录，snapshot-20250101175933.tar
 # -- input: 输入图片
 # -- output: 输出图片

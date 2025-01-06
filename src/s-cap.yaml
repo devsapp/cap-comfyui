@@ -1,0 +1,61 @@
+edition: 3.0.0 #  命令行YAML规范版本，遵循语义化版本（Semantic Versioning）规范
+name: cap-comfyui
+access: "quanxi-zijian"
+
+vars:
+  region: "us-east-1"
+  prefix: "zijian-test"
+  functionName: "comfyui"
+  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v6"
+  extraArgs: ""
+
+resources:
+  comfyui:
+    component: fc3
+    props:
+      region: "${vars.region}"
+      handler: index.handler
+      description: 'ComfyUI 函数'
+      timeout: 7200
+      diskSize: 61440
+      internetAccess: true
+      functionName: "${vars.prefix}__${vars.functionName}"
+      gpuConfig:
+        gpuMemorySize: 16384
+        gpuType: fc.gpu.tesla.1
+      runtime: custom-container
+      cpu: 8
+      customContainerConfig:
+        image: ${vars.imageUrl}
+        port: 8188
+      instanceConcurrency: 200
+      memorySize: 32768
+      environmentVariables:
+        EXTRA_ARGS: "${vars.extraArgs}"
+      vpcConfig:
+        securityGroupId: sg-0xi1tt3egernm2auk3al
+        vpcId: vpc-0xipbjyz6b3a24mz21bur
+        vSwitchIds:
+          - vsw-0xidb3dbc6cghnn98s6ln
+      nasConfig:
+        groupId: 0
+        mountPoints:
+          - enableTLS: false
+            serverAddr: >-
+              13ac804a096-ajk81.us-east-1.nas.aliyuncs.com:/sd-project-0
+            mountDir: /mnt/auto
+        userId: 0
+      triggers:
+        - triggerConfig:
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            authType: anonymous
+            disableURLInternet: false
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http

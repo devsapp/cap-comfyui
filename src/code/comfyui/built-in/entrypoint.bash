@@ -21,6 +21,7 @@ function show_cost_time() {
   echo "$START_TIME $(date '+%s.%N')" | awk "{printf \"$1, cost %f seconds\n\", \$2 - \$1}"
 }
 
+echo "Mount dir: ${MNT_DIR}"
 echo "Built-in dir: ${BUILT_IN_DIR}"
 IMAGE_TAG=$(cat /IMAGE_TAG)
 IMAGE_TAG_MNT=$(cat ${MNT_DIR}/IMAGE_TAG 2>/dev/null || echo '')

@@ -5,8 +5,8 @@ access: "quanxi-zijian"
 vars:
   region: "us-east-1"
   prefix: "zijian-test"
-  functionName: "comfyui"
-  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v6"
+  functionName: "comfyui-auto"
+  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v7"
   extraArgs: ""
 
 resources:
@@ -32,19 +32,22 @@ resources:
       memorySize: 32768
       environmentVariables:
         EXTRA_ARGS: "${vars.extraArgs}"
-      vpcConfig:
-        securityGroupId: sg-0xi1tt3egernm2auk3al
-        vpcId: vpc-0xipbjyz6b3a24mz21bur
-        vSwitchIds:
-          - vsw-0xidb3dbc6cghnn98s6ln
-      nasConfig:
-        groupId: 0
-        mountPoints:
-          - enableTLS: false
-            serverAddr: >-
-              13ac804a096-ajk81.us-east-1.nas.aliyuncs.com:/sd-project-0
-            mountDir: /mnt/auto
-        userId: 0
+        MNT_DIR: "/mnt/${vars.functionName}"
+#      vpcConfig:
+#        securityGroupId: sg-0xi1tt3egernm2auk3al
+#        vpcId: vpc-0xipbjyz6b3a24mz21bur
+#        vSwitchIds:
+#          - vsw-0xidb3dbc6cghnn98s6ln
+#      nasConfig:
+#        groupId: 0
+#        mountPoints:
+#          - enableTLS: false
+#            serverAddr: >-
+#              13ac804a096-ajk81.us-east-1.nas.aliyuncs.com:/sd-project-0
+#            mountDir: /mnt/auto
+#        userId: 0
+      vpcConfig: auto
+      nasConfig: auto
       triggers:
         - triggerConfig:
             methods:

@@ -60,7 +60,6 @@ RUN --mount=type=cache,target=/var/cache/apt \
     gcc g++ unzip build-essential
 
 ENV BUILT_IN_DIR="/built-in"
-ENV MNT_DIR="/mnt/auto"
 ENV COMFYUI_DIR="/root/comfyui"
 ARG IMAGE_TAG="${IMAGE_TAG}"
 ENV IMAGE_TAG=${IMAGE_TAG}

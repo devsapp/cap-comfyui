@@ -2,14 +2,14 @@ FROM alpine/git:2.36.2 AS codes
 
 WORKDIR /root
 
-ENV COMFYUI="/root/comfyui"
+ENV COMFYUI_DIR="/root/comfyui"
 
-RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI} && \
-    cd ${COMFYUI} && \
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
+    cd ${COMFYUI_DIR} && \
     git checkout "v0.3.10"
 
 # add built-in custom-nodes
-RUN cd ${COMFYUI}/custom_nodes && \
+RUN cd ${COMFYUI_DIR}/custom_nodes && \
     git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
     cd ComfyUI-Manager && \
     git checkout "3.3"
@@ -20,13 +20,13 @@ RUN apt update && apt install -y aria2
 
 COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
 
-FROM python:3.10.16-slim AS snapshots
+FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root
 
-ENV COMFYUI="/root/comfyui"
+ENV COMFYUI_DIR="/root/comfyui"
 
-COPY --from=codes ${COMFYUI} ${COMFYUI}
+COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 
 # 升级pip并初始化venv虚拟环境
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -40,14 +40,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # 安装 源码 所使用的依赖
 RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
+    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
 
 # issue: 历史原因，被某插件使用 @ohyee
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir onnxruntime-gpu \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
-
-RUN tar -cf snapshot.tar venv comfyui
 
 FROM python:3.10.16-slim AS base
 
@@ -61,11 +59,14 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 ENV BUILT_IN_DIR="/built-in"
 ENV COMFYUI_DIR="/root/comfyui"
+ENV VENV_DIR="/root/venv"
+# MNT_DIR is initialized in s.yaml
 ARG IMAGE_TAG="${IMAGE_TAG}"
 ENV IMAGE_TAG=${IMAGE_TAG}
 
 COPY --from=models /models ${BUILT_IN_DIR}/models
-COPY --from=snapshots /root/snapshot.tar ${BUILT_IN_DIR}/snapshot.tar
+COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
+COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY built-in/ ${BUILT_IN_DIR}/
 
 RUN chmod +x ${BUILT_IN_DIR}/entrypoint.bash

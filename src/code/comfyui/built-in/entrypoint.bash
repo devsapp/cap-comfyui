@@ -3,12 +3,13 @@
 # 文件目录总览
 # - /built-in: 内置文件目录
 # -- models: 内置模型，/root/comfyui/models/checkpoints/xxx.safetensors -> /built-in/models/checkpoints/xxx.safetensors
-# -- snapshot.tar: 包含comfyui目录 + venv目录
+
 # - /root: 工作目录
 # -- comfyui
 # -- venv: 依赖目录
-# - /mnt/auto: 挂载目录，NAS or OSS
-# -- models: 用户模型，/root/comfyui/models -> /mnt/auto/models
+
+# - /mnt/${functionName}: 挂载目录，NAS or OSS
+# -- models: 用户模型，/root/comfyui/models -> /mnt/${functionName}/models
 # -- snapshots: (comfyui+venv)的快照目录，snapshot-20250101175933.tar
 # -- input: 输入图片
 # -- output: 输出图片
@@ -38,19 +39,14 @@ if [ -e "${MNT_DIR}/snapshots/snapshot.tar" ]; then
   echo "Downloading snapshot..."
   set_start_time
   cp ${MNT_DIR}/snapshots/snapshot.tar .
-  show_cost_time
+  show_cost_time "Downloaded snapshot"
 
   echo "Unpacking snapshot..."
+  rm -rf comfyui venv
   set_start_time
   tar -xf snapshot.tar
-  show_cost_time
+  show_cost_time  "Unpacked snapshot"
   rm snapshot.tar
-else
-  # 否则使用内置的快照
-  echo "Unpacking snapshot..."
-  set_start_time
-  tar -xf ${BUILT_IN_DIR}/snapshot.tar
-  show_cost_time
 fi
 
 mkdir -p ${MNT_DIR}/input

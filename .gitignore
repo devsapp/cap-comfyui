@@ -1,2 +1,6 @@
-src/dist
-/.idea/**
+**/venv
+**/.idea
+**/.pytest_cache
+**/__pycache__
+**/*.pyc
+**/dist

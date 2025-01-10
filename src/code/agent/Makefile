@@ -10,6 +10,7 @@ all: build login push
 .PHONY: build
 build:
 	docker build -t $(IMAGE_NAME):$(TAG) .
+	docker tag $(IMAGE_NAME):$(TAG) agent
 
 # 登录镜像仓库
 .PHONY: login

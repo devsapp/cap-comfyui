@@ -125,8 +125,3 @@ def extract(tar_file_path, output_dir=None):
     except Exception as e:
         print(f"Failed to extract tar, reason: {e}")
         raise
-
-
-if __name__ == "__main__":
-    compress("./test.tar", "../code/", ["Dockerfile", "requirements.txt"])
-    extract("./test.tar", "/")

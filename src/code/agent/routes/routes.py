@@ -1,6 +1,7 @@
 import logging
 from flask import Flask, request, jsonify
-from services import comfyui_process
+from services import apis
+
 
 class Routes:
     def __init__(self):
@@ -53,7 +54,7 @@ class Routes:
         @self._app.route("/management/start", methods=["POST"])
         def start():
             # TODO: 异步 + 服务状态
-            comfyui_process.start()
+            apis.start()
             return jsonify({
                 "status": "success",
                 "message": "start"
@@ -70,7 +71,7 @@ class Routes:
         @self._app.route("/management/save", methods=["POST"])
         def save():
             # TODO: 异步 + 上传状态
-            comfyui_process.save()
+            apis.save()
             return jsonify({
                 "status": "success",
                 "message": "save"

@@ -10,7 +10,6 @@ all: build login push
 .PHONY: build
 build:
 	docker build -t $(IMAGE_NAME):$(TAG) .
-	docker tag $(IMAGE_NAME):$(TAG) agent
 
 # 登录镜像仓库
 .PHONY: login
@@ -24,8 +23,8 @@ push:
 
 .PHONY: test
 test:
-	docker run -it --rm -p 9000:9000 -p 8188:8188 $(IMAGE_NAME):$(TAG)
+	docker run --gpus all -it --rm -p 9000:9000 -p 8188:8188 $(IMAGE_NAME):$(TAG)
 
 .PHONY: test-debug
 test-debug:
-	docker run -it --rm -p 9000:9000 -p 8188:8188 --entrypoint /bin/bash $(IMAGE_NAME):$(TAG)
+	docker run --gpus all -it --rm -p 9000:9000 -p 8188:8188 --entrypoint /bin/bash $(IMAGE_NAME):$(TAG)

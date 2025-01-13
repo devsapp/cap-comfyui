@@ -1,5 +1,7 @@
 import logging
-from flask import Flask, request, jsonify
+import requests
+from flask import Flask, request, jsonify, Response
+import constants
 from services import apis
 
 
@@ -88,8 +90,8 @@ class Routes:
         @self._app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         @self._app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         def catch_all(path=""):
-            print(f"Redirecting request for path: {path}")
-            return "", 200
+            print(f"Forwarding request for path: {path}")
+            return _forward_requests(path)
 
         @self._app.errorhandler(Exception)
         def handle_error(error):
@@ -98,3 +100,36 @@ class Routes:
                 "status": "error",
                 "message": "Internal server error"
             }), 500
+
+
+def _forward_requests(path):
+    """处理所有请求的代理转发"""
+    target_url = f"{constants.COMFYUI_HOST}/{path}"
+
+    # 转发请求头
+    headers = {key: value for key, value in request.headers if key != 'Host'}
+
+    # 处理请求
+    try:
+        # 转发请求到目标服务器
+        resp = requests.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            data=request.get_data(),
+            cookies=request.cookies,
+            params=request.args,
+            allow_redirects=False,
+            stream=True
+        )
+
+        proxy_response = Response(
+            resp.content,
+            status=resp.status_code,
+            headers=dict(resp.headers)
+        )
+
+        return proxy_response
+
+    except requests.RequestException as e:
+        return {'error': str(e)}, 500

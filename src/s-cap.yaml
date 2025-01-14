@@ -26,7 +26,7 @@ resources:
       cpu: 8
       customContainerConfig:
         image: ${vars.imageUrl}
-        port: 8188
+        port: 9000
       instanceConcurrency: 200
       memorySize: 32768
       environmentVariables:

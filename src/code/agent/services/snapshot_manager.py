@@ -10,6 +10,14 @@ class SnapshotManager:
     def load(self):
         snapshot_path = self._select_snapshot()
         if snapshot_path is not None:
+            # 清理原始工作目录
+            print(f"Clearing work dir...")
+            start_time = time.time()
+            file_ops.remove(constants.WORK_DIR + "/comfyui")
+            file_ops.remove(constants.WORK_DIR + "/venv")
+            execution_time = time.time() - start_time
+            print(f"Cleared work dir, cost {execution_time} s")
+
             # 下载
             print(f"Downloading snapshot...")
             start_time = time.time()

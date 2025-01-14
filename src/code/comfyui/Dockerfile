@@ -24,10 +24,6 @@ FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root
 
-ENV COMFYUI_DIR="/root/comfyui"
-
-COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
-
 # 升级pip并初始化venv虚拟环境
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
@@ -38,14 +34,17 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir torch torchvision torchaudio \
     --extra-index-url https://download.pytorch.org/whl/cu124
 
-# 安装 源码 所使用的依赖
-RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
-
 # issue: 历史原因，被某插件使用 @ohyee
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir onnxruntime-gpu \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+
+ENV COMFYUI_DIR="/root/comfyui"
+COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
+
+# 安装 源码 所使用的依赖
+RUN --mount=type=cache,target=/root/.cache/pip \
+    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
 
 FROM agent AS agent
 

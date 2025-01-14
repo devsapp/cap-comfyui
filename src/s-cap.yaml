@@ -6,8 +6,7 @@ vars:
   region: "us-east-1"
   prefix: "zijian-test"
   functionName: "comfyui-auto"
-  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v8"
-  extraArgs: ""
+  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v11"
 
 resources:
   comfyui:
@@ -31,7 +30,6 @@ resources:
       instanceConcurrency: 200
       memorySize: 32768
       environmentVariables:
-        EXTRA_ARGS: "${vars.extraArgs}"
         MNT_DIR: "/mnt/${vars.prefix}__${vars.functionName}"
 #      vpcConfig:
 #        securityGroupId: sg-0xi1tt3egernm2auk3al

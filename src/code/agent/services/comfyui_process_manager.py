@@ -5,6 +5,7 @@ from services.process_manager import ProcessManager
 
 
 class ComfyuiProcessManager(ProcessManager):
+    # TODO: Comfyui进程重启问题
     def is_ready(self) -> bool:
         """
         检查进程是否就绪，通过检查对应端口是否已被监听来判断comfyui进程是否已启动完成

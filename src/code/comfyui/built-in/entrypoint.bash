@@ -23,14 +23,6 @@
 # ---- comfyui
 # ---- venv.tar
 
-function set_start_time() {
-  START_TIME=$(date '+%s.%N')
-}
-
-function show_cost_time() {
-  echo "$START_TIME $(date '+%s.%N')" | awk "{printf \"$1, cost %f seconds\n\", \$2 - \$1}"
-}
-
 echo "Mount dir: ${MNT_DIR}"
 echo "Built-in dir: ${BUILT_IN_DIR}"
 IMAGE_TAG=$(cat /IMAGE_TAG)
@@ -54,13 +46,13 @@ mkdir -p ${MNT_DIR}/input
 mkdir -p ${MNT_DIR}/output
 mkdir -p ${MNT_DIR}/snapshots
 
-# 启动(非agent模式)
-source venv/bin/activate
-echo "Using python venv, python path '$(which python)', pip path '$(which pip)'... "
-CLI_ARGS="${CLI_ARGS:---listen 0.0.0.0 --input-directory ${MNT_DIR}/input --output-directory ${MNT_DIR}/output --temp-directory ${MNT_DIR}/output}"
-EXTRA_ARGS="${EXTRA_ARGS:-}"
-export ARGS="${CLI_ARGS} ${EXTRA_ARGS}"
-python comfyui/main.py ${ARGS}
+## 启动(非agent模式)
+#source venv/bin/activate
+#echo "Using python venv, python path '$(which python)', pip path '$(which pip)'... "
+#CLI_ARGS="${CLI_ARGS:---listen 0.0.0.0 --input-directory ${MNT_DIR}/input --output-directory ${MNT_DIR}/output --temp-directory ${MNT_DIR}/output}"
+#EXTRA_ARGS="${EXTRA_ARGS:-}"
+#export ARGS="${CLI_ARGS} ${EXTRA_ARGS}"
+#python comfyui/main.py ${ARGS}
 
 # 启动(agent模式)
 source agent/venv/bin/activate

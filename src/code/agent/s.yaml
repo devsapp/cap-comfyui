@@ -27,7 +27,7 @@ resources:
         gpuMemorySize: 16384
         gpuType: fc.gpu.tesla.1
       internetAccess: true
-      instanceConcurrency: 1
+      instanceConcurrency: 100
       customContainerConfig:
         image: ${vars.imageUrl}
       vpcConfig: auto

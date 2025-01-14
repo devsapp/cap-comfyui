@@ -73,6 +73,7 @@ COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 COPY built-in/ ${BUILT_IN_DIR}/
+# TODO add pip path of venv
 
 RUN chmod +x ${BUILT_IN_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "${BUILT_IN_DIR}/entrypoint.bash" ]

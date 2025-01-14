@@ -5,84 +5,68 @@ from flask import Flask, request, jsonify, Response
 from flask_sock import Sock
 import websocket
 import constants
-from services import apis
+from services.comfyui_service import ComfyuiService
+import traceback
 
 
 class Routes:
     def __init__(self):
         self.app = Flask(__name__)
         self._sock = Sock(self.app)
+        self._comfyui = ComfyuiService()
         self.setup_routes()
 
     def setup_routes(self):
-        """设置所有路由"""
-
-        @self.app.route("/initialize", methods=["POST"])
-        def initialize():
-            # See FC docs for all the HTTP headers: https://www.alibabacloud.com/help/doc-detail/132044.htm#common-headers
-            request_id = request.headers.get("x-fc-request-id", "")
-            print("FC Initialize Start RequestId: " + request_id)
-
-            # do your things
-            # Use the following code to get temporary credentials
-            # access_key_id = request.headers['x-fc-access-key-id']
-            # access_key_secret = request.headers['x-fc-access-key-secret']
-            # access_security_token = request.headers['x-fc-security-token']
-
-            print("FC Initialize End RequestId: " + request_id)
-            return "Function is initialized, request_id: " + request_id + "\n"
-
-        @self.app.route("/invoke", methods=["POST"])
-        def invoke():
-            # See FC docs for all the HTTP headers: https://www.alibabacloud.com/help/doc-detail/132044.htm#common-headers
-            request_id = request.headers.get("x-fc-request-id", "")
-            print("FC Invoke Start RequestId: " + request_id)
-
-            print("hello world！")
-            # Get function input, data type is bytes, convert as needed
-            # event = request.get_data()
-            # event_str = event.decode("utf-8")
-
-            # Use the following code to get temporary STS credentials to access Alibaba Cloud services
-            # access_key_id = request.headers['x-fc-access-key-id']
-            # access_key_secret = request.headers['x-fc-access-key-secret']
-            # access_security_token = request.headers['x-fc-security-token']
-
-            print("FC Invoke End RequestId: " + request_id)
-            return "hello world!"
+        def _handle_exception(e):
+            err_msg = traceback.format_exc()
+            print(f"Error occurred: {str(e)}\nStacktrace:\n{err_msg}")
+            return jsonify({
+                "status": "failed",
+                "message": f"{str(e)}\n{err_msg}"
+            }), 500
 
         @self.app.route("/management/start", methods=["POST"])
         def start():
-            # TODO: 异步 + 服务状态
-            apis.start()
-            return jsonify({
-                "status": "success",
-                "message": "start"
-            }), 200
+            # TODO: 异步
+            try:
+                self._comfyui.start()
+                return jsonify({
+                    "status": "success",
+                    "message": "Successfully load snapshot and start comfyui process"
+                }), 200
+            except Exception as e:
+                return _handle_exception(e)
 
         @self.app.route("/management/stop", methods=["POST"])
         def stop():
-            print("stop")
-            return jsonify({
-                "status": "success",
-                "message": "stop"
-            }), 200
+            try:
+                self._comfyui.stop()
+                return jsonify({
+                    "status": "success",
+                    "message": "Successfully shutdown comfyui process"
+                }), 200
+            except Exception as e:
+                _handle_exception(e)
 
         @self.app.route("/management/save", methods=["POST"])
         def save():
-            # TODO: 异步 + 上传状态
-            apis.save()
-            return jsonify({
-                "status": "success",
-                "message": "save"
-            }), 200
+            # TODO: 异步
+            try:
+                self._comfyui.stop()
+                return jsonify({
+                    "status": "success",
+                    "message": "Successfully save snapshot"
+                }), 200
+            except Exception as e:
+                _handle_exception(e)
+
+        # TODO 检查文件内容有更新的接口
 
         @self.app.route("/management/status", methods=["GET"])
         def status():
-            print("status")
             return jsonify({
-                "status": "success",
-                "message": "status"
+                "data": self._comfyui.status,
+                "status": "success"
             }), 200
 
         # @self._sock.route('/ws')
@@ -124,7 +108,7 @@ class Routes:
                     message = ws.receive()
                     ws_client.send(message)
             except Exception as e:
-                print(f"WebSocket proxy error: {e}")
+                _handle_exception(e)
             finally:
                 ws_client.close()
 
@@ -132,46 +116,32 @@ class Routes:
         @self.app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         def comfyui_proxy(path=""):
             print(f"Forwarding request for path: {path}")
-            return _forward_requests(path)
+            target_url = f"http://{constants.COMFYUI_HOST}/{path}"
 
-        @self.app.errorhandler(Exception)
-        def handle_error(error):
-            logging.error(f"Unexpected error: {str(error)}")
-            return jsonify({
-                "status": "error",
-                "message": "Internal server error"
-            }), 500
+            # 转发请求头
+            headers = {key: value for key, value in request.headers}
 
+            # 处理请求
+            try:
+                # 转发请求到目标服务器
+                resp = requests.request(
+                    method=request.method,
+                    url=target_url,
+                    headers=headers,
+                    data=request.get_data(),
+                    cookies=request.cookies,
+                    params=request.args,
+                    allow_redirects=False,
+                    stream=True
+                )
 
-def _forward_requests(path):
-    """处理所有请求的代理转发"""
-    target_url = f"http://{constants.COMFYUI_HOST}/{path}"
+                proxy_response = Response(
+                    resp.content,
+                    status=resp.status_code,
+                    headers=dict(resp.headers)
+                )
+                print(f"Forward request success, status code: {resp.status_code}")
+                return proxy_response
 
-    # 转发请求头
-    headers = {key: value for key, value in request.headers}
-
-    # 处理请求
-    try:
-        # 转发请求到目标服务器
-        resp = requests.request(
-            method=request.method,
-            url=target_url,
-            headers=headers,
-            data=request.get_data(),
-            cookies=request.cookies,
-            params=request.args,
-            allow_redirects=False,
-            stream=True
-        )
-
-        proxy_response = Response(
-            resp.content,
-            status=resp.status_code,
-            headers=dict(resp.headers)
-        )
-        print(f"Forward request success, status code: {resp.status_code}")
-        return proxy_response
-
-    except requests.RequestException as e:
-        print(f"Forward request failed, reason: {type(e).__name__} {str(e)}")
-        return {'error': str(e)}, 200
+            except requests.RequestException as e:
+                _handle_exception(e)

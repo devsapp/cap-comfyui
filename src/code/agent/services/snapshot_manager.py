@@ -7,9 +7,8 @@ import constants
 
 
 class SnapshotManager:
-    @staticmethod
-    def load():
-        snapshot_path = SnapshotManager._select_snapshot()
+    def load(self):
+        snapshot_path = self._select_snapshot()
         if snapshot_path is not None:
             # 下载
             print(f"Downloading snapshot...")
@@ -27,8 +26,7 @@ class SnapshotManager:
             print(f"Extracted dependencies, cost {execution_time} s")
             file_ops.remove(constants.WORK_DIR + "/venv.tar")
 
-    @staticmethod
-    def save():
+    def save(self):
         snapshot_name = datetime.now().strftime(constants.SNAPSHOT_PATTERN)
         snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
         os.makedirs(snapshot_path, exist_ok=True)
@@ -48,8 +46,7 @@ class SnapshotManager:
         execution_time = time.time() - start_time
         print(f"Uploaded snapshot to {snapshot_path}, cost: {execution_time} s")
 
-    @staticmethod
-    def _select_snapshot(snapshot_name=None):
+    def _select_snapshot(self, snapshot_name=None):
         """
         获取所选快照目录路径
 

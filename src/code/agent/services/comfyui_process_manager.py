@@ -26,7 +26,7 @@ class ComfyuiProcessManager(ProcessManager):
 
     def is_living(self) -> bool:
         """
-        检查进程是否存活
+        TODO 检查进程是否存活
 
         Returns:
             bool: 如果进程存在且正在运行则返回True，否则返回False

@@ -54,23 +54,6 @@ class ProcessManager(ABC):
             print(f"Failed to start process: {e}")
             return False
 
-    def _read_output(self):
-        """读取进程输出的方法"""
-        while self.process:
-            # 读取标准输出
-            line = self.process.stdout.readline()
-            if line:
-                print(f"[STDOUT] {line.strip()}")
-
-            # 读取标准错误
-            error = self.process.stderr.readline()
-            if error:
-                print(f"[STDERR] {error.strip()}")
-
-            # 如果进程已经结束且没有更多输出，则退出循环
-            if not line and not error and self.process.poll() is not None:
-                break
-
     def wait_until_ready(self,
                          poll_interval: float = constants.DEFAULT_READINESS_POLL_INTERVAL,
                          timeout: float = constants.DEFAULT_READINESS_TIMEOUT) -> bool:
@@ -105,6 +88,25 @@ class ProcessManager(ABC):
         if self.process:
             try:
                 self.process.kill()
+                self.process.wait()
+
+                # 关闭标准输出和标准错误管道
+                if self.process.stdout:
+                    self.process.stdout.close()
+                if self.process.stderr:
+                    self.process.stderr.close()
+
+                # 等待输出读取线程结束
+                if self.stdout_thread and self.stdout_thread.is_alive():
+                    self.stdout_thread.join(timeout=1)
+                if self.stderr_thread and self.stderr_thread.is_alive():
+                    self.stderr_thread.join(timeout=1)
+
+                # 清理相关对象
+                self.process = None
+                self.stdout_thread = None
+                self.stderr_thread = None
+
                 print("Process killed")
                 return True
             except Exception as e:

@@ -45,17 +45,17 @@ def setup_snapshot_files(tmp_path):
 
 
 def test_select_snapshot_latest(setup_snapshot_files):
-    result = SnapshotManager._select_snapshot()
+    result = SnapshotManager()._select_snapshot()
     assert result == os.path.join(constants.SNAPSHOT_DIR, "20231202-120000")
 
 
 def test_select_snapshot_specific(setup_snapshot_files):
-    result = SnapshotManager._select_snapshot("20231202-115959")
+    result = SnapshotManager()._select_snapshot("20231202-115959")
     assert result == os.path.join(constants.SNAPSHOT_DIR, "20231202-115959")
 
 
 def test_select_snapshot_nonexistent(setup_snapshot_files):
-    result = SnapshotManager._select_snapshot("20231204-120000")
+    result = SnapshotManager()._select_snapshot("20231204-120000")
     assert result is None
 
 
@@ -63,12 +63,12 @@ def test_select_snapshot_invalid_format(setup_snapshot_files):
     invalid_snapshot = os.path.join(constants.SNAPSHOT_DIR, "invalid_format")
     os.makedirs(invalid_snapshot)
 
-    result = SnapshotManager._select_snapshot()
+    result = SnapshotManager()._select_snapshot()
     assert result == os.path.join(constants.SNAPSHOT_DIR, "20231202-120000")
 
 
 def test_load_with_real_files(setup_snapshot_files):
-    SnapshotManager.load()
+    SnapshotManager().load()
 
     copied_file_comfyui = os.path.join(constants.WORK_DIR, "comfyui", "test.txt")
     assert os.path.exists(copied_file_comfyui)
@@ -92,9 +92,9 @@ def test_save_with_real_files(setup_snapshot_files):
     with open(os.path.join(venv_dir, "test.txt"), 'w') as f:
         f.write("venv test content")
 
-    SnapshotManager.save()
+    SnapshotManager().save()
 
-    latest_snapshot = SnapshotManager._select_snapshot()
+    latest_snapshot = SnapshotManager()._select_snapshot()
     assert latest_snapshot is not None
     assert latest_snapshot is not "20231202-120000"
 

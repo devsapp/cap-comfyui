@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify, Response
 from flask_sock import Sock
 import websocket
 import constants
-from services.comfyui_service import ComfyuiService
+from services.comfyui_service import ComfyuiService, ComfyuiStatus
 import traceback
 
 
@@ -19,7 +19,7 @@ class Routes:
     def setup_routes(self):
         def _handle_exception(e):
             err_msg = traceback.format_exc()
-            print(f"Error occurred: {str(e)}\nStacktrace:\n{err_msg}")
+            print(f"{str(e)}\nStacktrace:\n{err_msg}")
             return jsonify({
                 "status": "failed",
                 "message": f"{str(e)}\n{err_msg}"
@@ -46,7 +46,7 @@ class Routes:
                     "message": "Successfully shutdown comfyui process"
                 }), 200
             except Exception as e:
-                _handle_exception(e)
+                return _handle_exception(e)
 
         @self.app.route("/management/save", methods=["POST"])
         def save():
@@ -58,14 +58,26 @@ class Routes:
                     "message": "Successfully save snapshot"
                 }), 200
             except Exception as e:
-                _handle_exception(e)
+                return _handle_exception(e)
+
+        @self.app.route("/management/saveAndStop", methods=["POST"])
+        def save_and_stop():
+            # TODO: 异步
+            try:
+                self._comfyui.save_and_stop()
+                return jsonify({
+                    "status": "success",
+                    "message": "Successfully save snapshot and stop comfyui process"
+                }), 200
+            except Exception as e:
+                return _handle_exception(e)
 
         # TODO 检查文件内容有更新的接口
 
         @self.app.route("/management/status", methods=["GET"])
         def status():
             return jsonify({
-                "data": self._comfyui.status,
+                "data": self._comfyui.status.value,
                 "status": "success"
             }), 200
 
@@ -77,7 +89,14 @@ class Routes:
 
         @self._sock.route('/<path:path>')
         def comfyui_proxy_ws(ws, path):
-            print(f"Forwarding websocket request for path: {path}")
+            comfyui_status = self._comfyui.status
+            if comfyui_status not in (ComfyuiStatus.RUNNING, ComfyuiStatus.SAVING):
+                return jsonify({
+                    "status": "failed",
+                    "message": "Please start your comfyui service first"
+                }), 500
+
+            # print(f"Forwarding websocket request for path: {path}")
             target_url = f"ws://{constants.COMFYUI_HOST}/{path}"
 
             def on_message(_, message):
@@ -108,13 +127,20 @@ class Routes:
                     message = ws.receive()
                     ws_client.send(message)
             except Exception as e:
-                _handle_exception(e)
+                return _handle_exception(e)
             finally:
                 ws_client.close()
 
         @self.app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         @self.app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         def comfyui_proxy(path=""):
+            comfyui_status = self._comfyui.status
+            if comfyui_status not in (ComfyuiStatus.RUNNING, ComfyuiStatus.SAVING):
+                return jsonify({
+                    "status": "failed",
+                    "message": "Please start your comfyui service first"
+                }), 500
+
             print(f"Forwarding request for path: {path}")
             target_url = f"http://{constants.COMFYUI_HOST}/{path}"
 
@@ -144,4 +170,4 @@ class Routes:
                 return proxy_response
 
             except requests.RequestException as e:
-                _handle_exception(e)
+                return _handle_exception(e)

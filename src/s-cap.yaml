@@ -6,7 +6,7 @@ vars:
   region: "us-east-1"
   prefix: "zijian-test"
   functionName: "comfyui-auto"
-  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v11"
+  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v12"
 
 resources:
   comfyui:

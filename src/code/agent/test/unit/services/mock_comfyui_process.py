@@ -1,12 +1,20 @@
+import signal
 import time
 import socket
 import sys
 
 
+def signal_handler(signum, frame):
+    print(f"Received signal {signum}")
+    sys.exit(0)
+
+
 def main():
-    print("Mock server starting...")
+    # 注册信号处理器
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # 模拟启动过程
+    print("Mock server starting...")
     counter = 0
     while counter < 3:
         print(f"Mock server boot log message #{counter}")
@@ -29,6 +37,7 @@ def main():
         print(f"Mock server log message #{counter}")
         counter += 1
         time.sleep(1)
+
 
 if __name__ == "__main__":
     main()

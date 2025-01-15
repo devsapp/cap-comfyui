@@ -13,12 +13,11 @@ resources:
     component: fc3
     props:
       region: "${vars.region}"
-      handler: index.handler
+      functionName: "${vars.prefix}__${vars.functionName}"
       description: 'ComfyUI 函数'
       timeout: 7200
       diskSize: 61440
       internetAccess: true
-      functionName: "${vars.prefix}__${vars.functionName}"
       gpuConfig:
         gpuMemorySize: 16384
         gpuType: fc.gpu.tesla.1

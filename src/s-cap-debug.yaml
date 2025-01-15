@@ -1,12 +1,12 @@
 edition: 3.0.0 #  命令行YAML规范版本，遵循语义化版本（Semantic Versioning）规范
 name: cap-comfyui
-access: '{{ access }}'
+access: 'quanxi-zijian'
 vars:
-  region: '{{ region }}'
-  name: '{{ name }}'
-  imageUrl: "registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v12"
-  role: "acs:ram::${config('AccountID')}:role/aliyundevsdefaultrole"
-  gpuType: '{{ gpu }}'
+  region: 'us-east-1'
+  name: 'zijian-test-comfyui-model-svc'
+  imageUrl: 'registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v12'
+  role: 'acs:ram::1431999136518149:role/aliyundevsdefaultrole'
+  gpuType: 'fc.gpu.tesla.1'
 
 resources:
   comfyui:

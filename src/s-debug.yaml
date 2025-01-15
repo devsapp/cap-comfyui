@@ -1,35 +1,42 @@
 edition: 3.0.0 #  命令行YAML规范版本，遵循语义化版本（Semantic Versioning）规范
 name: cap-comfyui
-access: "quanxi-zijian"
+access: 'quanxi-zijian'
 
 vars:
-  region: "us-east-1"
-  prefix: "zijian-test"
-  functionName: "comfyui-auto"
-  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v12"
+  region: 'us-east-1'
+  name: 'zijian-test-comfyui'
+  imageUrl: 'registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v12'
+  gpuType: 'fc.gpu.tesla.1'
 
 resources:
   comfyui:
     component: fc3
     props:
-      region: "${vars.region}"
-      functionName: "${vars.prefix}__${vars.functionName}"
+      region: '${vars.region}'
+      functionName: '${vars.name}'
       description: 'ComfyUI 函数'
-      timeout: 7200
+
+      cpu: 8
+      memorySize: 32768
       diskSize: 61440
-      internetAccess: true
       gpuConfig:
         gpuMemorySize: 16384
-        gpuType: fc.gpu.tesla.1
+        gpuType: '{vars.gpuType}'
+
       runtime: custom-container
-      cpu: 8
       customContainerConfig:
         image: ${vars.imageUrl}
         port: 9000
+
+      timeout: 7200
+      internetAccess: true
       instanceConcurrency: 200
-      memorySize: 32768
       environmentVariables:
-        MNT_DIR: "/mnt/${vars.prefix}__${vars.functionName}"
+        MNT_DIR: '/mnt/${vars.name}'
+      logConfig: auto
+      vpcConfig: auto
+      nasConfig: auto
+      httpTrigger: auto
 #      vpcConfig:
 #        securityGroupId: sg-0xi1tt3egernm2auk3al
 #        vpcId: vpc-0xipbjyz6b3a24mz21bur
@@ -43,20 +50,3 @@ resources:
 #              13ac804a096-ajk81.us-east-1.nas.aliyuncs.com:/sd-project-0
 #            mountDir: /mnt/auto
 #        userId: 0
-      vpcConfig: auto
-      nasConfig: auto
-      logConfig: auto
-      triggers:
-        - triggerConfig:
-            methods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            authType: anonymous
-            disableURLInternet: false
-          triggerName: defaultTrigger
-          description: ''
-          qualifier: LATEST
-          triggerType: http

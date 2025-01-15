@@ -4,68 +4,35 @@ access: '{{ access }}'
 vars:
   region: '{{ region }}'
   name: '{{ name }}'
-  imageUrl: "registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v12"
-  role: "acs:ram::${config('AccountID')}:role/aliyundevsdefaultrole"
+  imageUrl: 'registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v12'
   gpuType: '{{ gpu }}'
 
 resources:
   comfyui:
-    component: model
+    component: fc3
     props:
       region: '${vars.region}'
-      name: '${vars.name}'
+      functionName: '${vars.name}'
       description: 'ComfyUI 函数'
-      logConfig: auto
-      vpcConfig: auto
-      nasConfig: auto
-      httpTrigger: auto
-      modelConfig:
-        sourceType: custom-container
-      role: '${vars.role}'
-      environmentVariables:
-        MNT_DIR: "/mnt/${vars.name}"
 
-      # 实例规格
-      timeout: 7200
-      diskSize: 61440
       cpu: 8
       memorySize: 32768
-      instanceConcurrency: 200
+      diskSize: 61440
       gpuConfig:
         gpuMemorySize: 16384
         gpuType: '{vars.gpuType}'
 
-      # 运行时
       runtime: custom-container
       customContainerConfig:
+        image: ${vars.imageUrl}
         port: 9000
-        image: ${vars.imageUrl} 
-        instanceConcurrency: 200
 
-
-  gateway:
-    component: fc3
-    actions:
-    props:
-      region: '${vars.region}'
-      functionName: '${vars.name}__gateway'
-      description: '网关函数'
-      timeout: 3600
-      diskSize: 512
-      runtime: custom
-      cpu: 1
-      memorySize: 1024
+      timeout: 7200
+      internetAccess: true
       instanceConcurrency: 200
-      code: dist
-      customRuntimeConfig:
-        port: 9000
-        command:
-          - ./gateway
       environmentVariables:
-        ENDPOINT: '${resources.comfyui.info.urlInternet}'
-      customDomain:
-        protocol: "HTTP"
-        route:
-          path: "/*"
-          qualifier: "LATEST"
-        domainName: auto
+        MNT_DIR: '/mnt/${vars.name}'
+      logConfig: auto
+      vpcConfig: auto
+      nasConfig: auto
+      httpTrigger: auto

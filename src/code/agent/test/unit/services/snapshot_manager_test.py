@@ -67,6 +67,18 @@ def test_select_snapshot_invalid_format(setup_snapshot_files):
     assert result == os.path.join(constants.SNAPSHOT_DIR, "20231202-120000")
 
 
+def test_select_snapshot_empty_folder(tmp_path):
+    snapshot_dir = tmp_path / "snapshots-tmp"
+    snapshot_dir.mkdir(exist_ok=True)
+
+    constants.SNAPSHOT_DIR = str(snapshot_dir)
+    constants.WORK_DIR = str(tmp_path / "work")
+    os.makedirs(constants.WORK_DIR, exist_ok=True)
+
+    result = SnapshotManager()._select_snapshot()
+    assert result is None
+
+
 def test_load_with_real_files(setup_snapshot_files):
     SnapshotManager().load()
 

@@ -91,5 +91,7 @@ class SnapshotManager:
             except ValueError:
                 continue
 
+        if latest_snapshot_name is None:
+            return None
         return os.path.join(constants.SNAPSHOT_DIR, latest_snapshot_name)
 

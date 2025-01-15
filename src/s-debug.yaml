@@ -21,7 +21,7 @@ resources:
       diskSize: 61440
       gpuConfig:
         gpuMemorySize: 16384
-        gpuType: '{vars.gpuType}'
+        gpuType: '${vars.gpuType}'
 
       runtime: custom-container
       customContainerConfig:

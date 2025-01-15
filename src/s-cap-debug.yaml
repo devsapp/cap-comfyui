@@ -33,7 +33,7 @@ resources:
       instanceConcurrency: 200
       gpuConfig:
         gpuMemorySize: 16384
-        gpuType: '{vars.gpuType}'
+        gpuType: '${vars.gpuType}'
 
       # 运行时
       runtime: custom-container

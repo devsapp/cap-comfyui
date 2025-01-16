@@ -73,7 +73,7 @@ class ProcessManager(ABC):
             # 检查是否超时
             if time.time() - start_time > timeout:
                 print(f"Process startup timed out after {timeout} seconds")
-                return False
+                raise RuntimeError(f"Process startup timed out")
 
             # 检查是否就绪
             if self.is_ready():

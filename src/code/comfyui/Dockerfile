@@ -9,10 +9,11 @@ RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     git checkout "v0.3.10"
 
 # add built-in custom-nodes
-RUN cd ${COMFYUI_DIR}/custom_nodes && \
-    git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
-    cd ComfyUI-Manager && \
-    git checkout "3.3"
+# FIXME: ComfyUI-Manager在启动过程中需要拉取内容，由于跨境网络问题，导致杭州实例启动非常慢，暂时去掉
+#RUN cd ${COMFYUI_DIR}/custom_nodes && \
+#    git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
+#    cd ComfyUI-Manager && \
+#    git checkout "3.3"
 
 FROM python:3.10.16-slim AS models
 

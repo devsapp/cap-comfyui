@@ -4,7 +4,7 @@ access: '{{ access }}'
 vars:
   region: '{{ region }}'
   name: '{{ name }}'
-  imageUrl: 'registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v12'
+  imageUrl: 'registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v13'
   gpuType: '{{ gpu }}'
 
 resources:
@@ -35,4 +35,17 @@ resources:
       logConfig: auto
       vpcConfig: auto
       nasConfig: auto
-      httpTrigger: auto
+      triggers:
+        - triggerConfig:
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            authType: anonymous
+            disableURLInternet: false
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http

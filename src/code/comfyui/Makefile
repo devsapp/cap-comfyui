@@ -1,6 +1,6 @@
 # 定义变量
 IMAGE_NAME = registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd
-TAG = cap-comfyui-v12
+TAG = cap-comfyui-v13
 
 # 默认目标
 .PHONY: all

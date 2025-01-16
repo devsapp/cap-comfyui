@@ -40,12 +40,31 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir onnxruntime-gpu \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
-ENV COMFYUI_DIR="/root/comfyui"
-COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
-
 # 安装 源码 所使用的依赖
+#ENV COMFYUI_DIR="/root/comfyui"
+#COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
+#RUN --mount=type=cache,target=/root/.cache/pip \
+#    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
 RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
+    venv/bin/pip install --no-cache-dir \
+    torch \
+    torchsde \
+    torchvision \
+    torchaudio \
+    einops \
+    transformers>=4.28.1 \
+    tokenizers>=0.13.3 \
+    sentencepiece \
+    safetensors>=0.4.2 \
+    aiohttp \
+    pyyaml \
+    Pillow \
+    scipy \
+    tqdm \
+    psutil \
+    kornia>=0.7.1 \
+    spandrel \
+    soundfile
 
 FROM agent AS agent
 
@@ -69,8 +88,8 @@ ARG IMAGE_TAG="${IMAGE_TAG}"
 ENV IMAGE_TAG=${IMAGE_TAG}
 
 COPY --from=models /models ${BUILT_IN_DIR}/models
-COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
+COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 COPY built-in/ ${BUILT_IN_DIR}/
 # TODO add pip path of venv

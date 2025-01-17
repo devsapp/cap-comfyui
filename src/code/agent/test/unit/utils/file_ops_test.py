@@ -1,3 +1,4 @@
+import os
 import pytest
 import shutil
 from utils.file_ops import copy, move, remove, compress, extract
@@ -41,6 +42,51 @@ def test_copy_directory(setup_test_files):
     assert target_dir.exists()
     assert (target_dir / "test.txt").exists()
     assert (target_dir / "subdir" / "subfile.txt").exists()
+
+
+def test_copy_symlink(setup_test_files):
+    source_dir = setup_test_files / "source"
+    test_file = source_dir / "test.txt"
+    symlink_file = source_dir / "link"
+    os.symlink(str(test_file), str(symlink_file))
+
+    target_dir = setup_test_files / "target"
+
+    copy(str(source_dir), str(target_dir))
+
+    target_symlink = target_dir / "link"
+    assert os.path.islink(str(target_symlink))
+    assert os.path.realpath(str(target_symlink)) == os.path.realpath(str(test_file))
+
+
+def test_copy_symlink_file(setup_test_files):
+    source_dir = setup_test_files / "source"
+    test_file = source_dir / "test.txt"
+    symlink_file = source_dir / "link"
+    os.symlink(str(test_file), str(symlink_file))
+
+    target_symlink = setup_test_files / "target" / "link"
+
+    copy(str(symlink_file), str(target_symlink))
+
+    assert os.path.islink(str(target_symlink))
+    assert os.readlink(str(target_symlink)) == str(test_file)
+
+
+def test_copy_symlink_to_directory(setup_test_files):
+    source_dir = setup_test_files / "source"
+    subdir = source_dir / "subdir"
+    symlink_dir = source_dir / "link_to_subdir"
+    os.symlink(str(subdir), str(symlink_dir))
+
+    target_dir = setup_test_files / "target"
+
+    copy(str(source_dir), str(target_dir))
+
+    target_symlink = target_dir / "link_to_subdir"
+    assert os.path.islink(str(target_symlink))
+    assert os.path.realpath(str(target_symlink)) == os.path.realpath(str(subdir))
+
 
 
 def test_move_file(setup_test_files):

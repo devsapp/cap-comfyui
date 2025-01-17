@@ -16,9 +16,9 @@ def copy(source_path, target_path):
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
         if os.path.isfile(source_path):
-            shutil.copy2(source_path, target_path)
+            shutil.copy2(source_path, target_path, follow_symlinks=False)
         else:
-            shutil.copytree(source_path, target_path, dirs_exist_ok=True)
+            shutil.copytree(source_path, target_path, symlinks=True, dirs_exist_ok=True)
 
     except Exception as e:
         print(f"Failed to copy {source_path} to {target_path}, reason: {e}")

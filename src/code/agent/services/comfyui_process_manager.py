@@ -1,5 +1,7 @@
 import socket
 
+import requests
+
 import constants
 from services.process_manager import ProcessManager
 
@@ -21,15 +23,21 @@ class ComfyuiProcessManager(ProcessManager):
             sock.close()
             # TODO: 处理非预期result值
             return result == 0  # 若result为0，则端口被占用(即comfyui进程启动成功)
-        except:
+        except Exception:
             # TODO: handle corner cases
             return False
 
-    def is_living(self) -> bool:
+    def is_alive(self) -> bool:
         """
-        TODO 检查进程是否存活
+        通过发送 HTTP GET 请求到 ComfyUI 服务来检查进程是否存活
 
         Returns:
-            bool: 如果进程存在且正在运行则返回True，否则返回False
+            bool: 如果在2秒内收到正常响应则返回True，否则返回False
         """
-        return True
+        try:
+            response = requests.get(f'http://127.0.0.1:{constants.COMFYUI_PROCESS_PORT}', timeout=2)
+            return response.status_code == 200
+        except Exception:
+            # TODO: handle corner cases
+            return False
+

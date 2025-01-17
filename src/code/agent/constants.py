@@ -11,6 +11,7 @@ COMFYUI_PROCESS_PORT = 8188
 COMFYUI_HOST = f"127.0.0.1:{COMFYUI_PROCESS_PORT}"
 DEFAULT_READINESS_POLL_INTERVAL = 3
 DEFAULT_READINESS_TIMEOUT = 300
+DEFAULT_LIVENESS_POLL_INTERVAL = 5
 BOOT_CMD = [f"{VENV_DIR}/bin/python", f"{COMFYUI_DIR}/main.py", "--listen", "0.0.0.0",
             "--input-directory", f"{MNT_DIR}/input",
             "--output-directory", f"{MNT_DIR}/output",

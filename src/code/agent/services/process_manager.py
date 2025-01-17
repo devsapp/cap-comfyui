@@ -13,7 +13,7 @@ class ProcessManager(ABC):
         self.stdout_thread = None
         self.stderr_thread = None
 
-    def start(self, command: list):
+    def start(self, command: list) -> None:
         """
         启动子进程
 
@@ -31,32 +31,30 @@ class ProcessManager(ABC):
             print(f"Started process with PID: {self.process.pid}")
 
             # 启动标准输出和标准错误的读取线程
-            def read_output(pipe, prefix=''):
+            def read_output(pipe):
                 for line in iter(pipe.readline, ''):
-                    print(f"{prefix}{line.strip()}")
+                    print(line.strip())
                 pipe.close()
             self.stdout_thread = threading.Thread(
                 target=read_output,
-                args=(self.process.stdout, '[OUT] '),
+                args=self.process.stdout,
                 daemon=True
             )
             self.stderr_thread = threading.Thread(
                 target=read_output,
-                args=(self.process.stderr, '[ERR] '),
+                args=self.process.stderr,
                 daemon=True
             )
 
             self.stdout_thread.start()
             self.stderr_thread.start()
-
-            return True
         except Exception as e:
             print(f"Failed to start process: {e}")
-            return False
+            raise
 
     def wait_until_ready(self,
                          poll_interval: float = constants.DEFAULT_READINESS_POLL_INTERVAL,
-                         timeout: float = constants.DEFAULT_READINESS_TIMEOUT) -> bool:
+                         timeout: float = constants.DEFAULT_READINESS_TIMEOUT) -> None:
         """
         同步轮询等待进程就绪
 
@@ -78,12 +76,12 @@ class ProcessManager(ABC):
             # 检查是否就绪
             if self.is_ready():
                 print("Process is ready")
-                return True
+                return
 
             # 等待指定的轮询间隔
             time.sleep(poll_interval)
 
-    def stop(self):
+    def stop(self) -> None:
         """停止子进程"""
         if self.process:
             try:
@@ -108,11 +106,9 @@ class ProcessManager(ABC):
                 self.stderr_thread = None
 
                 print("Process killed")
-                return True
             except Exception as e:
                 print(f"Error stopping process: {e}")
-                return False
-        return False
+                raise
 
     @abstractmethod
     def is_ready(self) -> bool:

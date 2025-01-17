@@ -16,23 +16,20 @@ def test_start_real_process(process_manager):
 
     # 启动进程
     command = ['python3', str(script_path)]
-    result = process_manager.start(command)
+    process_manager.start(command)
 
-    assert result is True
     assert process_manager.process is not None
     assert process_manager.process.pid > 0
     assert process_manager.is_ready() is False  # 子进程Readiness探针未就绪
 
     # 等待子进程启动完成
-    result = process_manager.wait_until_ready()
-    assert result is True
+    process_manager.wait_until_ready()
 
     # 等待正常运行N秒
     time.sleep(5)
 
     # 停止进程
-    result = process_manager.stop()
-    assert result is True
+    process_manager.stop()
 
     # 验证进程已终止
     time.sleep(1)
@@ -44,12 +41,10 @@ def test_process_restart(process_manager):
 
     # 首次启动进程
     command = ['python3', str(script_path)]
-    result = process_manager.start(command)
-    assert result is True
+    process_manager.start(command)
 
     # 等待进程就绪
-    result = process_manager.wait_until_ready()
-    assert result is True
+    process_manager.wait_until_ready()
 
     # 记录第一次启动的进程ID
     first_pid = process_manager.process.pid
@@ -68,19 +63,16 @@ def test_process_restart(process_manager):
     assert process_manager.is_ready() is False
 
     # 重新启动进程
-    result = process_manager.start(command)
-    assert result is True
+    process_manager.start(command)
 
     # 等待新进程就绪
-    result = process_manager.wait_until_ready()
-    assert result is True
+    process_manager.wait_until_ready()
 
     # 验证是新的进程（PID不同）
     assert process_manager.process.pid != first_pid
 
     # 最后停止进程
-    result = process_manager.stop()
-    assert result is True
+    process_manager.stop()
 
     # 验证进程已完全终止
     time.sleep(1)

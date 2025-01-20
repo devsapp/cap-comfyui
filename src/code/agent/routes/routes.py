@@ -54,7 +54,7 @@ class Routes:
         def save():
             # TODO: 异步
             try:
-                self._comfyui.stop()
+                self._comfyui.save()
                 return jsonify({
                     "status": "success",
                     "message": "Successfully save snapshot"

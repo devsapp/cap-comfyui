@@ -33,7 +33,7 @@ class SnapshotManager:
             最终使用的快照名称；None表示不加载任何快照，使用镜像中的comfyui环境
         """
         target_snapshot_name = (
-            self._select_latest_snapshot() if snapshot_name is self.USE_LATEST
+            self._select_latest_snapshot() if snapshot_name == self.USE_LATEST
             else snapshot_name
         )
 

@@ -1,5 +1,9 @@
 FROM python:3.10.16-slim
 
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt update && \
+    apt install -y git
+
 WORKDIR /root
 ENV WORK_DIR='/root'
 ENV MNT_DIR='/mnt/auto'

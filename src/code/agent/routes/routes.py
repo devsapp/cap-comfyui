@@ -150,7 +150,7 @@ class Routes:
                     "message": "Please start your comfyui service first"
                 }), 500
 
-            print(f"Forwarding request for path: {path}")
+            # print(f"Forwarding request for path: {path}")
             target_url = f"http://{constants.COMFYUI_HOST}/{path}"
 
             # 转发请求头
@@ -175,7 +175,7 @@ class Routes:
                     status=resp.status_code,
                     headers=dict(resp.headers)
                 )
-                print(f"Forward request success, status code: {resp.status_code}")
+                # print(f"Forward request success, status code: {resp.status_code}")
                 return proxy_response
 
             except requests.RequestException as e:

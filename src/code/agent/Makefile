@@ -1,6 +1,6 @@
 # 定义变量
 IMAGE_NAME = registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd
-TAG = test-ctr-v13
+TAG = agent-v1
 
 # 默认目标
 .PHONY: all

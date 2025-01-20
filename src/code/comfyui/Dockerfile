@@ -41,30 +41,39 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
 # 安装 源码 所使用的依赖
+## 方式一: pip install使用comfyui源码中的requirments.txt, 缺点：与codes层耦合，源码有新的commit会导致依赖层内容不同
 #ENV COMFYUI_DIR="/root/comfyui"
 #COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 #RUN --mount=type=cache,target=/root/.cache/pip \
 #    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
+
+## 方式二: pip install使用comfyui源码中requirments.txt的具体内容, 缺点：与时间和pip版本耦合，使用新的ECS构建时会导致依赖层内容不同
+#RUN --mount=type=cache,target=/root/.cache/pip \
+#    venv/bin/pip install --no-cache-dir \
+#    torch \
+#    torchsde \
+#    torchvision \
+#    torchaudio \
+#    einops \
+#    transformers>=4.28.1 \
+#    tokenizers>=0.13.3 \
+#    sentencepiece \
+#    safetensors>=0.4.2 \
+#    aiohttp \
+#    pyyaml \
+#    Pillow \
+#    scipy \
+#    tqdm \
+#    psutil \
+#    kornia>=0.7.1 \
+#    spandrel \
+#    soundfile
+
+# 方式三: pip install使用锁版本(pip freeze)的requirments.txt, 缺点：comfyui版本升级时需要手动校对依赖版本
+ENV BUILT_IN_DIR="/built-in"
+COPY built-in/ ${BUILT_IN_DIR}/
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir \
-    torch \
-    torchsde \
-    torchvision \
-    torchaudio \
-    einops \
-    transformers>=4.28.1 \
-    tokenizers>=0.13.3 \
-    sentencepiece \
-    safetensors>=0.4.2 \
-    aiohttp \
-    pyyaml \
-    Pillow \
-    scipy \
-    tqdm \
-    psutil \
-    kornia>=0.7.1 \
-    spandrel \
-    soundfile
+    venv/bin/pip install --no-cache-dir ${BUILT_IN_DIR}/requirments.txt
 
 FROM agent AS agent
 
@@ -75,8 +84,7 @@ WORKDIR /root
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
     apt install -y \
-    rsync vim git curl wget jq ffmpeg \
-    gcc g++ unzip build-essential
+    git curl wget jq ffmpeg gcc g++ build-essential
 
 ENV WORK_DIR="/root"
 ENV BUILT_IN_DIR="/built-in"

@@ -1,76 +1,78 @@
 import time
 import os
+from contextlib import contextmanager
 from datetime import datetime
+from typing import Optional
 
 from utils import file_ops
 import constants
 
 
 class SnapshotManager:
-    def load(self):
-        snapshot_path = self._select_snapshot()
-        if snapshot_path is not None:
-            # 清理原始工作目录
-            print(f"Clearing work dir...")
-            start_time = time.time()
+    USE_LATEST = "latest"
+
+    def __init__(self):
+        self.cur_snapshot_name: Optional[str] = None
+
+    @contextmanager
+    def timer(self, operation: str):
+        print(f"{operation} ...")
+        start_time = time.time()
+        try:
+            yield
+        finally:
+            execution_time = time.time() - start_time
+            print(f"{operation} finished, cost: {execution_time:.2f}s")
+
+    def load(self, snapshot_name: str) -> Optional[str]:
+        """
+        加载快照
+        Args:
+            snapshot_name: 目标快照名称；若为USE_LATEST，则从用户挂载目录中寻找最近一次快照并加载；若快照已加载则不会重复加载。
+        Returns:
+            最终使用的快照名称；None表示不加载任何快照，使用镜像中的comfyui环境
+        """
+        print(f"adsfa {snapshot_name}")
+        target_snapshot_name = (
+            self._select_latest_snapshot() if snapshot_name is self.USE_LATEST
+            else snapshot_name
+        )
+
+        if target_snapshot_name == self.cur_snapshot_name:
+            return target_snapshot_name
+
+        if target_snapshot_name is None:
+            return self.cur_snapshot_name
+
+        snapshot_path = os.path.join(constants.SNAPSHOT_DIR, target_snapshot_name)
+        if not os.path.exists(snapshot_path):
+            return self.cur_snapshot_name
+
+        # 清理工作目录
+        with self.timer("Clearing work dir"):
             file_ops.remove(constants.WORK_DIR + "/comfyui")
             file_ops.remove(constants.WORK_DIR + "/venv")
-            execution_time = time.time() - start_time
-            print(f"Cleared work dir, cost {execution_time} s")
 
-            # 下载
-            print(f"Downloading snapshot...")
-            start_time = time.time()
+        # 下载快照
+        with self.timer(f"Downloading snapshot from {snapshot_path}"):
             file_ops.copy(snapshot_path + "/comfyui", constants.WORK_DIR + "/comfyui")
             file_ops.copy(snapshot_path + "/venv.tar", constants.WORK_DIR + "/venv.tar")
-            execution_time = time.time() - start_time
-            print(f"Downloaded snapshot from {snapshot_path}, cost: {execution_time} s")
 
-            # 解压
-            print(f"Extracting dependencies...")
-            start_time = time.time()
+        # 解压依赖
+        with self.timer("Extracting dependencies"):
             file_ops.extract(constants.WORK_DIR + "/venv.tar")
-            execution_time = time.time() - start_time
-            print(f"Extracted dependencies, cost {execution_time} s")
             file_ops.remove(constants.WORK_DIR + "/venv.tar")
 
-    def save(self):
-        snapshot_name = datetime.now().strftime(constants.SNAPSHOT_PATTERN)
-        snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
-        os.makedirs(snapshot_path, exist_ok=True)
+        self.cur_snapshot_name = target_snapshot_name
+        return target_snapshot_name
 
-        # 打包
-        print(f"Compressing dependencies...")
-        start_time = time.time()
-        file_ops.compress(constants.WORK_DIR + "/venv.tar", constants.WORK_DIR, ["venv"])
-        execution_time = time.time() - start_time
-        print(f"Compressed dependencies, cost {execution_time} s")
-
-        # 上传
-        print(f"Uploading snapshot...")
-        start_time = time.time()
-        file_ops.copy(constants.WORK_DIR + "/comfyui", snapshot_path + "/comfyui")
-        file_ops.copy(constants.WORK_DIR + "/venv.tar", snapshot_path + "/venv.tar")
-        execution_time = time.time() - start_time
-        print(f"Uploaded snapshot to {snapshot_path}, cost: {execution_time} s")
-
-    def _select_snapshot(self, snapshot_name=None):
+    def _select_latest_snapshot(self):
         """
-        获取所选快照目录路径
-
-        Args:
-            snapshot_name (str, optional): 指定的快照名称, 格式符合SNAPSHOT_PATTERN. 默认值None表示获取最近的快照
+        获取最近一次快照名称
 
         Returns:
-            str or None: 所选快照目录的路径，如果未找到则返回None
+            str or None: 所选快照目录的名称，如果不存在任何快照目录则返回None
         """
-
-        # 如果指定了具体快照名称，直接返回对应快照的路径
-        if snapshot_name:
-            snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
-            return snapshot_path if os.path.isdir(snapshot_path) else None
-
-        # 查找最近一次快照的路径
         try:
             folders = [
                 f for f in os.listdir(constants.SNAPSHOT_DIR)
@@ -81,7 +83,6 @@ class SnapshotManager:
 
         latest_snapshot_name = None
         latest_dt = None
-
         for folder in folders:
             try:
                 dt = datetime.strptime(folder, constants.SNAPSHOT_PATTERN)
@@ -90,8 +91,21 @@ class SnapshotManager:
                     latest_snapshot_name = folder
             except ValueError:
                 continue
+        return latest_snapshot_name
 
-        if latest_snapshot_name is None:
-            return None
-        return os.path.join(constants.SNAPSHOT_DIR, latest_snapshot_name)
+    def save(self) -> str:
+        snapshot_name = datetime.now().strftime(constants.SNAPSHOT_PATTERN)
+        snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
+        os.makedirs(snapshot_path, exist_ok=True)
 
+        # 打包
+        with self.timer("Compressing dependencies"):
+            file_ops.compress(constants.WORK_DIR + "/venv.tar", constants.WORK_DIR, ["venv"])
+
+        # 上传
+        with self.timer(f"Uploading snapshot to {snapshot_path}"):
+            file_ops.copy(constants.WORK_DIR + "/comfyui", snapshot_path + "/comfyui")
+            file_ops.copy(constants.WORK_DIR + "/venv.tar", snapshot_path + "/venv.tar")
+
+        self.cur_snapshot_name = snapshot_name
+        return snapshot_name

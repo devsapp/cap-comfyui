@@ -43,12 +43,12 @@ class ComfyuiService:
         with self._status_lock:
             return self._status
 
-    def start(self):
+    def start(self, snapshot_name: str):
         print("Starting comfyui process...")
         self._transition_to(ComfyuiStatus.STARTING)
 
         try:
-            self._snapshot_mgr.load()
+            self._snapshot_mgr.load(snapshot_name)
             self._process_mgr.start(constants.BOOT_CMD)
             self._process_mgr.wait_until_ready()
             self._transition_to(ComfyuiStatus.RUNNING)

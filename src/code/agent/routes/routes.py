@@ -29,7 +29,9 @@ class Routes:
         def start():
             # TODO: 异步
             try:
-                self._comfyui.start()
+                snapshot = request.args.get('snapshot')
+                print(f"[debug] start with snapshot {snapshot}")
+                self._comfyui.start(snapshot)
                 return jsonify({
                     "status": "success",
                     "message": "Successfully load snapshot and start comfyui process"

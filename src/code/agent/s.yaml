@@ -9,7 +9,7 @@ access: "quanxi-zijian"
 
 vars: 
   region: "us-east-1"
-  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:test-ctr-v13"
+  imageUrl: "registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:agent-v1"
 
 resources:
   hello_world:

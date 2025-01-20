@@ -1,9 +1,9 @@
 import io
 import tarfile
-
 import pytest
 import os
 import shutil
+from datetime import datetime
 from services.snapshot_manager import SnapshotManager
 import constants
 
@@ -25,16 +25,17 @@ def setup_snapshot_files(tmp_path):
         snapshot_path = snapshot_dir / snapshot
         snapshot_path.mkdir()
 
+        # 创建comfyui目录和测试文件
         (snapshot_path / "comfyui").mkdir()
         (snapshot_path / "comfyui/test.txt").write_text("test content")
+
+        # 创建venv.tar文件
         tar_path = snapshot_path / "venv.tar"
         with tarfile.open(tar_path, "w") as tar:
             test_content = "This is a test file in venv"
             test_file = io.BytesIO(test_content.encode())
-
-            tarinfo = tarfile.TarInfo(name="test_venv.txt")
+            tarinfo = tarfile.TarInfo(name="venv/test_venv.txt")
             tarinfo.size = len(test_content)
-
             tar.addfile(tarinfo, test_file)
 
     constants.SNAPSHOT_DIR = str(snapshot_dir)
@@ -44,83 +45,129 @@ def setup_snapshot_files(tmp_path):
     return tmp_path
 
 
-def test_select_snapshot_latest(setup_snapshot_files):
-    result = SnapshotManager()._select_snapshot()
-    assert result == os.path.join(constants.SNAPSHOT_DIR, "20231202-120000")
+def test_load_latest_snapshot(setup_snapshot_files):
+    manager = SnapshotManager()
+    snapshot_name = manager.load(SnapshotManager.USE_LATEST)
+
+    assert snapshot_name == "20231202-120000"
+    assert manager.cur_snapshot_name == "20231202-120000"
+
+    # 验证文件复制和解压
+    assert os.path.exists(os.path.join(constants.WORK_DIR, "comfyui/test.txt"))
+    assert os.path.exists(os.path.join(constants.WORK_DIR, "venv/test_venv.txt"))
+    assert not os.path.exists(os.path.join(constants.WORK_DIR, "venv.tar"))
 
 
-def test_select_snapshot_specific(setup_snapshot_files):
-    result = SnapshotManager()._select_snapshot("20231202-115959")
-    assert result == os.path.join(constants.SNAPSHOT_DIR, "20231202-115959")
+def test_load_specific_snapshot(setup_snapshot_files):
+    manager = SnapshotManager()
+    snapshot_name = manager.load("20231202-115959")
+
+    assert snapshot_name == "20231202-115959"
+    assert manager.cur_snapshot_name == "20231202-115959"
 
 
-def test_select_snapshot_nonexistent(setup_snapshot_files):
-    result = SnapshotManager()._select_snapshot("20231204-120000")
-    assert result is None
+def test_load_nonexistent_snapshot(setup_snapshot_files):
+    manager = SnapshotManager()
+    snapshot_name = manager.load("nonexistent")
+
+    assert snapshot_name is None
+    assert manager.cur_snapshot_name is None
 
 
-def test_select_snapshot_invalid_format(setup_snapshot_files):
+def test_load_same_snapshot_twice(setup_snapshot_files):
+    manager = SnapshotManager()
+    first_load = manager.load("20231202-120000")
+    second_load = manager.load("20231202-120000")
+
+    assert first_load == second_load
+    assert manager.cur_snapshot_name == "20231202-120000"
+
+
+def test_select_latest_snapshot_with_invalid_format(setup_snapshot_files):
     invalid_snapshot = os.path.join(constants.SNAPSHOT_DIR, "invalid_format")
     os.makedirs(invalid_snapshot)
 
-    result = SnapshotManager()._select_snapshot()
-    assert result == os.path.join(constants.SNAPSHOT_DIR, "20231202-120000")
+    manager = SnapshotManager()
+    latest = manager._select_latest_snapshot()
+
+    assert latest == "20231202-120000"
 
 
-def test_select_snapshot_empty_folder(tmp_path):
-    snapshot_dir = tmp_path / "snapshots-tmp"
-    snapshot_dir.mkdir(exist_ok=True)
+def test_select_latest_snapshot_empty_dir(tmp_path):
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    constants.SNAPSHOT_DIR = str(empty_dir)
 
-    constants.SNAPSHOT_DIR = str(snapshot_dir)
-    constants.WORK_DIR = str(tmp_path / "work")
-    os.makedirs(constants.WORK_DIR, exist_ok=True)
+    manager = SnapshotManager()
+    latest = manager._select_latest_snapshot()
 
-    result = SnapshotManager()._select_snapshot()
-    assert result is None
-
-
-def test_load_with_real_files(setup_snapshot_files):
-    SnapshotManager().load()
-
-    copied_file_comfyui = os.path.join(constants.WORK_DIR, "comfyui", "test.txt")
-    assert os.path.exists(copied_file_comfyui)
-    with open(copied_file_comfyui, 'r') as f:
-        assert f.read() == "test content"
-
-    copied_file_venv = os.path.join(constants.WORK_DIR, "venv.tar")
-    assert not os.path.exists(copied_file_venv)
-
-    extracted_file = os.path.join(constants.WORK_DIR, "test_venv.txt")
-    assert os.path.exists(extracted_file)
+    assert latest is None
 
 
-def test_save_with_real_files(setup_snapshot_files):
+def test_save_snapshot(setup_snapshot_files):
+    # 准备要保存的文件
     comfyui_dir = os.path.join(constants.WORK_DIR, "comfyui")
     venv_dir = os.path.join(constants.WORK_DIR, "venv")
     os.makedirs(comfyui_dir)
     os.makedirs(venv_dir)
-    with open(os.path.join(comfyui_dir, "test.txt"), 'w') as f:
-        f.write("comfyui test content")
-    with open(os.path.join(venv_dir, "test.txt"), 'w') as f:
-        f.write("venv test content")
 
-    SnapshotManager().save()
+    test_file_comfyui = os.path.join(comfyui_dir, "test.txt")
+    test_file_venv = os.path.join(venv_dir, "test.txt")
 
-    latest_snapshot = SnapshotManager()._select_snapshot()
-    assert latest_snapshot is not None
-    assert latest_snapshot is not "20231202-120000"
+    with open(test_file_comfyui, 'w') as f:
+        f.write("new comfyui content")
+    with open(test_file_venv, 'w') as f:
+        f.write("new venv content")
 
-    copied_comfyui_file = os.path.join(latest_snapshot, "comfyui", "test.txt")
-    assert os.path.exists(copied_comfyui_file)
-    with open(copied_comfyui_file, 'r') as f:
-        assert f.read() == "comfyui test content"
+    # 执行保存
+    manager = SnapshotManager()
+    new_snapshot_name = manager.save()
 
-    copied_venv_tar = os.path.join(latest_snapshot, "venv.tar")
-    assert os.path.exists(copied_venv_tar)
+    # 验证保存结果
+    assert datetime.strptime(new_snapshot_name, constants.SNAPSHOT_PATTERN)
+    new_snapshot_path = os.path.join(constants.SNAPSHOT_DIR, new_snapshot_name)
+
+    assert os.path.exists(os.path.join(new_snapshot_path, "comfyui/test.txt"))
+    assert os.path.exists(os.path.join(new_snapshot_path, "venv.tar"))
+
+    # 验证文件内容
+    with open(os.path.join(new_snapshot_path, "comfyui/test.txt"), 'r') as f:
+        assert f.read() == "new comfyui content"
+
+
+def test_load_after_save(setup_snapshot_files):
+    # 准备要保存的文件
+    comfyui_dir = os.path.join(constants.WORK_DIR, "comfyui")
+    venv_dir = os.path.join(constants.WORK_DIR, "venv")
+    os.makedirs(comfyui_dir)
+    os.makedirs(venv_dir)
+
+    test_file_comfyui = os.path.join(comfyui_dir, "test.txt")
+    test_file_venv = os.path.join(venv_dir, "test.txt")
+
+    with open(test_file_comfyui, 'w') as f:
+        f.write("new comfyui content")
+    with open(test_file_venv, 'w') as f:
+        f.write("new venv content")
+
+    # 保存新快照
+    manager = SnapshotManager()
+    saved_snapshot_name = manager.save()
+    assert saved_snapshot_name == manager.cur_snapshot_name
+
+    # 清理工作目录
+    shutil.rmtree(comfyui_dir)
+    shutil.rmtree(venv_dir)
+
+    # 加载最新快照
+    loaded_snapshot_name = manager.load(SnapshotManager.USE_LATEST)
+
+    # 验证不会重新加载目录
+    assert loaded_snapshot_name == saved_snapshot_name
+    assert not os.path.exists(os.path.join(constants.WORK_DIR, "comfyui/test.txt"))
 
 
 @pytest.fixture(autouse=True)
 def cleanup(setup_snapshot_files):
     yield
-    # 测试后清理临时文件
     shutil.rmtree(setup_snapshot_files)

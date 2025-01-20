@@ -32,7 +32,6 @@ class SnapshotManager:
         Returns:
             最终使用的快照名称；None表示不加载任何快照，使用镜像中的comfyui环境
         """
-        print(f"adsfa {snapshot_name}")
         target_snapshot_name = (
             self._select_latest_snapshot() if snapshot_name is self.USE_LATEST
             else snapshot_name
@@ -73,25 +72,43 @@ class SnapshotManager:
         Returns:
             str or None: 所选快照目录的名称，如果不存在任何快照目录则返回None
         """
-        try:
-            folders = [
-                f for f in os.listdir(constants.SNAPSHOT_DIR)
-                if os.path.isdir(os.path.join(constants.SNAPSHOT_DIR, f))
-            ]
-        except OSError:
+        snapshots = self.find_valid_snapshots()
+        if not snapshots:
             return None
+        else:
+            return snapshots[0]
 
-        latest_snapshot_name = None
-        latest_dt = None
-        for folder in folders:
-            try:
-                dt = datetime.strptime(folder, constants.SNAPSHOT_PATTERN)
-                if latest_dt is None or dt > latest_dt:
-                    latest_dt = dt
-                    latest_snapshot_name = folder
-            except ValueError:
-                continue
-        return latest_snapshot_name
+    def find_valid_snapshots(self):
+        """
+        获取所有符合规范的快照目录列表
+
+        Returns:
+            list[str]: 按时间排序的有效快照目录名称列表
+        """
+        if not os.path.exists(constants.SNAPSHOT_DIR):
+            return []
+
+        try:
+            folders = (f for f in os.scandir(constants.SNAPSHOT_DIR) if f.is_dir())
+
+            # 过滤出符合日期格式的文件夹名
+            valid_snapshots = [
+                f.name for f in folders
+                if self._is_valid_snapshot_name(f.name)
+            ]
+
+            # 按时间戳排序
+            return sorted(valid_snapshots, reverse=True)
+
+        except OSError:
+            return []
+
+    def _is_valid_snapshot_name(self, folder_name):
+        try:
+            datetime.strptime(folder_name, constants.SNAPSHOT_PATTERN)
+            return True
+        except ValueError:
+            return False
 
     def save(self) -> str:
         snapshot_name = datetime.now().strftime(constants.SNAPSHOT_PATTERN)

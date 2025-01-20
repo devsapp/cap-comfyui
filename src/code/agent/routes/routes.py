@@ -83,6 +83,13 @@ class Routes:
                 "status": "success"
             }), 200
 
+        @self.app.route("/management/snapshots", methods=["GET"])
+        def snapshots():
+            return jsonify({
+                "data": self._comfyui.find_snapshots(),
+                "status": "success"
+            }), 200
+
         # @self._sock.route('/ws')
         # def websocket_tester(ws):
         #     while True:

@@ -82,3 +82,6 @@ class ComfyuiService:
         print("Saving and Stopping comfyui workspace...")
         self.save()
         self.stop()
+
+    def find_snapshots(self):
+        return self._snapshot_mgr.find_valid_snapshots()

@@ -73,7 +73,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV BUILT_IN_DIR="/built-in"
 COPY built-in/ ${BUILT_IN_DIR}/
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir ${BUILT_IN_DIR}/requirments.txt
+    venv/bin/pip install --no-cache-dir -r ${BUILT_IN_DIR}/requirments.txt
 
 FROM agent AS agent
 

@@ -7,6 +7,7 @@ import websocket
 import constants
 from services.comfyui_service import ComfyuiService, ComfyuiStatus
 import traceback
+from .serverless_api_routes import ServerlessApiRoutes
 
 
 class Routes:
@@ -24,6 +25,10 @@ class Routes:
                 "status": "failed",
                 "message": f"{str(e)}\n{err_msg}"
             }), 500
+        
+        serverless_api = ServerlessApiRoutes()
+        serverless_api.register(self.app)
+
 
         @self.app.route("/management/start", methods=["POST"])
         def start():

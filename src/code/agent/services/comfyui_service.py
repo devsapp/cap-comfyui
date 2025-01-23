@@ -1,8 +1,9 @@
-from threading import Lock
 from enum import Enum
+from threading import Lock
 from typing import Dict, Set
 
 import constants
+from exceptions.exceptions import StateTransitionError
 from services.comfyui_process_manager import ComfyuiProcessManager
 from services.snapshot_manager import SnapshotManager
 
@@ -33,9 +34,7 @@ class ComfyuiService:
     def _transition_to(self, new_status: ComfyuiStatus) -> None:
         with self._status_lock:
             if new_status not in self._VALID_TRANSITIONS[self._status]:
-                raise RuntimeError(
-                    f"Illegal state transition: {self._status} -> {new_status}"
-                )
+                raise StateTransitionError(self._status, new_status)
             self._status = new_status
 
     @property

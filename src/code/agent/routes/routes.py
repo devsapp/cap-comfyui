@@ -1,12 +1,16 @@
 import logging
 import threading
+import traceback
+
 import requests
+import websocket
 from flask import Flask, request, jsonify, Response
 from flask_sock import Sock
-import websocket
+
 import constants
-from services.comfyui_service import ComfyuiService, ComfyuiStatus
-import traceback
+from exceptions.exceptions import CustomError
+from services.comfyui_service import ComfyuiStatus
+from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
 
 
@@ -14,96 +18,19 @@ class Routes:
     def __init__(self):
         self.app = Flask(__name__)
         self._sock = Sock(self.app)
-        self._comfyui = ComfyuiService()
         self.setup_routes()
 
     def setup_routes(self):
-        def _handle_exception(e):
-            err_msg = traceback.format_exc()
-            print(f"{str(e)}\nStacktrace:\n{err_msg}")
-            return jsonify({
-                "status": "failed",
-                "message": f"{str(e)}\n{err_msg}"
-            }), 500
+
+        management = ManagementRoutes()
+        management.register(self.app)
         
         serverless_api = ServerlessApiRoutes()
         serverless_api.register(self.app)
 
-
-        @self.app.route("/management/start", methods=["POST"])
-        def start():
-            # TODO: 异步
-            try:
-                snapshot = request.args.get('snapshot')
-                print(f"[debug] start with snapshot {snapshot}")
-                self._comfyui.start(snapshot)
-                return jsonify({
-                    "status": "success",
-                    "message": "Successfully load snapshot and start comfyui process"
-                }), 200
-            except Exception as e:
-                return _handle_exception(e)
-
-        @self.app.route("/management/stop", methods=["POST"])
-        def stop():
-            try:
-                self._comfyui.stop()
-                return jsonify({
-                    "status": "success",
-                    "message": "Successfully shutdown comfyui process"
-                }), 200
-            except Exception as e:
-                return _handle_exception(e)
-
-        @self.app.route("/management/save", methods=["POST"])
-        def save():
-            # TODO: 异步
-            try:
-                self._comfyui.save()
-                return jsonify({
-                    "status": "success",
-                    "message": "Successfully save snapshot"
-                }), 200
-            except Exception as e:
-                return _handle_exception(e)
-
-        @self.app.route("/management/saveAndStop", methods=["POST"])
-        def save_and_stop():
-            # TODO: 异步
-            try:
-                self._comfyui.save_and_stop()
-                return jsonify({
-                    "status": "success",
-                    "message": "Successfully save snapshot and stop comfyui process"
-                }), 200
-            except Exception as e:
-                return _handle_exception(e)
-
-        # TODO 检查文件内容有更新的接口
-
-        @self.app.route("/management/status", methods=["GET"])
-        def status():
-            return jsonify({
-                "data": self._comfyui.status.value,
-                "status": "success"
-            }), 200
-
-        @self.app.route("/management/snapshots", methods=["GET"])
-        def snapshots():
-            return jsonify({
-                "data": self._comfyui.find_snapshots(),
-                "status": "success"
-            }), 200
-
-        # @self._sock.route('/ws')
-        # def websocket_tester(ws):
-        #     while True:
-        #         message = ws.receive()
-        #         ws.send(f"Echo: {message}")
-
         @self._sock.route('/<path:path>')
         def comfyui_proxy_ws(ws, path):
-            comfyui_status = self._comfyui.status
+            comfyui_status = management.service.status
             if comfyui_status not in (ComfyuiStatus.RUNNING, ComfyuiStatus.SAVING):
                 return jsonify({
                     "status": "failed",
@@ -140,15 +67,13 @@ class Routes:
                 while True:
                     message = ws.receive()
                     ws_client.send(message)
-            except Exception as e:
-                return _handle_exception(e)
             finally:
                 ws_client.close()
 
         @self.app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         @self.app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         def comfyui_proxy(path=""):
-            comfyui_status = self._comfyui.status
+            comfyui_status = management.service.status
             if comfyui_status not in (ComfyuiStatus.RUNNING, ComfyuiStatus.SAVING):
                 return jsonify({
                     "status": "failed",
@@ -161,27 +86,47 @@ class Routes:
             # 转发请求头
             headers = {key: value for key, value in request.headers}
 
-            # 处理请求
-            try:
-                # 转发请求到目标服务器
-                resp = requests.request(
-                    method=request.method,
-                    url=target_url,
-                    headers=headers,
-                    data=request.get_data(),
-                    cookies=request.cookies,
-                    params=request.args,
-                    allow_redirects=False,
-                    stream=True
-                )
+            # 转发请求到目标服务器
+            resp = requests.request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                data=request.get_data(),
+                cookies=request.cookies,
+                params=request.args,
+                allow_redirects=False,
+                stream=True
+            )
 
-                proxy_response = Response(
-                    resp.content,
-                    status=resp.status_code,
-                    headers=dict(resp.headers)
-                )
-                # print(f"Forward request success, status code: {resp.status_code}")
-                return proxy_response
+            proxy_response = Response(
+                resp.content,
+                status=resp.status_code,
+                headers=dict(resp.headers)
+            )
+            # print(f"Forward request success, status code: {resp.status_code}")
+            return proxy_response
 
-            except requests.RequestException as e:
-                return _handle_exception(e)
+        @self.app.errorhandler(Exception)
+        def handle_all_errors(error):
+            return _handle_exception(error)
+
+        @self.app.errorhandler(CustomError)
+        def handle_base_error(error):
+            return _handle_exception(error)
+
+        def _handle_exception(e):
+            err_msg = traceback.format_exc()
+            print(f"{str(e)}\nStacktrace:\n{err_msg}")
+
+            if isinstance(e, CustomError):
+                # 处理自定义异常
+                return jsonify({
+                    "status": "failed",
+                    "message": str(e)
+                }), e.code
+            else:
+                # 处理其他非预期的异常
+                return jsonify({
+                    "status": "failed",
+                    "message": str(e)
+                }), 500

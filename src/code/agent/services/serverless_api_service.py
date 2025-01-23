@@ -23,7 +23,7 @@ class ServerlessApiService:
         #
         # 默认实现了基于共享存储的方式实现的状态持久化（需要正确挂载 NAS）
         # 必要时，也可以参考对应代码实现基于 Redis、TableStore、MySQL 等方式的状态持久化
-        self.store: Store = FileSystem()
+        self.store: Store = FileSystem(f"{constants.MNT_DIR}/output/serverless_api")
         self.store_lock = asyncio.Lock()
 
     def api_prompt(self, client_id: str, prompt: Any):

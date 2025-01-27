@@ -4,7 +4,7 @@ access: '{{ access }}'
 vars:
   region: '{{ region }}'
   name: '{{ name }}'
-  imageUrl: 'registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v15'
+  imageUrl: 'registry.{{ region }}.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v16'
   gpuType: '{{ gpu }}'
 
 resources:

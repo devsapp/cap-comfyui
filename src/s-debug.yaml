@@ -5,7 +5,7 @@ access: 'quanxi-zijian'
 vars:
   region: 'us-east-1'
   name: 'zijian-test-comfyui'
-  imageUrl: 'registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v15'
+  imageUrl: 'registry.us-east-1.aliyuncs.com/fc-demo2/zijian-test-sd:cap-comfyui-v16'
   gpuType: 'fc.gpu.tesla.1'
 
 resources:

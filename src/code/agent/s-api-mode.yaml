@@ -31,9 +31,12 @@ resources:
       customContainerConfig:
         image: ${vars.imageUrl}
       environmentVariables:
-        AUTO_LAUNCH: 'true'
         AUTO_LAUNCH_SNAPSHOT_NAME: 'latest'
         MNT_DIR: '/mnt/e2e-cases-duemu6__comfyui'
+      instanceLifecycleConfig:
+        initializer:
+          handler: 'true'
+          timeout: 180
       vpcConfig: auto
       nasConfig: auto
       logConfig: auto

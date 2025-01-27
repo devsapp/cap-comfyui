@@ -9,7 +9,7 @@ from flask_sock import Sock
 
 import constants
 from exceptions.exceptions import CustomError
-from services.comfyui_service import ComfyuiStatus
+from services.comfyui_service import ComfyuiStatus, ComfyuiService
 from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
 
@@ -27,6 +27,25 @@ class Routes:
         
         serverless_api = ServerlessApiRoutes()
         serverless_api.register(self.app)
+
+        @self.app.route("/initialize", methods=["POST"])
+        def initialize():
+            # See FC docs for all the HTTP headers: https://www.alibabacloud.com/help/doc-detail/132044.htm#common-headers
+            request_id = request.headers.get("x-fc-request-id", "")
+            print("FC Initialize Start RequestId: " + request_id)
+
+            # Use the following code to get temporary credentials
+            # access_key_id = request.headers['x-fc-access-key-id']
+            # access_key_secret = request.headers['x-fc-access-key-secret']
+            # access_security_token = request.headers['x-fc-security-token']
+
+            # API模式需要自动启动comfyui进程
+            # TODO 防止抛出5xx导致函数计算一直重试产生大量费用
+            service = ComfyuiService()
+            service.start(constants.AUTO_LAUNCH_SNAPSHOT_NAME)
+
+            print("FC Initialize End RequestId: " + request_id)
+            return "Function is initialized, request_id: " + request_id + "\n"
 
         @self._sock.route('/<path:path>')
         def comfyui_proxy_ws(ws, path):

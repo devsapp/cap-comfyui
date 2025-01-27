@@ -16,3 +16,8 @@ BOOT_CMD = [f"{VENV_DIR}/bin/python", f"{COMFYUI_DIR}/main.py", "--listen", "0.0
             "--input-directory", f"{MNT_DIR}/input",
             "--output-directory", f"{MNT_DIR}/output",
             "--temp-directory", f"{MNT_DIR}/output"]
+
+# API Mode
+AUTO_LAUNCH = os.getenv('AUTO_LAUNCH', 'false')
+AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv('AUTO_LAUNCH_SNAPSHOT_NAME', 'latest')
+# TODO 提供快照轮转机制，环境变量可配置未使用的快照上限，生产环境使用的快照需保证不会被轮转

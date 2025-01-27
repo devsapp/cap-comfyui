@@ -16,7 +16,7 @@ resources:
     component: fc3
     props:
       region: ${vars.region}              
-      functionName: "zijian-test-agent"
+      functionName: "zijian-test-agent-api"
       runtime: "custom-container"
       description: 'hello world by serverless devs'
       timeout: 600
@@ -31,6 +31,8 @@ resources:
       customContainerConfig:
         image: ${vars.imageUrl}
       environmentVariables:
+        AUTO_LAUNCH: true
+        AUTO_LAUNCH_SNAPSHOT_NAME: 'latest'
         MNT_DIR: '/mnt/e2e-cases-duemu6__comfyui'
       vpcConfig: auto
       nasConfig: auto

@@ -16,6 +16,17 @@ class ComfyuiStatus(Enum):
     STOPPING = "Stopping"
 
 
+def singleton(cls):
+    _instances = {}
+
+    def get_instance(*args, **kwargs):
+        if cls not in _instances:
+            _instances[cls] = cls(*args, **kwargs)
+        return _instances[cls]
+    return get_instance
+
+
+@singleton
 class ComfyuiService:
     _VALID_TRANSITIONS: Dict[ComfyuiStatus, Set[ComfyuiStatus]] = {
         ComfyuiStatus.STOPPED: {ComfyuiStatus.STARTING},

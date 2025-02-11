@@ -91,7 +91,7 @@ ENV BUILT_IN_DIR="/built-in"
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
-# MNT_DIR is initialized in s.yaml
+# MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 ARG IMAGE_TAG="${IMAGE_TAG}"
 ENV IMAGE_TAG=${IMAGE_TAG}
 

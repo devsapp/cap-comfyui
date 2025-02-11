@@ -23,6 +23,7 @@
 # ---- comfyui
 # ---- venv.tar
 
+MNT_DIR=${MODEL_ASSET_DIR:="/mnt/auto"}
 echo "Mount dir: ${MNT_DIR}"
 echo "Built-in dir: ${BUILT_IN_DIR}"
 IMAGE_TAG=$(cat /IMAGE_TAG)

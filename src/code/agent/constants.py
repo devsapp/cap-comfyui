@@ -1,7 +1,7 @@
 import os
 
 WORK_DIR = os.getenv('WORK_DIR', '/root')
-MNT_DIR = os.getenv('MNT_DIR', '/mnt/auto')
+MNT_DIR = os.getenv('MODEL_ASSET_DIR', '/mnt/auto')
 COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
 VENV_DIR = os.getenv('VENV_DIR', WORK_DIR + '/venv')
 SNAPSHOT_DIR = MNT_DIR + '/snapshots'

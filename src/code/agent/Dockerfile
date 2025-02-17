@@ -2,20 +2,23 @@ FROM python:3.10.16-slim
 
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
-    apt install -y git
+    apt install -y \
+    git curl wget jq ffmpeg gcc g++ build-essential
 
 WORKDIR /root
 ENV WORK_DIR='/root'
-ENV MNT_DIR='/mnt/auto'
+ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
+ENV VENV_DIR="${WORK_DIR}/venv"
+ENV AGENT_DIR="${WORK_DIR}/agent"
 
-COPY . agent/
+COPY . ${AGENT_DIR}/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
-    python3 -m venv agent/venv
+    python3 -m venv ${AGENT_DIR}/venv
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    agent/venv/bin/pip install -r agent/requirements.txt --no-cache-dir
+    ${AGENT_DIR}/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 
-RUN chmod +x agent/entrypoint.bash
+RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

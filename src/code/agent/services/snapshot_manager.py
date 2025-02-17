@@ -62,6 +62,13 @@ class SnapshotManager:
             file_ops.extract(constants.WORK_DIR + "/venv.tar")
             file_ops.remove(constants.WORK_DIR + "/venv.tar")
 
+        # 创建模型目录软链接
+        file_ops.create_symlink(
+            source_path=constants.MNT_DIR + "/models",
+            link_path=constants.COMFYUI_DIR + "/models",
+            force=True
+        )
+
         self.cur_snapshot_name = target_snapshot_name
         return target_snapshot_name
 

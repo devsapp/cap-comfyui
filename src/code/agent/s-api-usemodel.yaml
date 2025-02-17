@@ -3,8 +3,8 @@ name: cap-comfyui
 access: 'quanxi-zijian'
 vars:
   region: 'cn-hangzhou'
-  name: 'zijian-test-comfyui-modelsvc'
-  imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v17'
+  name: 'zijian-test-comfyui-usenotemptynas-api'
+  imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-agent-v2'
   role: 'acs:ram::1431999136518149:role/aliyundevsdefaultrole'
   gpuType: 'fc.gpu.tesla.1'
   snapshotName: 'latest'
@@ -26,15 +26,24 @@ resources:
         AUTO_LAUNCH_SNAPSHOT_NAME: '${vars.snapshotName}'
 
       # 挂载存储配置
-      vpcConfig: auto
-      nasConfig: auto
+      nasConfig:
+        groupId: 0
+        mountPoints:
+          - enableTLS: false
+            serverAddr: "079114a64a-uvp4.cn-hangzhou.nas.aliyuncs.com:/cap-models/19b01965-c2f5-56c1-883f-4d011f37f94a"
+            mountDir: "/mnt/zijian-test-comfyui-xh8lowvdq-model-dld"
+        userId: 0
+      vpcConfig:
+        securityGroupId: "sg-bp17i05zspzkgkvjsbu4"
+        vpcId: "vpc-bp1aqum0mca3iugmw345n"
+        vSwitchIds:
+          - "vsw-bp1njgn8sbaeij9r84nqc"
 
       # 实例规格
       timeout: 7200
       diskSize: 61440
       cpu: 8
       memorySize: 32768
-      instanceConcurrency: 200
       gpuConfig:
         gpuMemorySize: 16384
         gpuType: '${vars.gpuType}'
@@ -52,4 +61,4 @@ resources:
       # 预留配置
       provisionConfig:
         target: 1
-        alwaysAllocateGPU: false
+        alwaysAllocateGPU: true

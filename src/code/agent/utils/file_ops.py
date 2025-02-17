@@ -125,3 +125,36 @@ def extract(tar_file_path, output_dir=None):
     except Exception as e:
         print(f"Failed to extract tar, reason: {e}")
         raise
+
+
+def create_symlink(source_path, link_path, force=False):
+    """
+    创建符号链接
+
+    Args:
+        source_path: 源路径
+        link_path: 链接路径
+        force: 是否强制创建（如果链接已存在则先删除）
+    """
+    try:
+        # 确保源路径存在
+        if not os.path.exists(source_path):
+            raise Exception(f"Source path does not exist: {source_path}")
+        # 如果链接已存在且force为True，则删除已存在的链接
+        if force and os.path.lexists(link_path):
+            if os.path.islink(link_path):
+                os.unlink(link_path)
+            elif os.path.isfile(link_path):
+                os.remove(link_path)
+            elif os.path.isdir(link_path):
+                shutil.rmtree(link_path)
+
+        # 确保链接的父目录存在
+        os.makedirs(os.path.dirname(link_path), exist_ok=True)
+
+        # 创建符号链接
+        os.symlink(source_path, link_path)
+
+    except Exception as e:
+        print(f"Failed to create symlink from {source_path} to {link_path}, reason: {e}")
+        raise

@@ -50,16 +50,3 @@ resources:
           description: ''
           qualifier: LATEST
           triggerType: http
-#      vpcConfig:
-#        securityGroupId: sg-0xi1tt3egernm2auk3al
-#        vpcId: vpc-0xipbjyz6b3a24mz21bur
-#        vSwitchIds:
-#          - vsw-0xidb3dbc6cghnn98s6ln
-#      nasConfig:
-#        groupId: 0
-#        mountPoints:
-#          - enableTLS: false
-#            serverAddr: >-
-#              13ac804a096-ajk81.us-east-1.nas.aliyuncs.com:/sd-project-0
-#            mountDir: /mnt/auto
-#        userId: 0

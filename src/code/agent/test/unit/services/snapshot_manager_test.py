@@ -38,8 +38,19 @@ def setup_snapshot_files(tmp_path):
             tarinfo.size = len(test_content)
             tar.addfile(tarinfo, test_file)
 
+    # 创建挂载目录和模型目录
+    mnt_dir = tmp_path / "mnt"
+    mnt_dir.mkdir()
+    models_dir = mnt_dir / "models"
+    models_dir.mkdir()
+    (models_dir / "test_model.bin").write_text("test model content")
+
+    # 设置常量
     constants.SNAPSHOT_DIR = str(snapshot_dir)
     constants.WORK_DIR = str(tmp_path / "work")
+    constants.MNT_DIR = str(mnt_dir)
+    constants.COMFYUI_DIR = str(tmp_path / "work/comfyui")
+
     os.makedirs(constants.WORK_DIR, exist_ok=True)
 
     return tmp_path
@@ -57,6 +68,12 @@ def test_load_latest_snapshot(setup_snapshot_files):
     assert os.path.exists(os.path.join(constants.WORK_DIR, "venv/test_venv.txt"))
     assert not os.path.exists(os.path.join(constants.WORK_DIR, "venv.tar"))
 
+    # 验证模型目录软链接
+    models_link = os.path.join(constants.COMFYUI_DIR, "models")
+    assert os.path.islink(models_link)
+    assert os.readlink(models_link) == os.path.join(constants.MNT_DIR, "models")
+    assert os.path.exists(os.path.join(models_link, "test_model.bin"))
+
 
 def test_load_specific_snapshot(setup_snapshot_files):
     manager = SnapshotManager()
@@ -64,6 +81,11 @@ def test_load_specific_snapshot(setup_snapshot_files):
 
     assert snapshot_name == "20231202-115959"
     assert manager.cur_snapshot_name == "20231202-115959"
+
+    # 验证模型目录软链接
+    models_link = os.path.join(constants.COMFYUI_DIR, "models")
+    assert os.path.islink(models_link)
+    assert os.readlink(models_link) == os.path.join(constants.MNT_DIR, "models")
 
 
 def test_load_nonexistent_snapshot(setup_snapshot_files):
@@ -81,6 +103,11 @@ def test_load_same_snapshot_twice(setup_snapshot_files):
 
     assert first_load == second_load
     assert manager.cur_snapshot_name == "20231202-120000"
+
+    # 验证模型目录软链接仍然存在且正确
+    models_link = os.path.join(constants.COMFYUI_DIR, "models")
+    assert os.path.islink(models_link)
+    assert os.readlink(models_link) == os.path.join(constants.MNT_DIR, "models")
 
 
 def test_select_latest_snapshot_with_invalid_format(setup_snapshot_files):

@@ -1,0 +1,53 @@
+edition: 3.0.0 #  命令行YAML规范版本，遵循语义化版本（Semantic Versioning）规范
+name: cap-comfyui
+access: 'quanxi-zijian'
+vars:
+  region: 'cn-hangzhou'
+  name: 'zijian-test-comfyui-usenotemptynas'
+  imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-agent-v2'
+  role: 'acs:ram::1431999136518149:role/aliyundevsdefaultrole'
+  gpuType: 'fc.gpu.tesla.1'
+  snapshotName: 'latest'
+
+resources:
+  comfyui:
+    component: model@dev.25.210
+    props:
+      # 基本配置
+      region: '${vars.region}'
+      name: '${vars.name}'
+      description: 'ComfyUI 函数'
+      logConfig: auto
+      httpTrigger: auto
+      modelConfig:
+        sourceType: custom-container
+      role: '${vars.role}'
+
+      # 挂载存储配置
+      nasConfig:
+        groupId: 0
+        mountPoints:
+          - enableTLS: false
+            serverAddr: "079114a64a-uvp4.cn-hangzhou.nas.aliyuncs.com:/cap-models/19b01965-c2f5-56c1-883f-4d011f37f94a"
+            mountDir: "/mnt/zijian-test-comfyui-xh8lowvdq-model-dld"
+        userId: 0
+      vpcConfig:
+        securityGroupId: "sg-bp17i05zspzkgkvjsbu4"
+        vpcId: "vpc-bp1aqum0mca3iugmw345n"
+        vSwitchIds:
+          - "vsw-bp1njgn8sbaeij9r84nqc"
+
+      # 实例规格
+      timeout: 7200
+      diskSize: 61440
+      cpu: 8
+      memorySize: 32768
+      gpuConfig:
+        gpuMemorySize: 16384
+        gpuType: '${vars.gpuType}'
+
+      # 运行时
+      customContainerConfig:
+        port: 9000
+        image: ${vars.imageUrl} 
+        instanceConcurrency: 200

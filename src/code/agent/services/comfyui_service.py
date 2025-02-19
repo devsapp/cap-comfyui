@@ -54,7 +54,7 @@ class ComfyuiService:
             return self._status
 
     def start(self, snapshot_name: str):
-        print("Starting comfyui process...")
+        print(f"Starting comfyui process using snapshot '{snapshot_name}'...")
         self._transition_to(ComfyuiStatus.STARTING)
 
         try:

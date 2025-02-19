@@ -20,7 +20,6 @@ class ManagementRoutes:
         def start():
             # TODO: 异步
             snapshot = request.args.get('snapshot')
-            print(f"[debug] start with snapshot {snapshot}")
             self.service.start(snapshot)
             return jsonify({
                 "status": "success",

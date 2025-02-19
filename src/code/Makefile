@@ -51,6 +51,7 @@ build-comfyui: build
 	docker build -t $(COMFYUI_IMAGE) -f Dockerfile.comfyui .
 
 # 本地测试运行Comfyui
+# curl -X POST http://localhost:9000/management/start
 .PHONY: run-comfyui
 run-comfyui:
 	docker run --gpus all -it --rm -p 9000:9000 -p 8188:8188 $(COMFYUI_IMAGE)
@@ -84,7 +85,7 @@ upload-base:
 
 	@echo "Uploading files to OSS..."
 	@ossutil cp -r ./tmp/comfyui oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/comfyui && \
-	ossutil cp ./tmp/venv.tar.gz oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/venv.tar.gz && \
+	ossutil cp ./tmp/venv.tar oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/venv.tar && \
 	ossutil cp -r ./tmp/comfyui/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models
 
 	@rm -rf tmp

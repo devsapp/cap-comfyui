@@ -1,11 +1,12 @@
 FROM python:3.10.16-slim
 
+WORKDIR /root
+
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
     apt install -y \
     git curl wget jq ffmpeg gcc g++ build-essential
 
-WORKDIR /root
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV VENV_DIR="${WORK_DIR}/venv"

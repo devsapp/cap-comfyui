@@ -69,26 +69,23 @@ TIMESTAMP := $(shell date +%Y%m%d-%H%M%S)
 .PHONY: upload-base
 upload-base:
 	@echo "Starting upload process..."
-
-	# 创建临时目录并确保清理
+	@rm -rf tmp
 	@mkdir -p tmp
-	@trap 'rm -rf tmp' EXIT
 
-	# 从容器复制文件
 	@echo "Copying files from container..."
+	@docker rm -f comfyuiImage 2>/dev/null || true
 	@docker create --name comfyuiImage $(COMFYUI_IMAGE) && \
 	docker cp comfyuiImage:/root/comfyui ./tmp/comfyui && \
-	docker cp comfyuiImage:/root/venv ./tmp/venv && \
-	docker rm comfyuiImage
+	docker cp comfyuiImage:/root/venv ./tmp/venv
+	@docker rm comfyuiImage
 
-	# 创建压缩文件
 	@echo "Creating venv.tar..."
 	@tar -cf ./tmp/venv.tar ./tmp/venv
 
-	# 上传文件到OSS
 	@echo "Uploading files to OSS..."
-	@ossutil cp -r ./tmp/comfyui oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/comfyui
-	@ossutil cp ./tmp/venv.tar.gz oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/venv.tar.gz
-	@ossutil cp -r ./tmp/comfyui/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models
+	@ossutil cp -r ./tmp/comfyui oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/comfyui && \
+	ossutil cp ./tmp/venv.tar.gz oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/venv.tar.gz && \
+	ossutil cp -r ./tmp/comfyui/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models
 
+	@rm -rf tmp
 	@echo "Upload completed successfully"

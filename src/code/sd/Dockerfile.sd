@@ -80,4 +80,5 @@ COPY --from=codes ${SD_DIR} ${SD_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 # TODO add pip path of venv
 
+ENV BACKEND_TYPE="sd"
 ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]

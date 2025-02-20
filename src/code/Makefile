@@ -1,8 +1,10 @@
 # 定义变量
 AGENT_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-agent-v2
 COMFYUI_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v18
+SD_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v1
 OSS_BUCKET = dipper-cache-cn-hangzhou
 OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
+OSS_SD_BASE_DIR = base/sd/v1.10.1-alpha
 
 .PHONY: update-agent
 update-agent: build login push deploy
@@ -43,7 +45,7 @@ deploy:
 
 # ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 .PHONY: update-comfyui
-update-comfyui: build-comfyui upload-base deploy
+update-comfyui: build-comfyui upload-comfyui-base deploy
 
 # 构建Comfyui镜像
 .PHONY: build-comfyui
@@ -67,8 +69,8 @@ exec-comfyui:
 # endpoint: 内网oss-cn-hangzhou-internal.aliyuncs.com 公网oss-cn-hangzhou.aliyuncs.com
 # ak & sk: fc-ide-prod账号包含OSS账号写权限的一组AK SK，可联系zijian
 TIMESTAMP := $(shell date +%Y%m%d-%H%M%S)
-.PHONY: upload-base
-upload-base:
+.PHONY: upload-comfyui-base
+upload-comfyui-base:
 	@echo "Starting upload process..."
 	@rm -rf tmp
 	@mkdir -p tmp
@@ -87,6 +89,58 @@ upload-base:
 	@ossutil cp -r ./tmp/comfyui oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/comfyui && \
 	ossutil cp ./tmp/venv.tar oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/venv.tar && \
 	ossutil cp -r ./tmp/comfyui/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models
+
+	@rm -rf tmp
+	@echo "Upload completed successfully"
+
+# ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+.PHONY: update-sd
+update-sd: build-sd upload-sd-base deploy
+
+# 构建SD镜像
+.PHONY: build-sd
+build-sd: build
+	docker build -t $(SD_IMAGE) -f Dockerfile.sd .
+
+# 本地测试运行SD
+# curl -X POST http://localhost:9000/management/start
+.PHONY: run-sd
+run-sd:
+	docker run --gpus all -it --rm -p 9000:9000 -p 7860:7860 $(SD_IMAGE)
+
+# 本地测试登录SD
+.PHONY: exec-sd
+exec-sd:
+	docker run --gpus all -it --rm -p 9000:9000 -p 7860:7860 --entrypoint /bin/bash $(SD_IMAGE)
+
+# 上传到官方OSS源
+# sudo -v ; curl https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+# ossutil config
+# endpoint: 内网oss-cn-hangzhou-internal.aliyuncs.com 公网oss-cn-hangzhou.aliyuncs.com
+# ak & sk: fc-ide-prod账号包含OSS账号写权限的一组AK SK，可联系zijian
+TIMESTAMP := $(shell date +%Y%m%d-%H%M%S)
+.PHONY: upload-sd-base
+upload-sd-base:
+	@echo "Starting upload process..."
+	@rm -rf tmp
+	@mkdir -p tmp
+
+	@echo "Copying files from container..."
+	@docker rm -f sdImage 2>/dev/null || true
+	@docker create --name sdImage $(SD_IMAGE) && \
+	docker cp sdImage:/root/stable-diffusion-webui ./tmp/stable-diffusion-webui && \
+	docker cp sdImage:/root/venv ./tmp/venv
+	docker cp sdImage:/root/.cache ./tmp/.cache
+	@docker rm sdImage
+
+	@echo "Creating venv.tar..."
+	@tar -cf ./tmp/venv.tar ./tmp/venv
+
+	@echo "Uploading files to OSS..."
+	@ossutil cp -r ./tmp/stable-diffusion-webui oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(TIMESTAMP)/stable-diffusion-webui && \
+	ossutil cp ./tmp/venv.tar oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(TIMESTAMP)/venv.tar && \
+	ossutil cp ./tmp/.cache oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(TIMESTAMP)/.cache && \
+	ossutil cp -r ./tmp/stable-diffusion-webui/models oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/models
 
 	@rm -rf tmp
 	@echo "Upload completed successfully"

@@ -40,6 +40,13 @@ FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root
 
+# 安装 rust 环境
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt update && \
+    apt install -y curl gcc g++ build-essential
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="/root/.cargo/bin:$PATH"
+
 # 升级pip并初始化venv虚拟环境
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \

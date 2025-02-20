@@ -9,7 +9,7 @@ from flask_sock import Sock
 
 import constants
 from exceptions.exceptions import CustomError
-from services.comfyui_service import ComfyuiStatus, ComfyuiService
+from services.management_service import BackendStatus, ManagementService
 from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
 
@@ -41,7 +41,7 @@ class Routes:
 
             # API模式需要自动启动comfyui进程
             # TODO 防止抛出5xx导致函数计算一直重试产生大量费用
-            service = ComfyuiService()
+            service = ManagementService()
             service.start(constants.AUTO_LAUNCH_SNAPSHOT_NAME)
 
             print("FC Initialize End RequestId: " + request_id)
@@ -50,10 +50,10 @@ class Routes:
         @self._sock.route('/<path:path>')
         def comfyui_proxy_ws(ws, path):
             comfyui_status = management.service.status
-            if comfyui_status not in (ComfyuiStatus.RUNNING, ComfyuiStatus.SAVING):
+            if comfyui_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
                 return jsonify({
                     "status": "failed",
-                    "message": "Please start your comfyui service first"
+                    "message": "Please start your comfyui/sd service first"
                 }), 500
 
             # print(f"Forwarding websocket request for path: {path}")
@@ -93,10 +93,10 @@ class Routes:
         @self.app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         def comfyui_proxy(path=""):
             comfyui_status = management.service.status
-            if comfyui_status not in (ComfyuiStatus.RUNNING, ComfyuiStatus.SAVING):
+            if comfyui_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
                 return jsonify({
                     "status": "failed",
-                    "message": "Please start your comfyui service first"
+                    "message": "Please start your comfyui/sd service first"
                 }), 500
 
             # print(f"Forwarding request for path: {path}")

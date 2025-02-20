@@ -45,9 +45,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
     python3 -m venv venv
 
-# 安装cu124最新PyTorch及相关包
+# 安装cu124最新PyTorch及相关包，需锁版本与requirements.txt中一致
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir torch torchvision xformers \
+    venv/bin/pip install --no-cache-dir torch==2.6.0 torchvision==0.21.0 xformers \
     --extra-index-url https://download.pytorch.org/whl/cu124
 
 # 安装 源码 所使用的依赖

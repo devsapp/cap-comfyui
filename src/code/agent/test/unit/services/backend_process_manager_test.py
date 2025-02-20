@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from services.comfyui_process_manager import ComfyuiProcessManager
+from services.process.backend_process_manager import BackendProcessManager
 
 
 @pytest.fixture
 def process_manager():
-    return ComfyuiProcessManager()
+    return BackendProcessManager()
 
 
 def test_start_real_process(process_manager):

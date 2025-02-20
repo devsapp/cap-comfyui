@@ -4,7 +4,7 @@ import pytest
 import os
 import shutil
 from datetime import datetime
-from services.snapshot_manager import SnapshotManager
+from services.workspace.snapshot_manager import SnapshotManager
 import constants
 
 

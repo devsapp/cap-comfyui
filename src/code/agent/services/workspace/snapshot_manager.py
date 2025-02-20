@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
 
-from utils import file_ops
 import constants
 
 
@@ -30,7 +29,7 @@ class SnapshotManager:
         Args:
             snapshot_name: 目标快照名称；若为USE_LATEST，则从用户挂载目录中寻找最近一次快照并加载；若快照已加载则不会重复加载。
         Returns:
-            最终使用的快照名称；None表示不加载任何快照，使用镜像中的comfyui环境
+            最终使用的快照名称；None表示不加载任何快照，使用镜像中的comfyui/sd环境
         """
         target_snapshot_name = (
             self._select_latest_snapshot() if snapshot_name == self.USE_LATEST
@@ -47,27 +46,13 @@ class SnapshotManager:
         if not os.path.exists(snapshot_path):
             return self.cur_snapshot_name
 
-        # 清理工作目录
-        with self.timer("Clearing work dir"):
-            file_ops.remove(constants.WORK_DIR + "/comfyui")
-            file_ops.remove(constants.WORK_DIR + "/venv")
-
-        # 下载快照
-        with self.timer(f"Downloading snapshot from {snapshot_path}"):
-            file_ops.copy(snapshot_path + "/comfyui", constants.WORK_DIR + "/comfyui")
-            file_ops.copy(snapshot_path + "/venv.tar", constants.WORK_DIR + "/venv.tar")
-
-        # 解压依赖
-        with self.timer("Extracting dependencies"):
-            file_ops.extract(constants.WORK_DIR + "/venv.tar")
-            file_ops.remove(constants.WORK_DIR + "/venv.tar")
-
-        # 创建模型目录软链接
-        file_ops.create_symlink(
-            source_path=constants.MNT_DIR + "/models",
-            link_path=constants.COMFYUI_DIR + "/models",
-            force=True
+        from services.workspace.snapshot_loader import ComfyUISnapshotLoader
+        from services.workspace.snapshot_loader import SDSnapshotLoader
+        loader = (
+            ComfyUISnapshotLoader(self.timer) if constants.BACKEND_TYPE == constants.TYPE_COMFYUI
+            else SDSnapshotLoader(self.timer)
         )
+        loader.load(snapshot_path)
 
         self.cur_snapshot_name = target_snapshot_name
         return target_snapshot_name
@@ -122,14 +107,13 @@ class SnapshotManager:
         snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
         os.makedirs(snapshot_path, exist_ok=True)
 
-        # 打包
-        with self.timer("Compressing dependencies"):
-            file_ops.compress(constants.WORK_DIR + "/venv.tar", constants.WORK_DIR, ["venv"])
-
-        # 上传
-        with self.timer(f"Uploading snapshot to {snapshot_path}"):
-            file_ops.copy(constants.WORK_DIR + "/comfyui", snapshot_path + "/comfyui")
-            file_ops.copy(constants.WORK_DIR + "/venv.tar", snapshot_path + "/venv.tar")
+        from services.workspace.snapshot_saver import ComfyUISnapshotSaver
+        from services.workspace.snapshot_saver import SDSnapshotSaver
+        saver = (
+            ComfyUISnapshotSaver(self.timer) if constants.BACKEND_TYPE == constants.TYPE_COMFYUI
+            else SDSnapshotSaver(self.timer)
+        )
+        saver.save(snapshot_path)
 
         self.cur_snapshot_name = snapshot_name
         return snapshot_name

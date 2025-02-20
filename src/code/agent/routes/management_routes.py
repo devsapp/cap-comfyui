@@ -1,13 +1,13 @@
 from flask import Blueprint, Flask, request, jsonify
 
-from services.comfyui_service import ComfyuiService
+from services.management_service import ManagementService
 
 
 class ManagementRoutes:
 
     def __init__(self):
         self.bp = Blueprint("management", __name__, url_prefix="/management")
-        self.service = ComfyuiService()
+        self.service = ManagementService()
         self.setup_routes()
 
     def register(self, app: Flask):

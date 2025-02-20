@@ -2,7 +2,7 @@ import os
 
 TYPE_COMFYUI = 'comfyui'
 TYPE_SD = 'sd'
-APP_TYPE = os.getenv('APP_TYPE', TYPE_COMFYUI)
+BACKEND_TYPE = os.getenv('BACKEND_TYPE', TYPE_COMFYUI)
 
 WORK_DIR = os.getenv('WORK_DIR', '/root')
 MNT_DIR = os.getenv('MODEL_ASSET_DIR', '/mnt/auto')
@@ -11,17 +11,7 @@ SNAPSHOT_DIR = MNT_DIR + '/snapshots'
 SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
 COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
 COMFYUI_PROCESS_PORT = 8188
-SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
-SD_PROCESS_PORT = 7860
-if APP_TYPE == TYPE_COMFYUI:
-    APP_HOST = f"127.0.0.1:{COMFYUI_PROCESS_PORT}"
-else:
-    APP_HOST = f"127.0.0.1:{SD_PROCESS_PORT}"
-
-DEFAULT_READINESS_POLL_INTERVAL = 3
-DEFAULT_READINESS_TIMEOUT = 300
-DEFAULT_LIVENESS_POLL_INTERVAL = 5
-BOOT_CMD = [
+COMFYUI_BOOT_CMD = [
     f"{VENV_DIR}/bin/python",
     f"{COMFYUI_DIR}/main.py",
     "--listen",
@@ -31,8 +21,31 @@ BOOT_CMD = [
     "--output-directory",
     f"{MNT_DIR}/output",
     "--temp-directory",
-    f"{MNT_DIR}/output",
+    f"{MNT_DIR}/output"
 ]
+SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
+SD_PROCESS_PORT = 7860
+SD_BOOT_CMD = [
+    f"{VENV_DIR}/bin/python",
+    f"{SD_DIR}/webui.py",
+    "--listen",
+    "--xformers",
+    "--enable-insecure-extension-access",
+    "--skip-version-check",
+    "--no-download-sd-model",
+    "--gradio-allowed-path=/"
+]
+if BACKEND_TYPE == TYPE_COMFYUI:
+    BACKEND_PROCESS_PORT = COMFYUI_PROCESS_PORT
+    BOOT_CMD = COMFYUI_BOOT_CMD
+else:
+    BACKEND_PROCESS_PORT = SD_PROCESS_PORT
+    BOOT_CMD = SD_BOOT_CMD
+APP_HOST = f"127.0.0.1:{BACKEND_PROCESS_PORT}"
+
+DEFAULT_READINESS_POLL_INTERVAL = 3
+DEFAULT_READINESS_TIMEOUT = 300
+DEFAULT_LIVENESS_POLL_INTERVAL = 5
 
 # API Mode
 AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")

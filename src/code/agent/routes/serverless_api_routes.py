@@ -3,7 +3,7 @@ import threading
 from queue import Queue
 
 from utils.bool import is_true
-from services.serverless_api_service import ServerlessApiService
+from services.serverlessapi.serverless_api_service import ServerlessApiService
 
 from flask_sock import Sock
 from simple_websocket import Server

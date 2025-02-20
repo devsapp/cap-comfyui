@@ -2,13 +2,13 @@ import time
 
 import pytest
 from unittest.mock import Mock, patch
-from services.comfyui_service import ComfyuiService, ComfyuiStatus
+from services.management_service import ManagementService, BackendStatus
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 @pytest.fixture
 def mock_process_mgr():
-    with patch('services.comfyui_service.ComfyuiProcessManager') as mock:
+    with patch('services.process.process_manager.ProcessManager') as mock:
         instance = mock.return_value
         instance.start = Mock()
         instance.wait_until_ready = Mock(side_effect=lambda: time.sleep(1))
@@ -18,7 +18,7 @@ def mock_process_mgr():
 
 @pytest.fixture
 def mock_snapshot_mgr():
-    with patch('services.comfyui_service.SnapshotManager') as mock:
+    with patch('services.workspace.snapshot_manager.SnapshotManager') as mock:
         instance = mock.return_value
         instance.load = Mock(side_effect=lambda: time.sleep(1))
         instance.save = Mock(side_effect=lambda: time.sleep(1))
@@ -27,7 +27,7 @@ def mock_snapshot_mgr():
 
 @pytest.fixture
 def service(mock_process_mgr, mock_snapshot_mgr):
-    service = ComfyuiService()
+    service = ManagementService()
     service._process_mgr = mock_process_mgr
     service._snapshot_mgr = mock_snapshot_mgr
     return service
@@ -67,15 +67,15 @@ def test_concurrent_start(service, mock_process_mgr, mock_snapshot_mgr):
 
     # 验证成功的启动状态转换正确
     successful_start = successful_starts[0]
-    assert successful_start['initial_status'] == ComfyuiStatus.STOPPED
-    assert successful_start['final_status'] == ComfyuiStatus.RUNNING
+    assert successful_start['initial_status'] == BackendStatus.STOPPED
+    assert successful_start['final_status'] == BackendStatus.RUNNING
 
     # 验证失败的启动包含适当的错误信息
     for failed_start in failed_starts:
         assert "Illegal state transition" in failed_start['error']
 
     # 验证最终状态和调用次数
-    assert service.status == ComfyuiStatus.RUNNING
+    assert service.status == BackendStatus.RUNNING
     assert mock_snapshot_mgr.load.call_count == 1
     assert mock_process_mgr.start.call_count == 1
     assert mock_process_mgr.wait_until_ready.call_count == 1
@@ -85,9 +85,9 @@ def test_start_during_starting_fails(service):
     """测试在启动过程中再次调用start会失败"""
 
     def slow_start():
-        service._transition_to(ComfyuiStatus.STARTING)
+        service._transition_to(BackendStatus.STARTING)
         time.sleep(0.5)  # 模拟启动过程
-        service._transition_to(ComfyuiStatus.RUNNING)
+        service._transition_to(BackendStatus.RUNNING)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         # 开始第一次启动
@@ -104,11 +104,11 @@ def test_start_during_starting_fails(service):
         # 等待第一次启动完成
         first_start.result()
 
-    assert service.status == ComfyuiStatus.RUNNING
+    assert service.status == BackendStatus.RUNNING
 
 
 def test_initial_status(service):
-    assert service.status == ComfyuiStatus.STOPPED
+    assert service.status == BackendStatus.STOPPED
 
 
 def test_start_success(service, mock_process_mgr, mock_snapshot_mgr):
@@ -117,7 +117,7 @@ def test_start_success(service, mock_process_mgr, mock_snapshot_mgr):
     mock_snapshot_mgr.load.assert_called_once()
     mock_process_mgr.start.assert_called_once()
     mock_process_mgr.wait_until_ready.assert_called_once()
-    assert service.status == ComfyuiStatus.RUNNING
+    assert service.status == BackendStatus.RUNNING
 
 
 def test_start_failure(service, mock_process_mgr, mock_snapshot_mgr):
@@ -126,47 +126,47 @@ def test_start_failure(service, mock_process_mgr, mock_snapshot_mgr):
     with pytest.raises(Exception):
         service.start()
 
-    assert service.status == ComfyuiStatus.STOPPED
+    assert service.status == BackendStatus.STOPPED
 
 
 def test_save_success(service, mock_snapshot_mgr):
-    service._status = ComfyuiStatus.RUNNING
+    service._status = BackendStatus.RUNNING
     service.save()
 
     mock_snapshot_mgr.save.assert_called_once()
-    assert service.status == ComfyuiStatus.RUNNING
+    assert service.status == BackendStatus.RUNNING
 
 
 def test_save_failure(service, mock_snapshot_mgr):
-    service._status = ComfyuiStatus.RUNNING
+    service._status = BackendStatus.RUNNING
     mock_snapshot_mgr.save.side_effect = Exception("Save failed")
 
     with pytest.raises(Exception):
         service.save()
 
-    assert service.status == ComfyuiStatus.RUNNING
+    assert service.status == BackendStatus.RUNNING
 
 
 def test_stop_success(service, mock_process_mgr):
-    service._status = ComfyuiStatus.RUNNING
+    service._status = BackendStatus.RUNNING
     service.stop()
 
     mock_process_mgr.stop.assert_called_once()
-    assert service.status == ComfyuiStatus.STOPPED
+    assert service.status == BackendStatus.STOPPED
 
 
 def test_stop_failure(service, mock_process_mgr):
-    service._status = ComfyuiStatus.RUNNING
+    service._status = BackendStatus.RUNNING
     mock_process_mgr.stop.side_effect = Exception("Stop failed")
 
     with pytest.raises(Exception):
         service.stop()
 
-    assert service.status == ComfyuiStatus.RUNNING
+    assert service.status == BackendStatus.RUNNING
 
 
 def test_save_and_stop(service):
-    service._status = ComfyuiStatus.RUNNING
+    service._status = BackendStatus.RUNNING
     with patch.object(service, 'save') as mock_save:
         with patch.object(service, 'stop') as mock_stop:
             service.save_and_stop()
@@ -177,16 +177,16 @@ def test_save_and_stop(service):
 
 def test_invalid_transition(service):
     with pytest.raises(RuntimeError):
-        service._transition_to(ComfyuiStatus.RUNNING)
+        service._transition_to(BackendStatus.RUNNING)
 
 
 @pytest.mark.parametrize("current_status,new_status", [
-    (ComfyuiStatus.STOPPED, ComfyuiStatus.STARTING),
-    (ComfyuiStatus.STARTING, ComfyuiStatus.RUNNING),
-    (ComfyuiStatus.RUNNING, ComfyuiStatus.SAVING),
-    (ComfyuiStatus.SAVING, ComfyuiStatus.RUNNING),
-    (ComfyuiStatus.RUNNING, ComfyuiStatus.STOPPING),
-    (ComfyuiStatus.STOPPING, ComfyuiStatus.STOPPED),
+    (BackendStatus.STOPPED, BackendStatus.STARTING),
+    (BackendStatus.STARTING, BackendStatus.RUNNING),
+    (BackendStatus.RUNNING, BackendStatus.SAVING),
+    (BackendStatus.SAVING, BackendStatus.RUNNING),
+    (BackendStatus.RUNNING, BackendStatus.STOPPING),
+    (BackendStatus.STOPPING, BackendStatus.STOPPED),
 ])
 def test_valid_transitions(service, current_status, new_status):
     service._status = current_status
@@ -195,10 +195,10 @@ def test_valid_transitions(service, current_status, new_status):
 
 
 @pytest.mark.parametrize("current_status,new_status", [
-    (ComfyuiStatus.STOPPED, ComfyuiStatus.RUNNING),
-    (ComfyuiStatus.RUNNING, ComfyuiStatus.STARTING),
-    (ComfyuiStatus.SAVING, ComfyuiStatus.STOPPED),
-    (ComfyuiStatus.STOPPING, ComfyuiStatus.SAVING),
+    (BackendStatus.STOPPED, BackendStatus.RUNNING),
+    (BackendStatus.RUNNING, BackendStatus.STARTING),
+    (BackendStatus.SAVING, BackendStatus.STOPPED),
+    (BackendStatus.STOPPING, BackendStatus.SAVING),
 ])
 def test_invalid_transitions(service, current_status, new_status):
     service._status = current_status

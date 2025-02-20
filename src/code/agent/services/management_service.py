@@ -59,7 +59,7 @@ class ManagementService:
 
         try:
             self._snapshot_mgr.load(snapshot_name)
-            self._process_mgr.start(constants.COMFYUI_BOOT_CMD)
+            self._process_mgr.start(constants.BOOT_CMD)
             self._process_mgr.wait_until_ready()
             self._transition_to(BackendStatus.RUNNING)
         except Exception:

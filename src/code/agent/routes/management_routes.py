@@ -23,7 +23,7 @@ class ManagementRoutes:
             self.service.start(snapshot)
             return jsonify({
                 "status": "success",
-                "message": "Successfully load snapshot and start comfyui process"
+                "message": "Successfully load snapshot and start backend process"
             }), 200
 
         @self.bp.post("/stop")
@@ -31,7 +31,7 @@ class ManagementRoutes:
             self.service.stop()
             return jsonify({
                 "status": "success",
-                "message": "Successfully shutdown comfyui process"
+                "message": "Successfully shutdown backend process"
             }), 200
 
         @self.bp.post("/save")
@@ -49,7 +49,7 @@ class ManagementRoutes:
             self.service.save_and_stop()
             return jsonify({
                 "status": "success",
-                "message": "Successfully save snapshot and stop comfyui process"
+                "message": "Successfully save snapshot and stop backend process"
             }), 200
 
         # TODO 检查文件内容有更新的接口

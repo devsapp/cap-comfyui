@@ -14,7 +14,7 @@ ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
-COPY agent ${AGENT_DIR}/
+COPY . ${AGENT_DIR}/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \

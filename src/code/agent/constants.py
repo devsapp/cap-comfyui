@@ -1,14 +1,23 @@
 import os
 
+TYPE_COMFYUI = 'comfyui'
+TYPE_SD = 'sd'
+APP_TYPE = os.getenv('APP_TYPE', TYPE_COMFYUI)
+
 WORK_DIR = os.getenv('WORK_DIR', '/root')
 MNT_DIR = os.getenv('MODEL_ASSET_DIR', '/mnt/auto')
-COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
 VENV_DIR = os.getenv('VENV_DIR', WORK_DIR + '/venv')
 SNAPSHOT_DIR = MNT_DIR + '/snapshots'
 SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
-
+COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
 COMFYUI_PROCESS_PORT = 8188
-COMFYUI_HOST = f"127.0.0.1:{COMFYUI_PROCESS_PORT}"
+SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
+SD_PROCESS_PORT = 7860
+if APP_TYPE == TYPE_COMFYUI:
+    APP_HOST = f"127.0.0.1:{COMFYUI_PROCESS_PORT}"
+else:
+    APP_HOST = f"127.0.0.1:{SD_PROCESS_PORT}"
+
 DEFAULT_READINESS_POLL_INTERVAL = 3
 DEFAULT_READINESS_TIMEOUT = 300
 DEFAULT_LIVENESS_POLL_INTERVAL = 5

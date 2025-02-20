@@ -12,7 +12,7 @@ update-agent: build login push deploy
 # 构建Agent镜像
 .PHONY: build
 build:
-	docker build -t $(AGENT_IMAGE) .
+	docker build -t $(AGENT_IMAGE) -f agent/Dockerfile agent
 	docker tag $(AGENT_IMAGE) agent
 
 # 本地测试运行
@@ -50,7 +50,7 @@ update-comfyui: build-comfyui upload-comfyui-base deploy
 # 构建Comfyui镜像
 .PHONY: build-comfyui
 build-comfyui: build
-	docker build -t $(COMFYUI_IMAGE) -f Dockerfile.comfyui .
+	docker build -t $(COMFYUI_IMAGE) -f comfyui/Dockerfile.comfyui comfyui
 
 # 本地测试运行Comfyui
 # curl -X POST http://localhost:9000/management/start
@@ -100,7 +100,7 @@ update-sd: build-sd upload-sd-base deploy
 # 构建SD镜像
 .PHONY: build-sd
 build-sd: build
-	docker build -t $(SD_IMAGE) -f Dockerfile.sd .
+	docker build -t $(SD_IMAGE) -f sd/Dockerfile.sd sd
 
 # 本地测试运行SD
 # curl -X POST http://localhost:9000/management/start

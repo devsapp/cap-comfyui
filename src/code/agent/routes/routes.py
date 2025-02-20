@@ -57,7 +57,7 @@ class Routes:
                 }), 500
 
             # print(f"Forwarding websocket request for path: {path}")
-            target_url = f"ws://{constants.COMFYUI_HOST}/{path}"
+            target_url = f"ws://{constants.APP_HOST}/{path}"
 
             def on_message(_, message):
                 try:
@@ -100,7 +100,7 @@ class Routes:
                 }), 500
 
             # print(f"Forwarding request for path: {path}")
-            target_url = f"http://{constants.COMFYUI_HOST}/{path}"
+            target_url = f"http://{constants.APP_HOST}/{path}"
 
             # 转发请求头
             headers = {key: value for key, value in request.headers}

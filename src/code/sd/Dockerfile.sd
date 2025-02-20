@@ -50,22 +50,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir torch torchvision xformers \
     --extra-index-url https://download.pytorch.org/whl/cu124
 
-# 安装transformers, 低版本时(例如4.15.0)其依赖项tokenizers需要rust环境
-RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir transformers
-
 # 安装 源码 所使用的依赖
-#    find . -type f -name "requirements.txt" | xargs -I {} cat {} | tr -d '\r' | sed 's/>/=/g' |  sort -u | awk -F '==' '! /^(#|-|\s*$)/ {sub(/^[ \t]+|[ \t]+$/, "", $0); if (!seen[$1]++) print}' | xargs
+# issue: 安装低版本transformers依赖(例如4.15.0)时, 其依赖项tokenizers需要rust环境
+COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir \
-    accelerate albumentations==0.4.3 blendmodes clean-fid clip-anytorch diskcache einops \
-    facexlib fairscale==0.4.4 fastapi==0.90.1 GitPython gradio==3.13.2 imageio==2.9.0 \
-    imageio-ffmpeg==0.4.2 inflection invisible-watermark==0.1.5 jsonmerge kornia lark \
-    numpy omegaconf open-clip-torch opencv-python piexif Pillow pillow-avif-plugin==1.4.3 \
-    protobuf==3.20.0 psutil pudb==2019.2 pycocoevalcap pytorch_lightning pytorch-lightning==1.4.2 \
-    requests resize-right safetensors scikit-image scipy streamlit==0.73.1 streamlit-drawable-canvas==0.8.0 \
-    test-tube==0.7.5 timm==0.4.12 tomesd torch torchdiffeq torchmetrics==0.6 torchsde \
-    torchvision tqdm transformers wandb webdataset==0.2.5
+    venv/bin/pip install --no-cache-dir -r requirements.txt
 
 FROM agent AS agent
 

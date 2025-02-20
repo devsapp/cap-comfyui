@@ -17,7 +17,7 @@ from uuid import uuid4
 
 class ServerlessApiService:
     def __init__(self):
-        self.endpoint = f"http://{constants.COMFYUI_HOST}"
+        self.endpoint = f"http://{constants.APP_HOST}"
 
         # OSS 存储，需要时，可以将生成的图片同步至 OSS 中
         self.oss_store = OSS(

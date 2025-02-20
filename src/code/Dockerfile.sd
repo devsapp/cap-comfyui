@@ -59,9 +59,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # 安装transformers, 其依赖项tokenizers需要rust环境
 RUN --mount=type=cache,target=/root/.cache/pip \
-    . /venv/bin/activate && \
     export PATH="/root/.cargo/bin:$PATH" && \
-    pip install transformers==4.15.0
+    venv/bin/pip install --no-cache-dir transformers==4.15.0
 
 # 安装 源码 所使用的依赖
 #    find . -type f -name "requirements.txt" | xargs -I {} cat {} | tr -d '\r' | sed 's/>/=/g' |  sort -u | awk -F '==' '! /^(#|-|\s*$)/ {sub(/^[ \t]+|[ \t]+$/, "", $0); if (!seen[$1]++) print}' | xargs

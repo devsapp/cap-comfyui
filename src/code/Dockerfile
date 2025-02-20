@@ -5,10 +5,11 @@ WORKDIR /root
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
     apt install -y \
-    git curl wget jq ffmpeg gcc g++ build-essential
+    git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0
 
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
+ENV SD_DIR="${WORK_DIR}/stable-diffusion-webui"
 ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'

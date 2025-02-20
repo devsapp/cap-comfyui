@@ -40,13 +40,6 @@ FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root
 
-# 安装 rust 环境
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt update && \
-    apt install -y curl gcc g++ build-essential
-RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
-ENV PATH="/root/.cargo/bin:$PATH"
-
 # 升级pip并初始化venv虚拟环境
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
@@ -57,10 +50,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir torch torchvision xformers \
     --extra-index-url https://download.pytorch.org/whl/cu124
 
-# 安装transformers, 其依赖项tokenizers需要rust环境
+# 安装transformers, 低版本时(例如4.15.0)其依赖项tokenizers需要rust环境
 RUN --mount=type=cache,target=/root/.cache/pip \
-    export PATH="/root/.cargo/bin:$PATH" && \
-    venv/bin/pip install --no-cache-dir transformers==4.15.0
+    venv/bin/pip install --no-cache-dir transformers
 
 # 安装 源码 所使用的依赖
 #    find . -type f -name "requirements.txt" | xargs -I {} cat {} | tr -d '\r' | sed 's/>/=/g' |  sort -u | awk -F '==' '! /^(#|-|\s*$)/ {sub(/^[ \t]+|[ \t]+$/, "", $0); if (!seen[$1]++) print}' | xargs
@@ -73,7 +65,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     protobuf==3.20.0 psutil pudb==2019.2 pycocoevalcap pytorch_lightning pytorch-lightning==1.4.2 \
     requests resize-right safetensors scikit-image scipy streamlit==0.73.1 streamlit-drawable-canvas==0.8.0 \
     test-tube==0.7.5 timm==0.4.12 tomesd torch torchdiffeq torchmetrics==0.6 torchsde \
-    torchvision tqdm transformers==4.15.0 wandb webdataset==0.2.5
+    torchvision tqdm transformers wandb webdataset==0.2.5
 
 FROM agent AS agent
 

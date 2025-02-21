@@ -102,33 +102,39 @@ class Routes:
             # print(f"Forwarding request for path: {path}")
             target_url = f"http://{constants.APP_HOST}/{path}"
 
-            # 转发请求头
-            headers = {key: value for key, value in request.headers}
             print(f"[debug] forward request to url: {target_url}")
 
-            # 转发请求到目标服务器
+            # 获取原始请求的所有headers
+            headers = dict(request.headers)
+            # 删除可能导致问题的headers
+            headers.pop('Host', None)
+
+            # 转发请求
             resp = requests.request(
                 method=request.method,
                 url=target_url,
                 headers=headers,
+                params=request.args,
                 data=request.get_data(),
                 cookies=request.cookies,
-                params=request.args,
-                allow_redirects=False
+                allow_redirects=False,
+                verify=False  # 如果需要验证SSL证书，将其设置为True
             )
 
-            print("\n[debug]=== Response Details ===")
-            print(f"[debug]Status Code: {resp.status_code}")
-            print(f"[debug]Response Headers: {dict(resp.headers)}")
-            print(f"[debug]Response Length: {len(resp.content)} bytes")
+            # 构建响应
+            excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+            response_headers = {}
+            for name, value in resp.headers.items():
+                if name.lower() not in excluded_headers:
+                    response_headers[name] = value
 
-            proxy_response = Response(
-                resp.raw.read(),
+            # 构建响应
+            response = Response(
+                response=resp.content,
                 status=resp.status_code,
-                headers=dict(resp.raw.headers)
+                headers=response_headers
             )
-            # print(f"Forward request success, status code: {resp.status_code}")
-            return proxy_response
+            return response
 
         @self.app.errorhandler(Exception)
         def handle_all_errors(error):

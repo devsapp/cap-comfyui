@@ -9,7 +9,7 @@ access: "quanxi-zijian"
 
 vars: 
   region: "cn-hangzhou"
-  imageUrl: "registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v1"
+  imageUrl: "registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v2"
 
 resources:
   hello_world:

@@ -1,7 +1,7 @@
 # 定义变量
 AGENT_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-agent-v2
 COMFYUI_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v18
-SD_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v1
+SD_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v2
 OSS_BUCKET = dipper-cache-cn-hangzhou
 OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
 OSS_SD_BASE_DIR = base/sd/v1.10.1-alpha
@@ -12,7 +12,7 @@ update-agent: build login push deploy
 # 构建Agent镜像
 .PHONY: build
 build:
-	docker build -t $(AGENT_IMAGE) -f agent/Dockerfile agent
+	docker build -t $(AGENT_IMAGE) -f src/code/agent/Dockerfile src/code/agent
 	docker tag $(AGENT_IMAGE) agent
 
 # 本地测试运行
@@ -39,7 +39,7 @@ push:
 .PHONY: deploy
 deploy:
 	export WEBHOOK_URL="http://dipper-any-post-rwhuiqmhaf.cn-hangzhou.fcapp.run/post?uid=a&projectName=a&environmentName=a&serviceName=a&token=a" \
-	&& s deploy -t s-dev-usemodel.yaml
+	&& s deploy -t src/code/s-dev-usemodel.yaml
 
 # TODO: 发布新版本agent镜像
 
@@ -50,7 +50,7 @@ update-comfyui: build-comfyui upload-comfyui-base deploy
 # 构建Comfyui镜像
 .PHONY: build-comfyui
 build-comfyui: build
-	docker build -t $(COMFYUI_IMAGE) -f comfyui/Dockerfile.comfyui comfyui
+	docker build -t $(COMFYUI_IMAGE) -f src/code/comfyui/Dockerfile.comfyui src/code/comfyui
 
 # 本地测试运行Comfyui
 # curl -X POST http://localhost:9000/management/start
@@ -105,7 +105,7 @@ update-sd: build-sd upload-sd-base deploy
 # 构建SD镜像
 .PHONY: build-sd
 build-sd: build
-	docker build -t $(SD_IMAGE) -f sd/Dockerfile.sd sd
+	docker build -t $(SD_IMAGE) -f src/code/sd/Dockerfile.sd src/code/sd
 
 # 本地测试运行SD
 # curl -X POST http://localhost:9000/management/start

@@ -121,20 +121,33 @@ class Routes:
                 verify=False  # 如果需要验证SSL证书，将其设置为True
             )
 
-            # 构建响应
-            excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-            response_headers = {}
-            for name, value in resp.headers.items():
-                if name.lower() not in excluded_headers:
-                    response_headers[name] = value
+            # # 构建响应
+            # excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+            # response_headers = {}
+            # for name, value in resp.headers.items():
+            #     if name.lower() not in excluded_headers:
+            #         response_headers[name] = value
+            #
+            # # 构建响应
+            # response = Response(
+            #     response=resp.content,
+            #     status=resp.status_code,
+            #     headers=response_headers
+            # )
+            # return response
 
-            # 构建响应
-            response = Response(
-                response=resp.content,
+            print("\n[debug]=== Response Details ===")
+            print(f"[debug]Status Code: {resp.status_code}")
+            print(f"[debug]Response Headers: {dict(resp.headers)}")
+            print(f"[debug]Response Length: {len(resp.content)} bytes")
+
+            proxy_response = Response(
+                resp.content,
                 status=resp.status_code,
-                headers=response_headers
+                headers=dict(resp.headers)
             )
-            return response
+            # print(f"Forward request success, status code: {resp.status_code}")
+            return proxy_response
 
         @self.app.errorhandler(Exception)
         def handle_all_errors(error):

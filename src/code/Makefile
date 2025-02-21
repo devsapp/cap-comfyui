@@ -149,7 +149,7 @@ upload-sd-base:
 	@echo "Uploading files to OSS..."
 	@ossutil cp -r ./tmp/stable-diffusion-webui oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(TIMESTAMP)/stable-diffusion-webui && \
 	ossutil cp ./tmp/venv.tar oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(TIMESTAMP)/venv.tar && \
-	ossutil cp ./tmp/.cache oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(TIMESTAMP)/.cache && \
+	ossutil cp -r ./tmp/.cache oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(TIMESTAMP)/.cache && \
 	ossutil cp -r ./tmp/stable-diffusion-webui/models oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/models
 
 	@rm -rf tmp

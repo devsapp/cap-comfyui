@@ -48,9 +48,9 @@ class Routes:
             return "Function is initialized, request_id: " + request_id + "\n"
 
         @self._sock.route('/<path:path>')
-        def comfyui_proxy_ws(ws, path):
-            comfyui_status = management.service.status
-            if comfyui_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
+        def proxy_ws(ws, path):
+            backend_status = management.service.status
+            if backend_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
                 return jsonify({
                     "status": "failed",
                     "message": "Please start your comfyui/sd service first"
@@ -91,9 +91,9 @@ class Routes:
 
         @self.app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         @self.app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
-        def comfyui_proxy(path=""):
-            comfyui_status = management.service.status
-            if comfyui_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
+        def proxy(path=""):
+            backend_status = management.service.status
+            if backend_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
                 return jsonify({
                     "status": "failed",
                     "message": "Please start your comfyui/sd service first"
@@ -104,6 +104,7 @@ class Routes:
 
             # 转发请求头
             headers = {key: value for key, value in request.headers}
+            print(f"[debug] forward request to url: {target_url}")
 
             # 转发请求到目标服务器
             resp = requests.request(
@@ -116,6 +117,11 @@ class Routes:
                 allow_redirects=False,
                 stream=True
             )
+
+            print("\n[debug]=== Response Details ===")
+            print(f"[debug]Status Code: {resp.status_code}")
+            print(f"[debug]Response Headers: {dict(resp.headers)}")
+            print(f"[debug]Response Length: {len(resp.content)} bytes")
 
             proxy_response = Response(
                 resp.content,

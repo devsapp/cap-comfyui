@@ -1,0 +1,52 @@
+# ------------------------------------
+#   官方手册: https://manual.serverless-devs.com/user-guide/aliyun/#fc3
+#   常见小贴士: https://manual.serverless-devs.com/user-guide/tips/
+#   有问题快来钉钉群问一下吧：33947367
+# ------------------------------------
+edition: 3.0.0
+name: hello-world-app
+access: "quanxi-zijian"
+
+vars: 
+  region: "cn-hangzhou"
+  imageUrl: "registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v1"
+
+resources:
+  hello_world:
+    component: fc3
+    props:
+      region: ${vars.region}              
+      functionName: "e2e-cases-82w076__comfyui"
+      runtime: "custom-container"
+      description: 'hello world by serverless devs'
+      timeout: 600
+      memorySize: 32768
+      cpu: 8
+      diskSize: 61440
+      gpuConfig:
+        gpuMemorySize: 16384
+        gpuType: fc.gpu.tesla.1
+      internetAccess: true
+      instanceConcurrency: 100
+      customContainerConfig:
+        image: ${vars.imageUrl}
+      environmentVariables:
+        BACKEND_TYPE: 'sd'
+        MODEL_ASSET_DIR: '/mnt/e2e-cases-82w076__comfyui'
+      vpcConfig: auto
+      nasConfig: auto
+      logConfig: auto
+      triggers:
+        - triggerConfig:
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            authType: anonymous
+            disableURLInternet: false
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http

@@ -99,12 +99,8 @@ class Routes:
                     "message": "Please start your comfyui/sd service first"
                 }), 500
 
-            # print(f"Forwarding request for path: {path}")
             target_url = f"http://{constants.APP_HOST}/{path}"
 
-            print(f"[debug] forward request to url: {target_url}")
-
-            # 转发请求
             resp = requests.request(
                 method=request.method,
                 url=target_url,
@@ -116,8 +112,8 @@ class Routes:
                 verify=False  # 如果需要验证SSL证书，将其设置为True
             )
 
-            # 构建响应
-            excluded_headers = ['transfer-encoding', 'connection']
+            # issue: 实际内容被requests库解码，若保留content-encoding，可能会导致客户端试图重复解码，导致浏览器渲染SD页面失败
+            excluded_headers = ['content-encoding', 'transfer-encoding', 'connection']
             response_headers = {}
             for name, value in resp.headers.items():
                 if name.lower() not in excluded_headers:

@@ -1,7 +1,7 @@
 # 定义变量
 AGENT_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-agent-v2
-COMFYUI_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v18
-SD_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v2
+COMFYUI_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v19
+SD_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v3
 OSS_BUCKET = dipper-cache-cn-hangzhou
 OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
 OSS_SD_BASE_DIR = base/sd/v1.10.1-alpha

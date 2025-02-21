@@ -115,7 +115,6 @@ class Routes:
                 cookies=request.cookies,
                 params=request.args,
                 allow_redirects=False
-                # stream=True
             )
 
             print("\n[debug]=== Response Details ===")
@@ -124,9 +123,9 @@ class Routes:
             print(f"[debug]Response Length: {len(resp.content)} bytes")
 
             proxy_response = Response(
-                resp.content,
+                resp.raw.read(),
                 status=resp.status_code,
-                headers=dict(resp.headers)
+                headers=dict(resp.raw.headers)
             )
             # print(f"Forward request success, status code: {resp.status_code}")
             return proxy_response

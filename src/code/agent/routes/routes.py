@@ -114,8 +114,8 @@ class Routes:
                 data=request.get_data(),
                 cookies=request.cookies,
                 params=request.args,
-                allow_redirects=False,
-                stream=True
+                allow_redirects=False
+                # stream=True
             )
 
             print("\n[debug]=== Response Details ===")

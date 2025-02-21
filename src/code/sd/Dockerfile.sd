@@ -36,6 +36,8 @@ RUN apt update && apt install -y aria2
 
 COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
 
+# TODO: sd启动时依赖从HF拉取模型
+
 FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root

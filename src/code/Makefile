@@ -139,7 +139,7 @@ upload-sd-base:
 	@docker rm -f sdImage 2>/dev/null || true
 	@docker create --name sdImage $(SD_IMAGE) && \
 	docker cp sdImage:/root/stable-diffusion-webui ./tmp/stable-diffusion-webui && \
-	docker cp sdImage:/root/venv ./tmp/venv
+	docker cp sdImage:/root/venv ./tmp/venv && \
 	docker cp sdImage:/root/.cache ./tmp/.cache
 	@docker rm sdImage
 

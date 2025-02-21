@@ -63,6 +63,11 @@ run-comfyui:
 exec-comfyui:
 	docker run --gpus all -it --rm -p 9000:9000 -p 8188:8188 --entrypoint /bin/bash $(COMFYUI_IMAGE)
 
+# 拉取Comfyui镜像
+.PHONY: pull-comfyui
+pull-comfyui:
+	docker pull $(COMFYUI_IMAGE)
+
 # 上传到官方OSS源
 # sudo -v ; curl https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
 # ossutil config
@@ -112,6 +117,11 @@ run-sd:
 .PHONY: exec-sd
 exec-sd:
 	docker run --gpus all -it --rm -p 9000:9000 -p 7860:7860 --entrypoint /bin/bash $(SD_IMAGE)
+
+# 拉取SD镜像
+.PHONY: pull-sd
+pull-sd:
+	docker pull $(SD_IMAGE)
 
 # 上传到官方OSS源
 # sudo -v ; curl https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash

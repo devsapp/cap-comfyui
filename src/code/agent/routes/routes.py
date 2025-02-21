@@ -104,16 +104,11 @@ class Routes:
 
             print(f"[debug] forward request to url: {target_url}")
 
-            # 获取原始请求的所有headers
-            headers = dict(request.headers)
-            # 删除可能导致问题的headers
-            headers.pop('Host', None)
-
             # 转发请求
             resp = requests.request(
                 method=request.method,
                 url=target_url,
-                headers=headers,
+                headers=dict(request.headers),
                 params=request.args,
                 data=request.get_data(),
                 cookies=request.cookies,
@@ -121,33 +116,20 @@ class Routes:
                 verify=False  # 如果需要验证SSL证书，将其设置为True
             )
 
-            # # 构建响应
-            # excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-            # response_headers = {}
-            # for name, value in resp.headers.items():
-            #     if name.lower() not in excluded_headers:
-            #         response_headers[name] = value
-            #
-            # # 构建响应
-            # response = Response(
-            #     response=resp.content,
-            #     status=resp.status_code,
-            #     headers=response_headers
-            # )
-            # return response
+            # 构建响应
+            excluded_headers = ['transfer-encoding', 'connection']
+            response_headers = {}
+            for name, value in resp.headers.items():
+                if name.lower() not in excluded_headers:
+                    response_headers[name] = value
 
-            print("\n[debug]=== Response Details ===")
-            print(f"[debug]Status Code: {resp.status_code}")
-            print(f"[debug]Response Headers: {dict(resp.headers)}")
-            print(f"[debug]Response Length: {len(resp.content)} bytes")
-
-            proxy_response = Response(
-                resp.content,
+            # 构建响应
+            response = Response(
+                response=resp.content,
                 status=resp.status_code,
-                headers=dict(resp.headers)
+                headers=response_headers
             )
-            # print(f"Forward request success, status code: {resp.status_code}")
-            return proxy_response
+            return response
 
         @self.app.errorhandler(Exception)
         def handle_all_errors(error):

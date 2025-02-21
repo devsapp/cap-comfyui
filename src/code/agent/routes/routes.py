@@ -113,19 +113,17 @@ class Routes:
             )
 
             # issue: 实际内容被requests库解码，若保留content-encoding，可能会导致客户端试图重复解码，导致浏览器渲染SD页面失败
-            excluded_headers = ['content-encoding', 'transfer-encoding', 'connection']
+            excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
             response_headers = {}
             for name, value in resp.headers.items():
                 if name.lower() not in excluded_headers:
                     response_headers[name] = value
 
-            # 构建响应
-            response = Response(
+            return Response(
                 response=resp.content,
                 status=resp.status_code,
                 headers=response_headers
             )
-            return response
 
         @self.app.errorhandler(Exception)
         def handle_all_errors(error):

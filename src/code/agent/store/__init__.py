@@ -1,5 +1,6 @@
 from abc import ABC
 from .filesystem import FileSystem
+from .oss import OSS
 
 
 class Store(ABC):
@@ -13,4 +14,5 @@ class Store(ABC):
 __all__ = [
     FileSystem,
     Store,
+    OSS,
 ]

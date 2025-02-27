@@ -1,0 +1,59 @@
+edition: 3.0.0 #  命令行YAML规范版本，遵循语义化版本（Semantic Versioning）规范
+name: cap-sd
+access: 'quanxi-zijian'
+#access: 'quanxi-devs'
+vars:
+  region: 'cn-hangzhou'
+  name: 'zijian-test-sd-1'
+  imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-agent-v1'
+  role: 'acs:ram::1431999136518149:role/aliyundevsdefaultrole'
+#  role: 'acs:ram::1338904783509062:role/aliyundevsdefaultrole'
+  gpuType: 'fc.gpu.tesla.1'
+  backendType: 'sd'
+  baseVersion: 'v1.10.1-alpha'
+  snapshotName: 'latest'
+
+resources:
+  comfyui:
+    component: model@0.2.31
+    props:
+      # 基本配置
+      region: '${vars.region}'
+      name: '${vars.name}'
+      description: '${vars.backendType}函数, 用于调试工作空间'
+      logConfig: auto
+      httpTrigger: auto
+      modelConfig:
+        sourceType: multi
+        multiModelConfig:
+          - type: oss
+            region: '${vars.region}'
+            bucket: 'dipper-cache-${vars.region}'
+            path: '/base/${vars.backendType}/${vars.baseVersion}/'
+          - type: oss
+            region: '${vars.region}'
+            bucket: 'dipper-cache-${vars.region}'
+            path: '/models/checkpoints/'
+            prefix: 'models/Stable-diffusion'
+      role: '${vars.role}'
+      environmentVariables:
+        BACKEND_TYPE: '${vars.backendType}'
+
+      # 挂载存储配置
+      nasConfig: auto
+      vpcConfig: auto
+
+      # 实例规格
+      timeout: 7200
+      diskSize: 61440
+      cpu: 8
+      memorySize: 32768
+      gpuConfig:
+        gpuMemorySize: 16384
+        gpuType: '${vars.gpuType}'
+
+      # 运行时
+      customContainerConfig:
+        port: 9000
+        image: ${vars.imageUrl} 
+        instanceConcurrency: 200

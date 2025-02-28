@@ -4,7 +4,7 @@ access: 'quanxi-zijian'
 #access: 'quanxi-devs'
 vars:
   region: 'cn-hangzhou'
-  name: 'zijian-test-sd-2'
+  name: 'zijian-test-sd-api-1'
   imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-agent-v1'
   role: 'acs:ram::1431999136518149:role/aliyundevsdefaultrole'
 #  role: 'acs:ram::1338904783509062:role/aliyundevsdefaultrole'
@@ -23,25 +23,38 @@ resources:
       description: '${vars.backendType}函数, 用于调试工作空间'
       logConfig: auto
       httpTrigger: auto
-      modelConfig:
-        sourceType: multi
-        multiModelConfig:
-          - type: oss
-            region: '${vars.region}'
-            bucket: 'dipper-cache-${vars.region}'
-            path: '/base/${vars.backendType}/${vars.baseVersion}/'
-          - type: oss
-            region: '${vars.region}'
-            bucket: 'dipper-cache-${vars.region}'
-            path: '/models/checkpoints/sd-v1-5-inpainting.ckpt'
-            prefix: 'models/Stable-diffusion'
+#      modelConfig:
+#        sourceType: multi
+#        multiModelConfig:
+#          - type: oss
+#            region: '${vars.region}'
+#            bucket: 'dipper-cache-${vars.region}'
+#            path: '/base/${vars.backendType}/${vars.baseVersion}/'
+#          - type: oss
+#            region: '${vars.region}'
+#            bucket: 'dipper-cache-${vars.region}'
+#            path: '/models/checkpoints/sd-v1-5-inpainting.ckpt'
+#            prefix: 'models/Stable-diffusion'
       role: '${vars.role}'
       environmentVariables:
         BACKEND_TYPE: '${vars.backendType}'
+        AUTO_LAUNCH_SNAPSHOT_NAME: '${vars.snapshotName}'
 
       # 挂载存储配置
-      nasConfig: auto
-      vpcConfig: auto
+#      nasConfig: auto
+#      vpcConfig: auto
+      nasConfig:
+        groupId: 0
+        mountPoints:
+          - enableTLS: false
+            serverAddr: "079114a64a-uvp4.cn-hangzhou.nas.aliyuncs.com:/cap-models/4e7f1406-af7e-5e51-8c0e-ca057471debe"
+            mountDir: "/mnt/zijian-test-model-2-sy7zo4haf-model-dld"
+        userId: 0
+      vpcConfig:
+        securityGroupId: "sg-bp17i05zspzkgkvjsbu4"
+        vpcId: "vpc-bp1aqum0mca3iugmw345n"
+        vSwitchIds:
+          - "vsw-bp1njgn8sbaeij9r84nqc"
 
       # 实例规格
       timeout: 7200
@@ -57,3 +70,7 @@ resources:
         port: 9000
         image: ${vars.imageUrl} 
         instanceConcurrency: 200
+        instanceLifecycleConfig:
+          initializer:
+            handler: 'true'
+            timeout: 180

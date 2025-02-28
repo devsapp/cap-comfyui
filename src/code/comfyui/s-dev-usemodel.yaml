@@ -15,7 +15,7 @@ vars:
 
 resources:
   comfyui:
-    component: model@0.2.31
+    component: model@0.2.32
     props:
       # 基本配置
       region: '${vars.region}'
@@ -33,7 +33,7 @@ resources:
           - type: oss
             region: '${vars.region}'
             bucket: 'dipper-cache-${vars.region}'
-            path: '/models/checkpoints/'
+            path: '/models/checkpoints/sd-v1-5-inpainting.ckpt'
             prefix: 'models/checkpoints'
       role: '${vars.role}'
       environmentVariables:

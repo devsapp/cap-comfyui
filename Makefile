@@ -88,7 +88,7 @@ upload-comfyui-base:
 	@docker rm comfyuiImage
 
 	@echo "Creating venv.tar..."
-	@tar -cf ./tmp/venv.tar ./tmp/venv
+	@tar -C ./tmp -cf ./tmp/venv.tar venv
 
 	@echo "Uploading files to OSS..."
 	@ossutil cp -r ./tmp/comfyui oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(TIMESTAMP)/comfyui && \
@@ -144,7 +144,7 @@ upload-sd-base:
 	@docker rm sdImage
 
 	@echo "Creating venv.tar..."
-	@tar -cf ./tmp/venv.tar ./tmp/venv
+	@tar -C ./tmp -cf ./tmp/venv.tar venv
 
 	@echo "Uploading files to OSS..."
 	@ossutil cp -r ./tmp/stable-diffusion-webui oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(TIMESTAMP)/stable-diffusion-webui && \

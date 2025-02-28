@@ -1,37 +1,54 @@
 edition: 3.0.0 #  命令行YAML规范版本，遵循语义化版本（Semantic Versioning）规范
 name: cap-comfyui
 access: 'quanxi-zijian'
+#access: 'quanxi-devs'
 vars:
   region: 'cn-hangzhou'
-  name: 'zijian-test-comfyui-usenotemptynas-api'
-  imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-agent-v2'
+  name: 'zijian-test-comfyui-8'
+  imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-agent-v1'
   role: 'acs:ram::1431999136518149:role/aliyundevsdefaultrole'
+#  role: 'acs:ram::1338904783509062:role/aliyundevsdefaultrole'
   gpuType: 'fc.gpu.tesla.1'
+  backendType: 'comfyui'
+  baseVersion: 'v0.3.10-alpha'
   snapshotName: 'latest'
 
 resources:
   comfyui:
-    component: model@dev.25.210
+    component: model@0.2.32
     props:
       # 基本配置
       region: '${vars.region}'
       name: '${vars.name}'
-      description: 'ComfyUI 函数'
+      description: '${vars.backendType}函数, 用于调试工作空间'
       logConfig: auto
       httpTrigger: auto
-      modelConfig:
-        sourceType: custom-container
+#      modelConfig:
+#        sourceType: multi
+#        multiModelConfig:
+#          - type: oss
+#            region: '${vars.region}'
+#            bucket: 'dipper-cache-${vars.region}'
+#            path: '/base/${vars.backendType}/${vars.baseVersion}/'
+#          - type: oss
+#            region: '${vars.region}'
+#            bucket: 'dipper-cache-${vars.region}'
+#            path: '/models/checkpoints/sd-v1-5-inpainting.ckpt'
+#            prefix: 'models/checkpoints'
       role: '${vars.role}'
       environmentVariables:
+        BACKEND_TYPE: '${vars.backendType}'
         AUTO_LAUNCH_SNAPSHOT_NAME: '${vars.snapshotName}'
 
       # 挂载存储配置
+#      nasConfig: auto
+#      vpcConfig: auto
       nasConfig:
         groupId: 0
         mountPoints:
           - enableTLS: false
-            serverAddr: "079114a64a-uvp4.cn-hangzhou.nas.aliyuncs.com:/cap-models/19b01965-c2f5-56c1-883f-4d011f37f94a"
-            mountDir: "/mnt/zijian-test-comfyui-xh8lowvdq-model-dld"
+            serverAddr: "079114a64a-uvp4.cn-hangzhou.nas.aliyuncs.com:/cap-models/4e7f1406-af7e-5e51-8c0e-ca057471debe"
+            mountDir: "/mnt/zijian-test-model-2-sy7zo4haf-model-dld"
         userId: 0
       vpcConfig:
         securityGroupId: "sg-bp17i05zspzkgkvjsbu4"
@@ -58,7 +75,7 @@ resources:
             handler: 'true'
             timeout: 180
 
-      # 预留配置
-      provisionConfig:
-        target: 1
-        alwaysAllocateGPU: true
+#      # 预留配置
+#      provisionConfig:
+#        target: 1
+#        alwaysAllocateGPU: true

@@ -12,11 +12,27 @@ COMFYUI_HOST = f"127.0.0.1:{COMFYUI_PROCESS_PORT}"
 DEFAULT_READINESS_POLL_INTERVAL = 3
 DEFAULT_READINESS_TIMEOUT = 300
 DEFAULT_LIVENESS_POLL_INTERVAL = 5
-BOOT_CMD = [f"{VENV_DIR}/bin/python", f"{COMFYUI_DIR}/main.py", "--listen", "0.0.0.0",
-            "--input-directory", f"{MNT_DIR}/input",
-            "--output-directory", f"{MNT_DIR}/output",
-            "--temp-directory", f"{MNT_DIR}/output"]
+BOOT_CMD = [
+    f"{VENV_DIR}/bin/python",
+    f"{COMFYUI_DIR}/main.py",
+    "--listen",
+    "0.0.0.0",
+    "--input-directory",
+    f"{MNT_DIR}/input",
+    "--output-directory",
+    f"{MNT_DIR}/output",
+    "--temp-directory",
+    f"{MNT_DIR}/output",
+]
 
 # API Mode
-AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv('AUTO_LAUNCH_SNAPSHOT_NAME', 'latest')
+AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
 # TODO 提供快照轮转机制，环境变量可配置未使用的快照上限，生产环境使用的快照需保证不会被轮转
+
+# OSS
+ALIBABA_CLOUD_ACCESS_KEY_ID = os.getenv("ALIBABA_CLOUD_ACCESS_KEY_ID", "")
+ALIBABA_CLOUD_ACCESS_KEY_SECRET = os.getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET", "")
+ALIBABA_CLOUD_SECURITY_TOKEN = os.getenv("ALIBABA_CLOUD_SECURITY_TOKEN", "")
+OSS_BUCKET_DOMAIN = os.getenv("OSS_BUCKET_DOMAIN", "")
+OSS_KEY_PREFIX = os.getenv("OSS_KEY_PREFIX", "comfyui_serverless_api")
+OSS_EXPIRES_IN_SECOND = os.getenv("OSS_EXPIRES_IN_SECOND", "")

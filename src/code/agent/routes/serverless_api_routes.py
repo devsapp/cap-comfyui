@@ -8,13 +8,17 @@ from services.serverless_api_service import ServerlessApiService
 from flask_sock import Sock
 from simple_websocket import Server
 from flask import Blueprint, Flask, request, Response
+from flask_cors import cross_origin
 
 
 class ServerlessApiRoutes:
-    HEADER_KEY_TASK_ID = "x-serverless-api-task-id"
+    HEADER_KEY_TASK_ID = "x-fc-async-task-id"
 
     def __init__(self):
         self.bp = Blueprint("serverless_api", __name__, url_prefix="/api/serverless")
+        # self.bp = CORS(self.bp)
+        # self.bp.config["CORS_HEADERS"] = "Content-Type"
+
         self.service = ServerlessApiService()
         self.sock = Sock()
         self.sock.bp = self.bp
@@ -27,6 +31,7 @@ class ServerlessApiRoutes:
     def setup_routes(self):
 
         @self.bp.get("/status")
+        @cross_origin()
         def get_status():
             task_id = request.args.get("task_id", "")
             if not task_id:
@@ -37,6 +42,7 @@ class ServerlessApiRoutes:
             return self.service.get_status_from_store(task_id)
 
         @self.bp.post("/run")
+        @cross_origin()
         def run_http():
             """
             出图接口，http 协议
@@ -90,7 +96,7 @@ class ServerlessApiRoutes:
                     """
                     while True:
                         item = q.get(True)
-                        yield f"{item}\n\n"
+                        yield f"data: {item if type(item) == str else json.dumps(item)}\n\n"
 
                         if not type(item) == str:
                             return
@@ -99,7 +105,7 @@ class ServerlessApiRoutes:
                     """
                     单独线程需要执行的任务
                     """
-                    results = self.service.run(
+                    result = self.service.run(
                         body,
                         output_base64=output_base64,
                         output_oss=output_oss,
@@ -108,7 +114,7 @@ class ServerlessApiRoutes:
                     )
 
                     # 推送最终结果
-                    q.put(results)
+                    q.put(result)
 
                 # 出图的流程是同步执行的，需要在单独线程执行，不阻塞 stream 的流程
                 threading.Thread(target=run_prompt_task).start()
@@ -162,6 +168,5 @@ class ServerlessApiRoutes:
                 )
 
                 ws.send(json.dumps(results))
-
-            finally:
-                ws.close()
+            except:
+                pass

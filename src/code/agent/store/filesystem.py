@@ -3,11 +3,8 @@ import os
 
 class FileSystem:
 
-    def __init__(self, output_folder=None):
-        if output_folder != None:
-            self.output_folder = output_folder
-        else:
-            self.output_folder = "/mnt/auto/comfyui/serverless_api"
+    def __init__(self, output_folder: str):
+        self.output_folder = output_folder
 
     def __file_path(self, key: str):
         return os.path.join(self.output_folder, key)

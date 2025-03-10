@@ -1,10 +1,9 @@
-import time
 import os
-from contextlib import contextmanager
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
 
 import constants
+from utils.timer import timer
 
 
 class SnapshotManager:
@@ -13,17 +12,7 @@ class SnapshotManager:
     def __init__(self):
         self.cur_snapshot_name: Optional[str] = None
 
-    @contextmanager
-    def timer(self, operation: str):
-        print(f"{operation} ...")
-        start_time = time.time()
-        try:
-            yield
-        finally:
-            execution_time = time.time() - start_time
-            print(f"{operation} finished, cost: {execution_time:.2f}s")
-
-    def load(self, snapshot_name: str) -> Optional[str]:
+    def load(self, snapshot_name: str) -> Dict:
         """
         加载快照
         Args:
@@ -37,25 +26,26 @@ class SnapshotManager:
         )
 
         if target_snapshot_name == self.cur_snapshot_name:
-            return target_snapshot_name
+            return {"snapshot": target_snapshot_name}
 
         if target_snapshot_name is None:
-            return self.cur_snapshot_name
+            return {"snapshot": self.cur_snapshot_name}
 
         snapshot_path = os.path.join(constants.SNAPSHOT_DIR, target_snapshot_name)
         if not os.path.exists(snapshot_path):
-            return self.cur_snapshot_name
+            return {"snapshot": self.cur_snapshot_name}
 
         from services.workspace.snapshot_loader import ComfyUISnapshotLoader
         from services.workspace.snapshot_loader import SDSnapshotLoader
         loader = (
-            ComfyUISnapshotLoader(self.timer) if constants.BACKEND_TYPE == constants.TYPE_COMFYUI
-            else SDSnapshotLoader(self.timer)
+            ComfyUISnapshotLoader(timer) if constants.BACKEND_TYPE == constants.TYPE_COMFYUI
+            else SDSnapshotLoader(timer)
         )
-        loader.load(snapshot_path)
+        result_map = loader.load(snapshot_path)
 
         self.cur_snapshot_name = target_snapshot_name
-        return target_snapshot_name
+        result_map["snapshot"] = target_snapshot_name
+        return result_map
 
     def _select_latest_snapshot(self):
         """
@@ -102,7 +92,7 @@ class SnapshotManager:
         except ValueError:
             return False
 
-    def save(self) -> str:
+    def save(self) -> Dict:
         snapshot_name = datetime.now().strftime(constants.SNAPSHOT_PATTERN)
         snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
         os.makedirs(snapshot_path, exist_ok=True)
@@ -110,10 +100,11 @@ class SnapshotManager:
         from services.workspace.snapshot_saver import ComfyUISnapshotSaver
         from services.workspace.snapshot_saver import SDSnapshotSaver
         saver = (
-            ComfyUISnapshotSaver(self.timer) if constants.BACKEND_TYPE == constants.TYPE_COMFYUI
-            else SDSnapshotSaver(self.timer)
+            ComfyUISnapshotSaver(timer) if constants.BACKEND_TYPE == constants.TYPE_COMFYUI
+            else SDSnapshotSaver(timer)
         )
-        saver.save(snapshot_path)
+        result_map = saver.save(snapshot_path)
 
         self.cur_snapshot_name = snapshot_name
-        return snapshot_name
+        result_map["snapshot"] = snapshot_name
+        return result_map

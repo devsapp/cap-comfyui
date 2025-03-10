@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import Dict
+
 from utils import file_ops
 import constants
 
@@ -7,12 +9,16 @@ class SnapshotSaver(ABC):
     def __init__(self, timer):
         self.timer = timer
 
-    def save(self, snapshot_path: str):
-        with self.timer("Compressing dependencies"):
+    def save(self, snapshot_path: str) -> Dict:
+        stage_cost = {}
+        with self.timer("Compressing dependencies") as t_compress:
             self._compress()
+        stage_cost["time_compress"] = round(t_compress.elapsed, 2)
 
-        with self.timer(f"Uploading snapshot to {snapshot_path}"):
+        with self.timer(f"Uploading snapshot to {snapshot_path}") as t_upload:
             self._upload(snapshot_path)
+        stage_cost["time_upload"] = round(t_upload.elapsed, 2)
+        return stage_cost
 
     @abstractmethod
     def _compress(self):

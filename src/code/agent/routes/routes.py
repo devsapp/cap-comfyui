@@ -19,6 +19,9 @@ class Routes:
         self.app = Flask(__name__)
         self._sock = Sock(self.app)
         self.setup_routes()
+        import logging
+        log = logging.getLogger('werkzeug')
+        log.setLevel(logging.ERROR)
 
     def setup_routes(self):
 

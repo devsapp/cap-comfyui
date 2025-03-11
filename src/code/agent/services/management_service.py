@@ -85,12 +85,12 @@ class ManagementService:
             self._transition_to(BackendStatus.STOPPED, Action.START)
             raise
 
-    def save(self) -> Dict:
-        print("Saving workspace...")
+    def save(self, snapshot_type: str) -> Dict:
+        print(f"Saving workspace (type {snapshot_type})...")
         self._transition_to(BackendStatus.SAVING, Action.SAVE)
 
         try:
-            result_map = self._snapshot_mgr.save()
+            result_map = self._snapshot_mgr.save(snapshot_type)
             self._transition_to(BackendStatus.RUNNING, Action.SAVE)
             return result_map
         except Exception:
@@ -112,9 +112,9 @@ class ManagementService:
             self._transition_to(BackendStatus.RUNNING, Action.STOP)
             raise
 
-    def save_and_stop(self) -> Dict:
-        print("Saving and Stopping workspace...")
-        result_map = self.save()
+    def save_and_stop(self, snapshot_type: str) -> Dict:
+        print(f"Saving and Stopping workspace (type {snapshot_type})...")
+        result_map = self.save(snapshot_type)
         stop_result_map = self.stop()
         result_map.update(stop_result_map)
         return result_map

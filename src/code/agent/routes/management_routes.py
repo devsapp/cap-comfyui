@@ -39,7 +39,8 @@ class ManagementRoutes:
 
         @self.bp.post("/save")
         def save():
-            result_map = self.service.save()
+            snapshot_type = request.args.get('type')
+            result_map = self.service.save(snapshot_type)
             return jsonify({
                 "data": result_map,
                 "status": "success",
@@ -48,7 +49,8 @@ class ManagementRoutes:
 
         @self.bp.post("/saveAndStop")
         def save_and_stop():
-            result_map = self.service.save_and_stop()
+            snapshot_type = request.args.get('type')
+            result_map = self.service.save_and_stop(snapshot_type)
             return jsonify({
                 "data": result_map,
                 "status": "success",

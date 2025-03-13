@@ -4,6 +4,7 @@ from typing import Optional, Dict
 
 import constants
 from utils.timer import timer
+from utils import file_ops
 
 
 class SnapshotManager:
@@ -126,3 +127,24 @@ class SnapshotManager:
         self.cur_snapshot_name = snapshot_name
         result_map["snapshot"] = snapshot_name
         return result_map
+
+    def copy(self, snapshot_name: str) -> Dict:
+        src_snapshot_name = snapshot_name
+        if snapshot_name == self.USE_LATEST_DEV:
+            src_snapshot_name = self._select_latest_snapshot(self.TYPE_DEV)
+        elif snapshot_name == self.USE_LATEST_PROD:
+            src_snapshot_name = self._select_latest_snapshot(self.TYPE_PROD)
+
+        if src_snapshot_name is None:  # 若找不到目标快照，则抛错
+            raise RuntimeError(f"Snapshot '{snapshot_name}' not found")
+
+        src_snapshot_path = os.path.join(constants.SNAPSHOT_DIR, src_snapshot_name)  # 若源快照目录不存在，则抛错
+        if not os.path.exists(src_snapshot_path):
+            raise RuntimeError(f"Snapshot '{src_snapshot_path}' not found")
+
+        snapshot_name_suffix = datetime.now().strftime(constants.SNAPSHOT_PATTERN)
+        target_snapshot_name = f"{self.TYPE_PROD}-{snapshot_name_suffix}"
+        target_snapshot_path = os.path.join(constants.SNAPSHOT_DIR, target_snapshot_name)
+
+        file_ops.copy(src_snapshot_path, target_snapshot_path)
+        return {"snapshot_src": src_snapshot_name, "snapshot_dst": target_snapshot_name}

@@ -135,11 +135,6 @@ class ManagementService:
     def find_snapshots(self):
         return self._snapshot_mgr.find_valid_snapshots(SnapshotManager.TYPE_PROD)
 
-    def shutdown(self):
-        print("Executing shutdown after 1s...")
-        time.sleep(1)
-        sys.exit(0)
-
     # FIXME: 待删除
     def publish(self, snapshot_name: str = None) -> Dict:
         print(f"Publishing workspace {snapshot_name}...")

@@ -80,11 +80,9 @@ class ManagementRoutes:
 
         @self.bp.post('/shutdown')
         def shutdown():
-            threading.Thread(target=self.service.shutdown).start()
-            return jsonify({
-                "message": "Tried to exit the main process",
-                "status": "success"
-            }), 200
+            print("Executing shutdown immediately...")
+            import os
+            os._exit(0)
 
         # FIXME: 使用文件管理接口后，可去掉以下功能
         @self.bp.post('/publish')

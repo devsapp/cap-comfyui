@@ -85,11 +85,16 @@ class Routes:
             ws_thread.daemon = True
             ws_thread.start()
 
+            from services.process.websocket.websocket_manager import ws_manager
             try:
+                ws_manager.add_connection(ws)
                 while True:
                     message = ws.receive()
                     ws_client.send(message)
+            except Exception as e:
+                print(f"WebSocket error occur: {e}")
             finally:
+                ws_manager.remove_connection(ws)
                 ws_client.close()
 
         @self.app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])

@@ -138,6 +138,10 @@ class ProcessManager(ABC):
                 if self.process.stderr:
                     self.process.stderr.close()
 
+                # close all ws connection
+                from services.process.websocket.websocket_manager import ws_manager
+                ws_manager.close_all_connections()
+
                 if self.stdout_thread and self.stdout_thread.is_alive():
                     self.stdout_thread.join(timeout=1)
                 if self.stderr_thread and self.stderr_thread.is_alive():

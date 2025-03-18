@@ -110,7 +110,7 @@ class Routes:
             # issue: https://teambition.alibaba-inc.com/task/67c96194e6efb1c42a7ee904
             original_uri = request.environ['RAW_URI']
             target_url = f"http://{constants.APP_HOST}{original_uri}"
-            print(f"Forwarding http request to path: {target_url}")  # FIXME debug
+            # print(f"Forwarding http request to path: {target_url}")
 
             resp = requests.request(
                 method=request.method,

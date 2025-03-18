@@ -92,7 +92,7 @@ class Routes:
                     message = ws.receive()
                     ws_client.send(message)
             except Exception as e:
-                print(f"WebSocket error occur: {e}")
+                print(f"ws event occurs: {e}")
             finally:
                 ws_manager.remove_connection(ws)
                 ws_client.close()
@@ -107,7 +107,10 @@ class Routes:
                     "message": "Please start your comfyui/sd service first"
                 }), 500
 
-            target_url = f"http://{constants.APP_HOST}/{path}"
+            # issue: https://teambition.alibaba-inc.com/task/67c96194e6efb1c42a7ee904
+            original_uri = request.environ['RAW_URI']
+            target_url = f"http://{constants.APP_HOST}{original_uri}"
+            print(f"Forwarding http request to path: {target_url}")  # FIXME debug
 
             resp = requests.request(
                 method=request.method,

@@ -22,7 +22,7 @@ class WebSocketManager:
             self.active_connections.add(ws)
             self._connection_times[id(ws)] = datetime.now()
             conn_info = self.get_connection_info(ws)
-            print(f"User webSocket connected: {json.dumps(conn_info, indent=2)}")
+            print(f"ws connected: {json.dumps(conn_info, indent=2)}")
 
     def remove_connection(self, ws):
         with self._lock:
@@ -33,7 +33,7 @@ class WebSocketManager:
             if start_time:
                 duration = (datetime.now() - start_time).total_seconds()
                 conn_info['duration'] = f"{duration:.2f}s"
-            print(f"User webSocket disconnected, {json.dumps(conn_info, indent=2)}")
+            print(f"ws disconnected, {json.dumps(conn_info, indent=2)}")
 
     def close_all_connections(self):
         with self._lock:

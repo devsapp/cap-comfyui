@@ -21,6 +21,8 @@ COMFYUI_BOOT_CMD = [
     "--output-directory",
     f"{MNT_DIR}/output",
     "--temp-directory",
+    f"{MNT_DIR}/output",
+    "--user-directory",
     f"{MNT_DIR}/output"
 ]
 SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')

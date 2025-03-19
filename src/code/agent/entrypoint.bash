@@ -44,6 +44,8 @@ if [ ! -e "${MNT_DIR}/models" ] || [ ! -e "${MNT_DIR}/snapshots" ] || [ -z "$(fi
   fi
 fi
 
+mkdir -p ${MNT_DIR}/input
+mkdir -p ${MNT_DIR}/output
 source ${AGENT_DIR}/venv/bin/activate
 echo "Using python venv, python path '$(which python)', pip path '$(which pip)'... "
 python ${AGENT_DIR}/main.py

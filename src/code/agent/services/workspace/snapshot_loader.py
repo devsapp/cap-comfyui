@@ -94,3 +94,28 @@ class SDSnapshotLoader(SnapshotLoader):
             link_path=f"{constants.SD_DIR}/models",
             force=True
         )
+
+        config_path = f"{constants.MNT_DIR}/config.json"
+        origin_config_path = f"{constants.SD_DIR}/config.json"
+        if not os.path.exists(config_path):
+            print(f'Init config.json in MNT_DIR: {constants.MNT_DIR}')
+            # 基于工作空间快照中的config.json作修改后写入挂载目录
+            import json
+            with open(origin_config_path, "r") as f:
+                config = json.load(f)
+            config.update({
+                "outdir_samples": f"{constants.MNT_DIR}/output",  # 单图输出目录
+                "outdir_grids": f"{constants.MNT_DIR}/output",  # 网格图输出目录
+                "outdir_save": f"{constants.MNT_DIR}/output/saves",  # Save按钮保存图输出目录
+                "outdir_init_images": f"{constants.MNT_DIR}/input",  # 图生图输入图片存储目录
+                "save_init_img": True  # 图生图上传图片时是否自动保存输入图片
+            })
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=4)
+
+        # 将SD目录下的config.json替换为软链接
+        file_ops.create_symlink(
+            source_path=config_path,
+            link_path=origin_config_path,
+            force=True
+        )

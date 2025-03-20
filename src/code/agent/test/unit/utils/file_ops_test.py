@@ -20,6 +20,10 @@ def setup_test_files(tmp_path):
     test_subdir.mkdir()
     (test_subdir / "subfile.txt").write_text("subfile content")
 
+    # 创建软链接
+    symlink_path = source_dir / "symlink.txt"
+    os.symlink(str(test_file), str(symlink_path))
+
     return tmp_path
 
 
@@ -132,6 +136,47 @@ def test_remove_nonexistent_path(setup_test_files):
 
     # Should print message but not raise exception
     remove(str(nonexistent_path))
+
+
+def test_remove_symlink(setup_test_files):
+    source_dir = setup_test_files / "source"
+    test_file = source_dir / "test.txt"
+    symlink_path = source_dir / "symlink.txt"
+
+    # 确保软链接和原文件都存在
+    assert symlink_path.exists()
+    assert test_file.exists()
+    assert os.path.islink(str(symlink_path))
+
+    # 删除软链接
+    remove(str(symlink_path))
+
+    # 验证软链接被删除，但原文件仍然存在
+    assert not os.path.lexists(symlink_path)
+    assert test_file.exists()
+
+
+def test_remove_dangling_symlink(setup_test_files):
+    source_dir = setup_test_files / "source"
+    test_file = source_dir / "test.txt"
+    dangling_symlink = source_dir / "dangling_symlink.txt"
+
+    # 先创建软链接
+    os.symlink(str(test_file), str(dangling_symlink))
+
+    # 删除源文件，使软链接成为悬空链接
+    os.remove(str(test_file))
+
+    # 确认初始状态：软链接存在但是指向的文件不存在
+    assert os.path.islink(str(dangling_symlink))
+    assert not os.path.exists(str(dangling_symlink))  # 因为目标文件不存在，所以exists返回False
+
+    # 删除悬空的软链接
+    remove(str(dangling_symlink))
+
+    # 验证软链接被成功删除
+    assert not os.path.islink(str(dangling_symlink))
+    assert not os.path.lexists(str(dangling_symlink))
 
 
 def test_compress_all_files(setup_test_files):

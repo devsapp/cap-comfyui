@@ -58,7 +58,10 @@ def remove(path):
         path: 要删除的文件或目录的路径
     """
     try:
-        if os.path.isfile(path):
+        if os.path.islink(path):
+            # 删除软链接本身
+            os.unlink(path)
+        elif os.path.isfile(path):
             # 删除文件
             os.remove(path)
         elif os.path.isdir(path):

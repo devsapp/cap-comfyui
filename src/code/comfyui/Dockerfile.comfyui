@@ -90,6 +90,8 @@ ENV BUILT_IN_DIR="/built-in"
 COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
+# 删除模型文件夹，工作空间启动时agent会创建models文件夹到挂载存储的软链接
+RUN rm -rf ${SD_DIR}/models
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 # TODO add pip path of venv
 

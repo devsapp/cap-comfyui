@@ -22,6 +22,8 @@ class SnapshotSaver(ABC):
             self._upload(snapshot_path)
         stage_cost["time_upload"] = round(t_upload.elapsed, 2)
 
+        self._delete_symlinks(snapshot_path)
+
         if remove_old and old_snapshot_name is not None:
             old_snapshot_path = os.path.join(constants.SNAPSHOT_DIR, old_snapshot_name)
             with self.timer(f"Clearing old snapshot {old_snapshot_path}") as t_clear:
@@ -41,6 +43,11 @@ class SnapshotSaver(ABC):
         pass
 
     @abstractmethod
+    def _delete_symlinks(self, snapshot_path: str):
+        """删除工作空间快照中的软链接"""
+        pass
+
+    @abstractmethod
     def _clear(self, snapshot_path: str):
         """清理旧工作空间快照"""
         pass
@@ -54,6 +61,9 @@ class ComfyUISnapshotSaver(SnapshotSaver):
         file_ops.copy(constants.COMFYUI_DIR, f"{snapshot_path}/comfyui")
         file_ops.copy(f"{constants.WORK_DIR}/venv.tar", f"{snapshot_path}/venv.tar")
 
+    def _delete_symlinks(self, snapshot_path: str):
+        file_ops.remove(f"{snapshot_path}/comfyui/models")
+
     def _clear(self, snapshot_path: str):
         file_ops.remove(snapshot_path)
 
@@ -66,6 +76,10 @@ class SDSnapshotSaver(SnapshotSaver):
         file_ops.copy(constants.SD_DIR, f"{snapshot_path}/stable-diffusion-webui")
         file_ops.copy(f"{constants.WORK_DIR}/venv.tar", f"{snapshot_path}/venv.tar")
         file_ops.copy(f"{constants.WORK_DIR}/.cache", f"{snapshot_path}/.cache")
+
+    def _delete_symlinks(self, snapshot_path: str):
+        file_ops.remove(f"{snapshot_path}/stable-diffusion-webui/models")
+        file_ops.remove(f"{snapshot_path}/stable-diffusion-webui/config.json")
 
     def _clear(self, snapshot_path: str):
         file_ops.remove(snapshot_path)

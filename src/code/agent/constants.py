@@ -51,7 +51,6 @@ DEFAULT_LIVENESS_POLL_INTERVAL = 5
 
 # API Mode
 AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
-# TODO 提供快照轮转机制，环境变量可配置未使用的快照上限，生产环境使用的快照需保证不会被轮转
 
 # OSS
 ALIBABA_CLOUD_ACCESS_KEY_ID = os.getenv("ALIBABA_CLOUD_ACCESS_KEY_ID", "")

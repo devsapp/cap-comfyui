@@ -64,17 +64,8 @@ class ManagementRoutes:
             return jsonify({
                 "data": {
                     "status": self.service.status.value,
-                    "latest_action": getattr(self.service.latest_action, 'value', None),
-                    # FIXME
-                    "status_publish": self.service.status_publish.value
+                    "latest_action": getattr(self.service.latest_action, 'value', None)
                 },
-                "status": "success"
-            }), 200
-
-        @self.bp.get("/snapshots")
-        def snapshots():
-            return jsonify({
-                "data": self.service.find_snapshots(),
                 "status": "success"
             }), 200
 
@@ -83,14 +74,3 @@ class ManagementRoutes:
             print("Executing shutdown immediately...")
             import os
             os._exit(0)
-
-        # FIXME: 使用文件管理接口后，可去掉以下功能
-        @self.bp.post('/publish')
-        def publish():
-            snapshot = request.args.get('snapshot')
-            result_map = self.service.publish(snapshot)
-            return jsonify({
-                "data": result_map,
-                "status": "success",
-                "message": f"Successfully publish snapshot {snapshot}"
-            }), 200

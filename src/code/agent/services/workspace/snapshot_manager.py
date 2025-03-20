@@ -106,7 +106,7 @@ class SnapshotManager:
             return False
 
     def save(self, snapshot_type: str) -> Dict:
-        snapshot_name_suffix = datetime.now().strftime(constants.SNAPSHOT_PATTERN)
+        snapshot_name_suffix = datetime.utcnow().strftime(constants.SNAPSHOT_PATTERN)
         snapshot_name = f"{snapshot_type}-{snapshot_name_suffix}"
 
         from services.workspace.snapshot_saver import ComfyUISnapshotSaver

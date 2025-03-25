@@ -1,3 +1,4 @@
+import json
 import logging
 import threading
 import traceback
@@ -49,6 +50,22 @@ class Routes:
 
             print("FC Initialize End RequestId: " + request_id)
             return "Function is initialized, request_id: " + request_id + "\n"
+
+        @self.app.route("/pre-stop", methods=["GET"])
+        def pre_stop():
+            request_id = request.headers.get("x-fc-request-id", "")
+            print("FC PreStop Start RequestId: " + request_id)
+
+            service = ManagementService()  # singleton
+            from services.workspace.snapshot_manager import SnapshotManager
+            try:
+                result_map = service.save(SnapshotManager.TYPE_DEV)
+                print(f"save resp when preStop: {json.dumps(result_map, indent=2)}")
+            except Exception as e:
+                print(f"error occur when preStop: {str(e)}")
+
+            print("FC PreStop End RequestId: " + request_id)
+            return "OK"
 
         @self._sock.route('/<path:path>')
         def proxy_ws(ws, path):

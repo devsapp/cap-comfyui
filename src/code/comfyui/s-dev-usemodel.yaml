@@ -57,6 +57,10 @@ resources:
         port: 9000
         image: ${vars.imageUrl} 
         instanceConcurrency: 200
+        instanceLifecycleConfig:
+          preStop:
+            handler: 'true'
+            timeout: 90
 
       customDomain:
         protocol: HTTP

@@ -12,12 +12,11 @@ from flask_cors import cross_origin
 
 
 class ServerlessApiRoutes:
-    HEADER_KEY_TASK_ID = "x-fc-async-task-id"
+    HEADER_KEY_TASK_ID_PRIMARY = "x-fc-async-task-id"
+    HEADER_KEY_TASK_ID_SECONDARY = "x-fc-request-id"
 
     def __init__(self):
         self.bp = Blueprint("serverless_api", __name__, url_prefix="/api/serverless")
-        # self.bp = CORS(self.bp)
-        # self.bp.config["CORS_HEADERS"] = "Content-Type"
 
         self.service = ServerlessApiService()
         self.sock = Sock()
@@ -71,7 +70,12 @@ class ServerlessApiRoutes:
             stream = is_true(request.args.get("stream"))
             output_base64 = is_true(request.args.get("output_base64"))
             output_oss = is_true(request.args.get("output_oss"))
-            task_id = request.headers.get(ServerlessApiRoutes.HEADER_KEY_TASK_ID, "")
+            task_id = request.headers.get(
+                ServerlessApiRoutes.HEADER_KEY_TASK_ID_PRIMARY,
+                request.headers.get(
+                    ServerlessApiRoutes.HEADER_KEY_TASK_ID_SECONDARY, ""
+                ),
+            )
 
             if not stream:
                 return self.service.run(
@@ -149,7 +153,10 @@ class ServerlessApiRoutes:
                 output_base64 = is_true(request.args.get("output_base64"))
                 output_oss = is_true(request.args.get("output_oss"))
                 task_id = request.headers.get(
-                    ServerlessApiRoutes.HEADER_KEY_TASK_ID, ""
+                    ServerlessApiRoutes.HEADER_KEY_TASK_ID_PRIMARY,
+                    request.headers.get(
+                        ServerlessApiRoutes.HEADER_KEY_TASK_ID_SECONDARY, ""
+                    ),
                 )
 
                 # 获取第一个 message 作为输入的 prompt

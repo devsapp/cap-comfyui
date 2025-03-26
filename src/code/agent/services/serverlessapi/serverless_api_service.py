@@ -3,7 +3,6 @@ import os
 import json
 import base64
 import random
-import asyncio
 import threading
 import requests
 import websocket
@@ -78,7 +77,7 @@ class ServerlessApiService:
             files["overwrite"] = bytes("1")
 
         res = requests.post(
-            os.path.join(self.endpoint, "/upload/image"),
+            os.path.join(self.endpoint, "upload/image"),
             files=files,
         )
 
@@ -109,13 +108,26 @@ class ServerlessApiService:
                     image = value.get("inputs", {}).get("image", "")
                     content = ""
 
-                    if image.startswith("http://") or image.startwith("https://"):
+                    if image.startswith("http://") or image.startswith("https://"):
                         # 图片来源于 url
-                        content = requests.get(image).text
+                        content = requests.get(image).content
+                    elif image.startswith("oss://"):
+                        # 图片来源于 oss
+                        arr = image.split("/")
+                        host = arr[2]
+                        path = "/".join(arr[3:])
+                        oss = OSS(
+                            host,
+                            constants.ALIBABA_CLOUD_ACCESS_KEY_ID,
+                            constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
+                            constants.ALIBABA_CLOUD_SECURITY_TOKEN,
+                            "",
+                            0,
+                        )
+                        content = oss.get(path)
                     elif len(image) > 64:
                         # 图像可能是 base64，尝试使用 base64 解析
                         content = base64.b64decode(image.strip())
-
                     if content:
                         res = self.api_upload_image(content, False)
                         prompt[key]["inputs"]["image"] = res["name"]
@@ -160,13 +172,26 @@ class ServerlessApiService:
                 results.append(
                     {
                         "node_id": node_id,
-                        "index": index,
-                        "filename": filename,
-                        "img_type": img_type,
-                        "sub_folder": sub_folder,
-                        "image": img_output,
-                        "oss_object_key": oss_object_key,
-                        "oss_url": oss_url,
+                        "batch_id": index,
+                        "output": {
+                            "raw": {
+                                "filename": filename,
+                                "type": img_type,
+                                "subfolder": sub_folder,
+                                "filepath": (
+                                    os.path.join(img_type, sub_folder, filename)
+                                    if sub_folder
+                                    else os.path.join(img_type, filename)
+                                ),
+                            },
+                            "base64": {"content": img_output},
+                            "oss": {
+                                "region": self.oss_store.region,
+                                "bucket": self.oss_store.bucket_name,
+                                "object": oss_object_key,
+                                "url": oss_url,
+                            },
+                        },
                     }
                 )
 
@@ -217,10 +242,6 @@ class ServerlessApiService:
         client_id = str(uuid4())
         prompt_id = ""
 
-        # 如果 task id 未指定，则使用 client id
-        if not task_id:
-            task_id = client_id
-
         def on_message(ws: websocket.WebSocket, message: str):
             try:
                 msg = json.loads(message)
@@ -232,7 +253,8 @@ class ServerlessApiService:
                 if callback and hasattr(callback, "__call__"):
                     callback(message)
 
-                self.put_status_to_store(task_id, message)
+                if task_id:
+                    self.put_status_to_store(task_id, message)
 
                 if msg_type == "executing":
                     # 节点执行
@@ -257,6 +279,10 @@ class ServerlessApiService:
         # 提交出图任务
         prompt_result = self.api_prompt(client_id, prompt)
         prompt_id = prompt_result.get("prompt_id", "")
+
+        # 如果 task id 未指定，则使用 prompt id
+        if not task_id:
+            task_id = prompt_id
 
         if not prompt_id:
             raise Exception("can not get prompt_id from ComfyUI")

@@ -14,6 +14,8 @@ class OSS:
         expires_in_second: int = 0,
     ):
         self.oss_bucket = None
+        self.region = None
+        self.bucket_name = None
         self.oss_endpoint = endpoint
         self.oss_bucket_key_prefix = output_folder.strip("/ ")
         self.oss_expires = 0
@@ -34,6 +36,7 @@ class OSS:
             return
 
         self.bucket_name = arr[0].split("/")[-1] if "/" in arr[0] else arr[0]
+        self.region = arr[1]
 
         self.oss_bucket = oss2.Bucket(
             (

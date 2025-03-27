@@ -89,7 +89,7 @@ class ManagementService:
 
     @property
     def cur_snapshot_name(self) -> Optional[str]:
-        return self._snapshot_mgr.cur_snapshot_name
+        return self._snapshot_mgr.snapshot_name
 
     def start(self, snapshot_name: str) -> Dict:
         print(f"Starting backend process using snapshot '{snapshot_name}'...")

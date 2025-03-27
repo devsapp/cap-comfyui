@@ -16,6 +16,14 @@ class SnapshotManager:
     def __init__(self):
         self.cur_snapshot_name: Optional[str] = None
 
+    @property
+    def cur_snapshot_name(self) -> Optional[str]:
+        return self.cur_snapshot_name
+
+    @cur_snapshot_name.setter
+    def cur_snapshot_name(self, value: Optional[str]) -> None:
+        self._cur_snapshot_name = value
+
     def load(self, snapshot_name: str) -> Dict:
         """
         加载快照

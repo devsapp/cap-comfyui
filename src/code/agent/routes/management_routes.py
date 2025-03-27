@@ -1,5 +1,3 @@
-import threading
-
 from flask import Blueprint, Flask, request, jsonify
 
 from services.management_service import ManagementService
@@ -64,7 +62,17 @@ class ManagementRoutes:
             return jsonify({
                 "data": {
                     "status": self.service.status.value,
-                    "latest_action": getattr(self.service.latest_action, 'value', None)
+                    "latest_action": getattr(self.service.latest_action, 'value', None),
+                    "sub_status": self.service.sub_status
+                },
+                "status": "success"
+            }), 200
+
+        @self.bp.get("/snapshot")
+        def snapshot():
+            return jsonify({
+                "data": {
+                    "snapshotName": self.service.cur_snapshot_name or "",
                 },
                 "status": "success"
             }), 200

@@ -14,10 +14,16 @@ class SnapshotSaver(ABC):
         snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
         os.makedirs(snapshot_path, exist_ok=True)
         stage_cost = {}
+        from services.management_service import ManagementService
+        from services.management_service import SavingSubStatus
+        service = ManagementService()
+
+        service.sub_status = SavingSubStatus.PACKAGING
         with self.timer("Compressing dependencies") as t_compress:
             self._compress()
         stage_cost["time_compress"] = round(t_compress.elapsed, 2)
 
+        service.sub_status = SavingSubStatus.UPLOADING
         with self.timer(f"Uploading snapshot to {snapshot_path}") as t_upload:
             self._upload(snapshot_path)
         stage_cost["time_upload"] = round(t_upload.elapsed, 2)

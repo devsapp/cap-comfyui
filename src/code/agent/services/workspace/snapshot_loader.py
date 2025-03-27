@@ -12,14 +12,19 @@ class SnapshotLoader(ABC):
 
     def load(self, snapshot_path: str) -> Dict:
         stage_cost = {}
+        from services.management_service import ManagementService
+        from services.management_service import StartingSubStatus
+        service = ManagementService()
         with self.timer("Clearing work dir") as t_clear:
             self._clear()
         stage_cost["time_clear"] = round(t_clear.elapsed, 2)
 
+        service.sub_status = StartingSubStatus.DOWNLOADING
         with self.timer(f"Downloading snapshot from {snapshot_path}") as t_download:
             self._download(snapshot_path)
         stage_cost["time_download"] = round(t_download.elapsed, 2)
 
+        service.sub_status = StartingSubStatus.EXTRACTING
         with self.timer("Extracting dependencies") as t_extract:
             self._extract()
         stage_cost["time_extract"] = round(t_extract.elapsed, 2)

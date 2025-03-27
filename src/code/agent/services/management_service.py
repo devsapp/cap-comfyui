@@ -1,8 +1,6 @@
-import sys
-import time
 from enum import Enum
 from threading import Lock
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 
 import constants
 from exceptions.exceptions import StateTransitionError
@@ -23,6 +21,17 @@ class Action(Enum):
     START = "start"
     STOP = "stop"
     SAVE = "save"
+
+
+class StartingSubStatus(Enum):
+    DOWNLOADING = "Downloading"
+    EXTRACTING = "Extracting"
+    BOOTING = "Booting"
+
+
+class SavingSubStatus(Enum):
+    PACKAGING = "Packaging"
+    UPLOADING = "Uploading"
 
 
 def singleton(cls):
@@ -49,6 +58,7 @@ class ManagementService:
         self._process_mgr = BackendProcessManager()
         self._snapshot_mgr = SnapshotManager()
         self._status = BackendStatus.STOPPED
+        self._sub_status = ""
         self._latest_action = None
         self._status_lock = Lock()
 
@@ -69,32 +79,51 @@ class ManagementService:
         with self._status_lock:
             return self._latest_action
 
+    @property
+    def sub_status(self) -> str:
+        return self._sub_status
+
+    @sub_status.setter
+    def sub_status(self, value: str) -> None:
+        self._sub_status = value
+
+    @property
+    def cur_snapshot_name(self) -> Optional[str]:
+        return self._snapshot_mgr.cur_snapshot_name
+
     def start(self, snapshot_name: str) -> Dict:
         print(f"Starting backend process using snapshot '{snapshot_name}'...")
         self._transition_to(BackendStatus.STARTING, Action.START)
+        self.sub_status = StartingSubStatus.DOWNLOADING
 
         try:
             result_map = self._snapshot_mgr.load(snapshot_name)
+            self.sub_status = StartingSubStatus.BOOTING
             with timer("Start process") as t_start_process:
                 self._process_mgr.start(constants.BOOT_CMD)
                 self._process_mgr.wait_until_ready()
             result_map["time_start_process"] = round(t_start_process.elapsed, 2)
             self._transition_to(BackendStatus.RUNNING, Action.START)
+            self.sub_status = ""
             return result_map
         except Exception:
             self._transition_to(BackendStatus.STOPPED, Action.START)
+            self.sub_status = ""
             raise
 
     def save(self, snapshot_type: str) -> Dict:
         print(f"Saving workspace (type {snapshot_type})...")
         self._transition_to(BackendStatus.SAVING, Action.SAVE)
+        self.sub_status = SavingSubStatus.PACKAGING
 
         try:
             result_map = self._snapshot_mgr.save(snapshot_type)
             self._transition_to(BackendStatus.RUNNING, Action.SAVE)
+            self.sub_status = ""
             return result_map
         except Exception:
             self._transition_to(BackendStatus.RUNNING, Action.SAVE)
+            self.sub_status = ""
             raise
 
     def stop(self) -> Dict:

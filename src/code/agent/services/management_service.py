@@ -94,11 +94,11 @@ class ManagementService:
     def start(self, snapshot_name: str) -> Dict:
         print(f"Starting backend process using snapshot '{snapshot_name}'...")
         self._transition_to(BackendStatus.STARTING, Action.START)
-        self.sub_status = StartingSubStatus.DOWNLOADING
+        self.sub_status = StartingSubStatus.DOWNLOADING.value
 
         try:
             result_map = self._snapshot_mgr.load(snapshot_name)
-            self.sub_status = StartingSubStatus.BOOTING
+            self.sub_status = StartingSubStatus.BOOTING.value
             with timer("Start process") as t_start_process:
                 self._process_mgr.start(constants.BOOT_CMD)
                 self._process_mgr.wait_until_ready()
@@ -114,7 +114,7 @@ class ManagementService:
     def save(self, snapshot_type: str) -> Dict:
         print(f"Saving workspace (type {snapshot_type})...")
         self._transition_to(BackendStatus.SAVING, Action.SAVE)
-        self.sub_status = SavingSubStatus.PACKAGING
+        self.sub_status = SavingSubStatus.PACKAGING.value
 
         try:
             result_map = self._snapshot_mgr.save(snapshot_type)

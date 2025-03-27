@@ -1,5 +1,5 @@
 # 定义变量
-AGENT_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-agent-v20
+AGENT_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-agent-v22
 COMFYUI_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-comfyui-v19
 SD_IMAGE = registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-sd-v3
 OSS_BUCKET = dipper-cache-cn-hangzhou

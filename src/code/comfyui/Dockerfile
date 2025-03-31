@@ -6,7 +6,7 @@ ENV COMFYUI_DIR="/root/comfyui"
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
-    git checkout "v0.3.10"
+    git checkout "v0.3.27"
 
 # add built-in custom-nodes
 # FIXME: ComfyUI-Manager在启动过程中需要拉取内容，由于跨境网络问题，导致杭州实例启动非常慢，暂时去掉
@@ -50,16 +50,19 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 方式二: pip install使用comfyui源码中requirements.txt的具体内容, 缺点：与时间和pip版本耦合，使用新的ECS构建时会导致依赖层内容不同
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir \
+    comfyui-frontend-package==1.14.5 \
     torch \
     torchsde \
     torchvision \
     torchaudio \
+    numpy>=1.25.0 \
     einops \
     transformers>=4.28.1 \
     tokenizers>=0.13.3 \
     sentencepiece \
     safetensors>=0.4.2 \
-    aiohttp \
+    aiohttp>=3.11.8 \
+    yarl>=1.18.0 \
     pyyaml \
     Pillow \
     scipy \
@@ -67,7 +70,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     psutil \
     kornia>=0.7.1 \
     spandrel \
-    soundfile
+    soundfile \
+    av
 
 FROM agent AS agent
 
@@ -90,8 +94,6 @@ ENV BUILT_IN_DIR="/built-in"
 COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
-# 删除模型文件夹，工作空间启动时agent会创建models文件夹到挂载存储的软链接
-RUN rm -rf ${SD_DIR}/models
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 # TODO add pip path of venv
 

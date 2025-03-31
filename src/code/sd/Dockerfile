@@ -77,8 +77,6 @@ ENV BUILT_IN_DIR="/built-in"
 COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${SD_DIR} ${SD_DIR}
-# 删除模型文件夹，工作空间启动时agent会创建models文件夹到挂载存储的软链接
-RUN rm -rf ${SD_DIR}/models
 COPY .cache ${WORK_DIR}/.cache
 # 仅首次运行时才会自动生成config.json，为了保证制作的base工作空间快照的正确性，需要手动拷贝包含默认配置的config.json
 COPY config.json ${SD_DIR}/config.json

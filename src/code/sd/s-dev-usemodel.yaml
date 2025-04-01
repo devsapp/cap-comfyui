@@ -5,13 +5,12 @@ access: 'quanxi-zijian'
 vars:
   region: 'cn-hangzhou'
   name: 'zijian-test-sd-2'
-  imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-agent-v14'
+  imageUrl: 'registry.${vars.region}.aliyuncs.com/ohyee/fc-demo:cap-agent-v24'
   role: 'acs:ram::1431999136518149:role/aliyundevsdefaultrole'
 #  role: 'acs:ram::1338904783509062:role/aliyundevsdefaultrole'
   gpuType: 'fc.gpu.tesla.1'
   backendType: 'sd'
   baseVersion: 'v1.10.1-alpha.2'
-  snapshotName: 'latest'
 
 resources:
   comfyui:

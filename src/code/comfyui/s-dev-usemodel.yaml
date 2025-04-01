@@ -3,15 +3,14 @@ name: cap-comfyui
 access: 'quanxi-zijian'
 #access: 'quanxi-devs'
 vars:
-  region: 'cn-hangzhou'
-  name: 'zijian-test-comfyui-8'
-  imageUrl: 'registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:cap-agent-v14'
+  region: 'cn-beijing'
+  name: 'zijian-test-comfyui-1'
+  imageUrl: 'registry.${vars.region}.aliyuncs.com/ohyee/fc-demo:cap-agent-v24'
   role: 'acs:ram::1431999136518149:role/aliyundevsdefaultrole'
 #  role: 'acs:ram::1338904783509062:role/aliyundevsdefaultrole'
   gpuType: 'fc.gpu.tesla.1'
   backendType: 'comfyui'
   baseVersion: 'v0.3.10-alpha.2'
-  snapshotName: 'latest'
 
 resources:
   comfyui:

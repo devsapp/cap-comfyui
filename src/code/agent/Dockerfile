@@ -12,9 +12,12 @@ ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV SD_DIR="${WORK_DIR}/stable-diffusion-webui"
 ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
+
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
 COPY . ${AGENT_DIR}/
+
+RUN pip install --no-cache-dir mitmproxy
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
@@ -22,6 +25,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     ${AGENT_DIR}/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
+
+RUN mkdir -p ~/.pip \
+ && cp ${AGENT_DIR}/services/proxy/pip.conf ~/.pip/pip.conf
 
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

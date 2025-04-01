@@ -9,6 +9,30 @@ endif
 AGENT_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-agent-v24
 export OSS_BUCKET = dipper-cache-$(REGION)
 
+# 构建并推送Agent镜像到所有Region
+# make all
+# CR_PWD=xxx make all
+# REGION="cn-hangzhou cn-shanghai" CR_PWD=xxx make all
+.PHONY: all
+all:
+	@REGIONS="$${REGION:-$(VALID_REGIONS)}"; \
+	echo "====== Will process regions: $$REGIONS ======"; \
+	for region in $$REGIONS; do \
+		if ! echo "$(VALID_REGIONS)" | grep -w "$$region" > /dev/null; then \
+			echo "Error: Invalid region '$$region'. Must be one of: $(VALID_REGIONS)"; \
+			exit 1; \
+		fi; \
+	done; \
+	for region in $$REGIONS; do \
+		echo "\n====== Processing region: $$region ======"; \
+		$(MAKE) REGION=$$region CR_PWD="$$CR_PWD" login build push; \
+		if [ $$? -ne 0 ]; then \
+			echo "====== Failed in region $$region ======"; \
+			exit 1; \
+		fi; \
+		echo "====== Completed region: $$region ======"; \
+	done
+
 # 构建Agent镜像
 .PHONY: build
 build:
@@ -26,9 +50,16 @@ exec:
 	docker run -it --rm -p 9000:9000 --entrypoint /bin/bash $(IMAGE_NAME):$(TAG)
 
 # 登录镜像仓库
+# REGION=xxx CR_PWD=xxx make login
 .PHONY: login
 login:
-	docker login --username=oyohyee@gmail.com registry.$(REGION).aliyuncs.com
+	@if [ -z "$$CR_PWD" ]; then \
+		echo "[$(REGION)] No CR_PWD provided, using interactive login..."; \
+		docker login --username=oyohyee@gmail.com registry.$(REGION).aliyuncs.com; \
+	else \
+		echo "[$(REGION)] Using provided CR_PWD for login..."; \
+		echo "$$CR_PWD" | docker login --username=oyohyee@gmail.com --password-stdin registry.$(REGION).aliyuncs.com; \
+	fi
 
 # 推送镜像
 .PHONY: push

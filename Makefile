@@ -12,18 +12,18 @@ export OSS_BUCKET = dipper-cache-$(REGION)
 # 构建并推送Agent镜像到所有Region
 # make all
 # CR_PWD=xxx make all
-# REGION="cn-hangzhou cn-shanghai" CR_PWD=xxx make all
+# REGIONS="cn-hangzhou cn-shanghai" CR_PWD=xxx make all
 .PHONY: all
 all:
-	@REGIONS="$${REGION:-$(VALID_REGIONS)}"; \
-	echo "====== Will process regions: $$REGIONS ======"; \
-	for region in $$REGIONS; do \
+	@REGIONS_TO_DEPLOY="$${REGIONS:-$(VALID_REGIONS)}"; \
+	echo "====== Will process regions: $$REGIONS_TO_DEPLOY ======"; \
+	for region in $$REGIONS_TO_DEPLOY; do \
 		if ! echo "$(VALID_REGIONS)" | grep -w "$$region" > /dev/null; then \
 			echo "Error: Invalid region '$$region'. Must be one of: $(VALID_REGIONS)"; \
 			exit 1; \
 		fi; \
 	done; \
-	for region in $$REGIONS; do \
+	for region in $$REGIONS_TO_DEPLOY; do \
 		echo "\n====== Processing region: $$region ======"; \
 		$(MAKE) REGION=$$region CR_PWD="$$CR_PWD" login build push; \
 		if [ $$? -ne 0 ]; then \

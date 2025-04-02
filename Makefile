@@ -1,5 +1,5 @@
 # 定义变量
-VALID_REGIONS = ap-southeast-1 cn-hangzhou cn-beijing cn-shanghai
+VALID_REGIONS = ap-southeast-1 cn-hangzhou cn-beijing cn-shanghai cn-shenzhen
 export REGION ?= cn-hangzhou
 
 ifeq ($(filter $(REGION),$(VALID_REGIONS)),)

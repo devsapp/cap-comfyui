@@ -6,14 +6,13 @@ ENV COMFYUI_DIR="/root/comfyui"
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
-    git checkout "v0.3.27"
+    git checkout "v0.3.10"
 
 # add built-in custom-nodes
-# FIXME: ComfyUI-Manager在启动过程中需要拉取内容，由于跨境网络问题，导致杭州实例启动非常慢，暂时去掉
-#RUN cd ${COMFYUI_DIR}/custom_nodes && \
-#    git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
-#    cd ComfyUI-Manager && \
-#    git checkout "3.3"
+RUN cd ${COMFYUI_DIR}/custom_nodes && \
+    git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
+    cd ComfyUI-Manager && \
+    git checkout "3.31.8"
 
 FROM python:3.10.16-slim AS models
 
@@ -40,29 +39,26 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir onnxruntime-gpu \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
-# 安装 源码 所使用的依赖
-## 方式一: pip install使用comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致依赖层内容不同
+# 安装 ComfyUI源码 所使用的依赖
+## 方式一: pip install动态拉取comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致镜像层重新构建
 #ENV COMFYUI_DIR="/root/comfyui"
 #COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 #RUN --mount=type=cache,target=/root/.cache/pip \
 #    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
 
-# 方式二: pip install使用comfyui源码中requirements.txt的具体内容, 缺点：与时间和pip版本耦合，使用新的ECS构建时会导致依赖层内容不同
+# 方式二: pip install使用comfyui源码中requirements.txt, 缺点：每次ComfyUI版本升级都需要手动维护依赖列表
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir \
-    comfyui-frontend-package==1.14.5 \
     torch \
     torchsde \
     torchvision \
     torchaudio \
-    numpy>=1.25.0 \
     einops \
     transformers>=4.28.1 \
     tokenizers>=0.13.3 \
     sentencepiece \
     safetensors>=0.4.2 \
-    aiohttp>=3.11.8 \
-    yarl>=1.18.0 \
+    aiohttp \
     pyyaml \
     Pillow \
     scipy \
@@ -70,8 +66,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     psutil \
     kornia>=0.7.1 \
     spandrel \
-    soundfile \
-    av
+    soundfile
+
+# 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
+ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
+COPY --from=codes ${COMFYUI_NODE_DIR} ${COMFYUI_NODE_DIR}
+RUN --mount=type=cache,target=/root/.cache/pip \
+    find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
 
 FROM agent AS agent
 

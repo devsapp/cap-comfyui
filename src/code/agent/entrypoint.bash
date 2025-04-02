@@ -19,6 +19,45 @@
 # --- 20250102-120159
 # ---- comfyui
 # ---- venv.tar
+init_mitmproxy(){
+  echo 'export HTTP_PROXY="http://127.0.0.1:8080"' >> ~/.bashrc
+  echo 'export HTTPS_PROXY="http://127.0.0.1:8080"' >> ~/.bashrc
+  echo 'export REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc
+  echo 'export SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc
+  echo 'export CURL_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc
+
+  source ~/.bashrc
+
+#  mitmdump -s ${AGENT_DIR}/services/proxy/mirror_proxy.py &
+  mitmdump -s ${AGENT_DIR}/services/proxy/mirror_proxy.py >> /root/agent/mitmproxy.log 2>> /root/agent/mitmproxy_error.log &
+
+  sleep 5
+#  cp ~/.mitmproxy/mitmproxy-ca-cert.cer /usr/local/share/ca-certificates/
+  cp ~/.mitmproxy/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy.crt
+  update-ca-certificates
+  git config --global http.sslCAInfo /usr/local/share/ca-certificates/mitmproxy.crt
+}
+
+check_and_init_mitmproxy(){
+  domestic_regions=("cn-hangzhou" "cn-shanghai" "cn-shenzhen" "cn-beijing")
+
+  enableSnapshot="${AUTO_LAUNCH_SNAPSHOT_NAME}"
+  region="${REGION}"
+
+  is_domestic=false
+  for reg in "${domestic_regions[@]}"; do
+      if [[ "${region}" == "${reg}" ]]; then
+          is_domestic=true
+          break
+      fi
+  done
+
+  if [[ -n "${AUTO_LAUNCH_SNAPSHOT_NAME}" ]] && [[ ${is_domestic} == true ]]; then
+      echo "Init mitmproxy..."
+      init_mitmproxy
+  fi
+}
+
 
 MNT_DIR=${MODEL_ASSET_DIR:="/mnt/auto"}
 echo "Mount dir: ${MNT_DIR}"
@@ -48,4 +87,6 @@ mkdir -p ${MNT_DIR}/input
 mkdir -p ${MNT_DIR}/output
 source ${AGENT_DIR}/venv/bin/activate
 echo "Using python venv, python path '$(which python)', pip path '$(which pip)'... "
+
+check_and_init_mitmproxy
 python ${AGENT_DIR}/main.py

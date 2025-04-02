@@ -72,7 +72,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
 COPY --from=codes ${COMFYUI_NODE_DIR} ${COMFYUI_NODE_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
+    find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
 
 FROM agent AS agent
 

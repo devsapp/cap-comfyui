@@ -6,7 +6,8 @@ ifeq ($(filter $(REGION),$(VALID_REGIONS)),)
 $(error Invalid REGION: $(REGION). Must be one of: $(VALID_REGIONS))
 endif
 
-AGENT_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-agent-v24
+VERSION:=$(shell date "+%Y%m%d%H%M%S")
+AGENT_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:$(VERSION)
 export OSS_BUCKET = dipper-cache-$(REGION)
 
 # 构建并推送Agent镜像到所有Region

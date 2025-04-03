@@ -39,11 +39,17 @@ init_mitmproxy(){
 }
 
 check_and_init_mitmproxy(){
+  echo "Check and init mitmproxy..."
+
+  # 根据AUTO_LAUNCH_SNAPSHOT_NAME是否为空来判断当前函数是否use_api_mode
+  use_api_mode=false
+  if [[ -n "${AUTO_LAUNCH_SNAPSHOT_NAME}" ]]; then
+      use_api_mode=true
+  fi
+
+  # 根据当前REGION判断是否处于国内
   domestic_regions=("cn-hangzhou" "cn-shanghai" "cn-shenzhen" "cn-beijing")
-
-  enableSnapshot="${AUTO_LAUNCH_SNAPSHOT_NAME}"
   region="${REGION}"
-
   is_domestic=false
   for reg in "${domestic_regions[@]}"; do
       if [[ "${region}" == "${reg}" ]]; then
@@ -52,7 +58,7 @@ check_and_init_mitmproxy(){
       fi
   done
 
-  if [[ -n "${AUTO_LAUNCH_SNAPSHOT_NAME}" ]] && [[ ${is_domestic} == true ]]; then
+  if [[ ${use_api_mode} == false ]] && [[ ${is_domestic} == true ]]; then
       echo "Init mitmproxy..."
       init_mitmproxy
   fi

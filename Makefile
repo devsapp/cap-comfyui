@@ -6,8 +6,8 @@ ifeq ($(filter $(REGION),$(VALID_REGIONS)),)
 $(error Invalid REGION: $(REGION). Must be one of: $(VALID_REGIONS))
 endif
 
-VERSION:=$(shell date "+%Y%m%d%H%M%S")
-AGENT_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:$(VERSION)
+VERSION := $(shell date "+%Y%m%d%H%M%S")
+AGENT_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:agent-$(VERSION)
 export OSS_BUCKET = dipper-cache-$(REGION)
 
 # 构建并推送Agent镜像到所有Region
@@ -26,7 +26,7 @@ all:
 	done; \
 	for region in $$REGIONS_TO_DEPLOY; do \
 		echo "\n====== Processing region: $$region ======"; \
-		$(MAKE) REGION=$$region CR_PWD="$$CR_PWD" login build push; \
+		$(MAKE) REGION=$$region CR_PWD="$$CR_PWD" VERSION=$(VERSION) login build push; \
 		if [ $$? -ne 0 ]; then \
 			echo "====== Failed in region $$region ======"; \
 			exit 1; \

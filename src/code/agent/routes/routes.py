@@ -1,3 +1,4 @@
+import json
 import logging
 import threading
 import traceback
@@ -9,7 +10,7 @@ from flask_sock import Sock
 
 import constants
 from exceptions.exceptions import CustomError
-from services.management_service import BackendStatus, ManagementService
+from services.management_service import BackendStatus, ManagementService, Action
 from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
 
@@ -49,6 +50,26 @@ class Routes:
 
             print("FC Initialize End RequestId: " + request_id)
             return "Function is initialized, request_id: " + request_id + "\n"
+
+        @self.app.route("/pre-stop", methods=["GET"])
+        def pre_stop():
+            request_id = request.headers.get("x-fc-request-id", "")
+            print("FC PreStop Start RequestId: " + request_id)
+
+            service = ManagementService()  # singleton
+            # 若最近一次管控操作为Start，且实例非预期销毁时，需要在pre-stop中保存工作空间从而兜底;
+            # 其他情况：例如按量实例并未启动服务子进程、例如已经使用SaveAndStop保存了工作空间再销毁实例，均不需要在pre-stop中再次保存
+            if service.latest_action and service.latest_action == Action.START:
+                try:
+                    from services.workspace.snapshot_manager import SnapshotManager
+                    result_map = service.save(SnapshotManager.TYPE_DEV)
+                    print(f"save resp when preStop: {json.dumps(result_map, indent=2)}")
+                except Exception as e:
+                    print(f"error occur when preStop: {str(e)}")
+            else:
+                print("Do nothing in pre-stop")
+            print("FC PreStop End RequestId: " + request_id)
+            return "OK"
 
         @self._sock.route('/<path:path>')
         def proxy_ws(ws, path):

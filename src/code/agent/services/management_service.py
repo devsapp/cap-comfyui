@@ -41,6 +41,7 @@ def singleton(cls):
         if cls not in _instances:
             _instances[cls] = cls(*args, **kwargs)
         return _instances[cls]
+
     return get_instance
 
 
@@ -55,11 +56,11 @@ class ManagementService:
     }
 
     def __init__(self):
-        self._process_mgr = BackendProcessManager()
-        self._snapshot_mgr = SnapshotManager()
-        self._status = BackendStatus.STOPPED
-        self._sub_status = ""
-        self._latest_action = None
+        self._process_mgr = BackendProcessManager()  # 管理ComfyUI/SD子进程
+        self._snapshot_mgr = SnapshotManager()  # 管理实例磁盘空间中的工作空间快照
+        self._status = BackendStatus.STOPPED  # 服务进程状态
+        self._sub_status = ""  # 服务进程子状态，例如启动过程中的"下载"、"解压"、"服务启动"
+        self._latest_action = None  # 最近一次管控行为，包含start、stop、save
         self._status_lock = Lock()
 
     def _transition_to(self, new_status: BackendStatus, action: Action) -> None:

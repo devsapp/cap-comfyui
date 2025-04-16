@@ -23,7 +23,8 @@ COMFYUI_BOOT_CMD = [
     "--temp-directory",
     f"{MNT_DIR}/output",
     "--user-directory",
-    f"{MNT_DIR}/output"
+    f"{MNT_DIR}/output",
+    "--disable-metadata"
 ]
 SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
 SD_PROCESS_PORT = 7860
@@ -50,6 +51,7 @@ DEFAULT_READINESS_TIMEOUT = 300
 DEFAULT_LIVENESS_POLL_INTERVAL = 5
 
 # API Mode
+USE_API_MODE = bool(os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME"))
 AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
 
 # OSS

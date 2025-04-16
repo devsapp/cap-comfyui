@@ -1,6 +1,8 @@
 import os
-import pytest
 import shutil
+import tarfile
+import pytest
+import zipfile
 from utils.file_ops import copy, move, remove, compress, extract, create_symlink
 
 
@@ -23,6 +25,10 @@ def setup_test_files(tmp_path):
     # 创建软链接
     symlink_path = source_dir / "symlink.txt"
     os.symlink(str(test_file), str(symlink_path))
+
+    # 在子目录中创建同样的软链接
+    subdir_symlink = test_subdir / "symlink.txt"
+    os.symlink(str(test_file), str(subdir_symlink))
 
     return tmp_path
 
@@ -221,6 +227,161 @@ def test_extract_to_default_location(setup_test_files):
     assert tar_file.parent.exists()
     assert (tar_file.parent / "test.txt").exists()
     assert (tar_file.parent / "subdir" / "subfile.txt").exists()
+
+
+def test_extract_zip(setup_test_files):
+    # 首先创建一个zip文件
+    source_dir = setup_test_files / "source"
+    zip_file = setup_test_files / "test.zip"
+    output_dir = setup_test_files / "extracted"
+
+    compress(str(zip_file), str(source_dir))
+    extract(str(zip_file), str(output_dir))
+
+    assert output_dir.exists()
+    assert (output_dir / "test.txt").exists()
+    assert (output_dir / "subdir" / "subfile.txt").exists()
+
+    # 验证文件内容
+    assert (output_dir / "test.txt").read_text() == "test content"
+    assert (output_dir / "subdir" / "subfile.txt").read_text() == "subfile content"
+
+
+def test_extract_zip_to_default_location(setup_test_files):
+    source_dir = setup_test_files / "source"
+    zip_file = setup_test_files / "test.zip"
+
+    compress(str(zip_file), str(source_dir))
+    extract(str(zip_file))
+
+    assert zip_file.parent.exists()
+    assert (zip_file.parent / "test.txt").exists()
+    assert (zip_file.parent / "subdir" / "subfile.txt").exists()
+
+
+def test_extract_with_existing_files(setup_test_files):
+    # 准备源目录和目标目录
+    source_dir = setup_test_files / "source"
+    zip_file = setup_test_files / "test.zip"
+    output_dir = setup_test_files / "output"
+
+    # 创建zip文件
+    compress(str(zip_file), str(source_dir))
+
+    # 在解压目标目录下创建同名文件
+    output_dir.mkdir()
+    existing_file = output_dir / "subdir"
+    existing_file.write_text("existing content")
+
+    # 执行解压操作，会因为解压时subdir文件出现冲突而抛错，extract方法并不会在解压时强制覆盖
+    with pytest.raises(Exception):
+        extract(str(zip_file), output_dir=str(output_dir))
+
+
+def test_compress_tar_symlink_behavior(setup_test_files):
+    """测试tar格式压缩时对软链接的处理行为"""
+    source_dir = setup_test_files / "source"
+    tar_file = setup_test_files / "test.tar"
+    output_dir = setup_test_files / "extracted"
+
+    compress(str(tar_file), str(source_dir))
+
+    # 检查tar文件中的软链接
+    with tarfile.open(str(tar_file), 'r') as tar:
+        # 验证根目录下的软链接
+        symlink_info = tar.getmember("symlink.txt")
+        assert tarfile.SYMTYPE in symlink_info.type
+
+        # 验证子目录中的软链接
+        subdir_symlink_info = tar.getmember("subdir/symlink.txt")
+        assert tarfile.SYMTYPE in subdir_symlink_info.type
+
+    # 解压并验证
+    extract(str(tar_file), str(output_dir))
+
+    # 验证解压后的软链接
+    # 根目录软链接
+    extracted_symlink = output_dir / "symlink.txt"
+    assert os.path.islink(str(extracted_symlink))
+    assert os.readlink(str(extracted_symlink)) == str(setup_test_files / "source" / "test.txt")
+
+    # 子目录中的软链接
+    extracted_subdir_symlink = output_dir / "subdir" / "symlink.txt"
+    assert os.path.islink(str(extracted_subdir_symlink))
+    assert os.readlink(str(extracted_subdir_symlink)) == str(setup_test_files / "source" / "test.txt")
+
+
+def test_compress_all_files_zip(setup_test_files):
+    source_dir = setup_test_files / "source"
+    zip_file = setup_test_files / "test.zip"
+
+    compress(str(zip_file), str(source_dir))
+
+    assert zip_file.exists()
+    # 验证是否为有效的zip文件
+    assert zipfile.is_zipfile(str(zip_file))
+
+
+def test_compress_selected_files_zip(setup_test_files):
+    source_dir = setup_test_files / "source"
+    zip_file = setup_test_files / "test.zip"
+
+    compress(str(zip_file), str(source_dir), ["test.txt"])
+
+    assert zip_file.exists()
+    # 验证zip文件中只包含选定的文件
+    with zipfile.ZipFile(str(zip_file), 'r') as zf:
+        assert len(zf.namelist()) == 1
+        assert "test.txt" in zf.namelist()
+
+
+def test_compress_zip_symlink_behavior(setup_test_files):
+    """测试zip格式压缩时对软链接的处理行为"""
+    source_dir = setup_test_files / "source"
+    zip_file = setup_test_files / "test.zip"
+    output_dir = setup_test_files / "extracted"
+
+    compress(str(zip_file), str(source_dir))
+
+    # 检查zip文件中的内容
+    with zipfile.ZipFile(str(zip_file), 'r') as zf:
+        file_list = zf.namelist()
+        # 验证仅包含原始文件，不包含软链接及其指向的内容副本
+        expected_files = {'test.txt', 'symlink.txt', 'subdir/subfile.txt', 'subdir/symlink.txt'}
+        assert set(file_list) == expected_files
+
+    # 解压并验证
+    extract(str(zip_file), str(output_dir))
+
+    # 验证解压后的目录结构完整性
+    assert (output_dir / "test.txt").exists()
+    assert (output_dir / "symlink.txt").exists()
+    assert not os.path.islink(str(output_dir / "symlink.txt"))
+    assert (output_dir / "subdir" / "subfile.txt").exists()
+    assert (output_dir / "subdir" / "symlink.txt").exists()
+    assert not os.path.islink(str(output_dir / "subdir" / "symlink.txt"))
+
+
+def test_compress_invalid_format(setup_test_files):
+    """测试不支持的压缩格式"""
+    source_dir = setup_test_files / "source"
+    invalid_file = setup_test_files / "test.rar"
+
+    with pytest.raises(ValueError) as exc_info:
+        compress(str(invalid_file), str(source_dir))
+    assert "Unsupported archive format" in str(exc_info.value)
+
+
+def test_extract_invalid_format(setup_test_files):
+    """测试不支持的解压格式"""
+    invalid_file = setup_test_files / "test.rar"
+
+    # 创建一个假的rar文件
+    invalid_file.write_text("fake content")
+
+    with pytest.raises(ValueError) as exc_info:
+        extract(str(invalid_file))
+    assert "Unsupported archive format" in str(exc_info.value)
 
 
 # 错误处理测试

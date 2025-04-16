@@ -1,4 +1,5 @@
 import tarfile
+import zipfile
 import shutil
 import os
 
@@ -75,58 +76,90 @@ def remove(path):
         raise
 
 
-def compress(tar_file_path, source_dir, selected_files=None):
+def compress(target_file_path, source_dir, selected_files=None):
     """
     打包文件/文件夹
 
     Args:
-        tar_file_path: 输出的tar文件路径
+        target_file_path: 输出的tar/zip文件路径
         source_dir: 待打包文件所在父目录
         selected_files: 父目录下，待打包文件/文件夹名列表，None表示全部打包
     """
 
-    try:
-        with tarfile.open(tar_file_path, "w:") as tar:
-            # 保存当前工作目录
-            original_dir = os.getcwd()
-            try:
-                os.chdir(source_dir)
+    # 获取文件后缀
+    _, ext = os.path.splitext(target_file_path)
 
-                # 使用os.scandir()遍历一级目录
-                with os.scandir('.') as entries:
-                    for entry in entries:
-                        # 如果指定了目标文件列表，则只处理列表中的文件
-                        if selected_files is None or entry.name in selected_files:
-                            tar.add(entry.name)
-            finally:
-                # 恢复原始工作目录
-                os.chdir(original_dir)
+    try:
+        # 保存当前工作目录
+        original_dir = os.getcwd()
+        try:
+            os.chdir(source_dir)
+
+            if ext.lower() == '.tar':
+                # tar格式打包
+                with tarfile.open(target_file_path, "w:") as tar:
+                    with os.scandir('.') as entries:
+                        for entry in entries:
+                            if selected_files is None or entry.name in selected_files:
+                                tar.add(entry.name)
+
+            elif ext.lower() == '.zip':
+                # zip格式打包
+                with zipfile.ZipFile(target_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    with os.scandir('.') as entries:
+                        for entry in entries:
+                            if selected_files is None or entry.name in selected_files:
+                                # 如果是文件夹，需要递归添加; 且zip会丢失软链接信息，不会将软链接指向的内容归档
+                                if entry.is_dir():
+                                    for root, dirs, files in os.walk(entry.name):
+                                        for file in files:
+                                            file_path = os.path.join(root, file)
+                                            zipf.write(file_path)
+                                else:
+                                    zipf.write(entry.name)
+            else:
+                raise ValueError(f"Unsupported archive format: {ext}")
+
+        finally:
+            # 恢复原始工作目录
+            os.chdir(original_dir)
     except Exception as e:
-        print(f"Failed to compress tar, reason: {e}")
+        print(f"Failed to compress {ext}, reason: {e}")
         raise
 
 
-def extract(tar_file_path, output_dir=None):
+def extract(file_path, output_dir=None):
     """
-    解压tar包
+    解压tar/zip包
 
     Args:
-        tar_file_path: tar文件路径
-        output_dir: 解压输出目录，默认为None，表示解压到tar文件所在目录
+        file_path: 压缩文件路径
+        output_dir: 解压输出目录，默认为None，表示解压到压缩文件所在目录
     """
 
-    # 如果未指定输出目录，使用tar文件所在目录
+    # 如果未指定输出目录，使用压缩文件所在目录
     if output_dir is None:
-        output_dir = os.path.dirname(tar_file_path)
+        output_dir = os.path.dirname(file_path)
 
     # 确保输出目录存在
     os.makedirs(output_dir, exist_ok=True)
 
+    # 获取文件后缀
+    _, ext = os.path.splitext(file_path)
+
     try:
-        with tarfile.open(tar_file_path, 'r:*') as tar:
-            tar.extractall(path=output_dir)
+        if ext.lower() == '.tar':
+            # tar格式解压
+            with tarfile.open(file_path, 'r:*') as tar:
+                tar.extractall(path=output_dir)
+        elif ext.lower() == '.zip':
+            # zip格式解压
+            with zipfile.ZipFile(file_path, 'r') as zipf:
+                zipf.extractall(path=output_dir)
+        else:
+            raise ValueError(f"Unsupported archive format: {ext}")
     except Exception as e:
-        print(f"Failed to extract tar, reason: {e}")
+        print(f"Failed to extract {ext}, reason: {e}")
         raise
 
 

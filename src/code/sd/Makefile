@@ -1,8 +1,8 @@
 # 定义变量
 REGION ?= cn-hangzhou
-SD_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-sd-v3
+SD_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-sd
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_SD_BASE_DIR = base/sd/v1.10.1-alpha.3
+OSS_SD_BASE_DIR = base/sd/v1.10.1-beta
 
 .PHONY: upgrade
 upgrade: build upload-base
@@ -33,7 +33,7 @@ pull:
 # ossutil config
 # endpoint: 内网oss-cn-hangzhou-internal.aliyuncs.com 公网oss-cn-hangzhou.aliyuncs.com
 # ak & sk: fc-ide-prod账号包含OSS账号写权限的一组AK SK，可联系zijian
-SNAPSHOT_NAME := dev-$(shell date +%Y%m%d-%H%M%S)
+SNAPSHOT_NAME := dev-$(shell date -u +%Y%m%d-%H%M%S)
 .PHONY: upload-base
 upload-base:
 	@echo "Starting upload process..."
@@ -48,15 +48,16 @@ upload-base:
 	docker cp sdImage:/root/.cache ./tmp/.cache
 	@docker rm sdImage
 
-	@echo "Creating venv.tar..."
+	@echo "Creating snapshot..."
 	@tar -C ./tmp -cf ./tmp/venv.tar venv
+	@cd ./tmp && mv ./stable-diffusion-webui/models ./ && zip -rq stable-diffusion-webui.zip stable-diffusion-webui
+	@cd ./tmp && zip -rq .cache.zip .cache
 
 	@echo "Uploading files to OSS..."
-	@ossutil cp -r ./tmp/stable-diffusion-webui/models oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/models && \
-	rm -rf ./tmp/stable-diffusion-webui/models && \
-	ossutil cp -r ./tmp/stable-diffusion-webui oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/stable-diffusion-webui && \
+	@ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/models && \
+	ossutil cp ./tmp/stable-diffusion-webui.zip oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/stable-diffusion-webui.zip && \
 	ossutil cp ./tmp/venv.tar oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar && \
-	ossutil cp -r ./tmp/.cache oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/.cache
+	ossutil cp -r ./tmp/.cache.zip oss://$(OSS_BUCKET)/$(OSS_SD_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/.cache.zip
 
 	@rm -rf tmp
 	@echo "Upload completed successfully"

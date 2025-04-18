@@ -104,36 +104,48 @@ class ServerlessApiService:
         """
         for key, value in prompt.items():
             if type(value) == dict and value.get("class_type") == "LoadImage":
-                try:
-                    image = value.get("inputs", {}).get("image", "")
-                    content = ""
 
-                    if image.startswith("http://") or image.startswith("https://"):
-                        # 图片来源于 url
-                        content = requests.get(image).content
-                    elif image.startswith("oss://"):
-                        # 图片来源于 oss
-                        arr = image.split("/")
-                        host = arr[2]
-                        path = "/".join(arr[3:])
-                        oss = OSS(
-                            host,
-                            constants.ALIBABA_CLOUD_ACCESS_KEY_ID,
-                            constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
-                            constants.ALIBABA_CLOUD_SECURITY_TOKEN,
-                            "",
-                            0,
+                image = value.get("inputs", {}).get("image", "")
+                content = ""
+
+                if image.startswith("http://") or image.startswith("https://"):
+                    # 图片来源于 url
+                    response = requests.get(image)
+                    if response.status_code >= 400:
+                        raise Exception(
+                            f"can not get image {image} from http url, got status code {response.status_code}"
                         )
-                        content = oss.get(path)
-                    elif len(image) > 64:
-                        # 图像可能是 base64，尝试使用 base64 解析
-                        content = base64.b64decode(image.strip())
-                    if content:
-                        res = self.api_upload_image(content, False)
-                        prompt[key]["inputs"]["image"] = res["name"]
 
-                except Exception as e:
-                    print(e)
+                    content = response.content
+                    if content == "":
+                        raise Exception(f"can not get image {image} from http url")
+                elif image.startswith("oss://"):
+                    # 图片来源于 oss
+                    arr = image.split("/")
+                    host = arr[2]
+                    path = "/".join(arr[3:])
+                    oss = OSS(
+                        host,
+                        constants.ALIBABA_CLOUD_ACCESS_KEY_ID,
+                        constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
+                        constants.ALIBABA_CLOUD_SECURITY_TOKEN,
+                        "",
+                        0,
+                    )
+                    content = oss.get(path)
+
+                    if content == "":
+                        raise Exception(f"can not get image {image} from oss")
+                elif len(image) > 64:
+                    # 图像可能是 base64，尝试使用 base64 解析
+                    try:
+                        content = base64.b64decode(image.strip())
+                    except:
+                        pass
+                if content:
+                    res = self.api_upload_image(content, False)
+                    prompt[key]["inputs"]["image"] = res["name"]
+
             if type(value) == dict and value.get("class_type") == "KSampler":
                 if value.get("inputs", {}).get("seed") == -1:
                     prompt[key]["inputs"]["seed"] = random.randint(0, 4294967296)
@@ -161,13 +173,17 @@ class ServerlessApiService:
                         img_output = base64.b64encode(img_bytes).decode("ascii")
 
                     if output_oss:
-                        if not self.oss_store.ready():
-                            print("oss client is not init")
-                        else:
-                            oss_filename = f"{str(uuid4())}.png"
-                            self.oss_store.put(oss_filename, img_bytes)
-                            oss_object_key = self.oss_store.object_key(oss_filename)
-                            oss_url = self.oss_store.sign(oss_filename)
+                        try:
+                            if not self.oss_store.ready():
+                                print("oss client is not init")
+                            else:
+                                oss_filename = f"{str(uuid4())}.png"
+                                self.oss_store.put(oss_filename, img_bytes)
+                                oss_object_key = self.oss_store.object_key(oss_filename)
+                                oss_url = self.oss_store.sign(oss_filename)
+                        except Exception as e:
+                            print(e)
+                            pass
 
                 results.append(
                     {

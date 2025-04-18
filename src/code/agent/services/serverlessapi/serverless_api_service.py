@@ -110,10 +110,12 @@ class ServerlessApiService:
 
                 if image.startswith("http://") or image.startswith("https://"):
                     # 图片来源于 url
-                    response =requests.get(image)
+                    response = requests.get(image)
                     if response.status_code >= 400:
-                        raise Exception(f"can not get image {image} from http url, got status code {response.status_code}")
-                    
+                        raise Exception(
+                            f"can not get image {image} from http url, got status code {response.status_code}"
+                        )
+
                     content = response.content
                     if content == "":
                         raise Exception(f"can not get image {image} from http url")
@@ -163,16 +165,12 @@ class ServerlessApiService:
                 img_output = None
                 oss_object_key = None
                 oss_url = None
-                error_message = []
 
                 if output_base64 or output_oss:
                     img_bytes = self.api_view_image(filename, img_type, sub_folder)
 
                     if output_base64:
-                        try:
-                            img_output = base64.b64encode(img_bytes).decode("ascii")
-                        except Exception as e:
-                            error_message.append(e)
+                        img_output = base64.b64encode(img_bytes).decode("ascii")
 
                     if output_oss:
                         try:
@@ -184,37 +182,34 @@ class ServerlessApiService:
                                 oss_object_key = self.oss_store.object_key(oss_filename)
                                 oss_url = self.oss_store.sign(oss_filename)
                         except Exception as e:
-                            error_message.append(e)
+                            print(e)
+                            pass
 
-                result = {
-                    "node_id": node_id,
-                    "batch_id": index,
-                    "output": {
-                        "raw": {
-                            "filename": filename,
-                            "type": img_type,
-                            "subfolder": sub_folder,
-                            "filepath": (
-                                os.path.join(img_type, sub_folder, filename)
-                                if sub_folder
-                                else os.path.join(img_type, filename)
-                            ),
+                results.append(
+                    {
+                        "node_id": node_id,
+                        "batch_id": index,
+                        "output": {
+                            "raw": {
+                                "filename": filename,
+                                "type": img_type,
+                                "subfolder": sub_folder,
+                                "filepath": (
+                                    os.path.join(img_type, sub_folder, filename)
+                                    if sub_folder
+                                    else os.path.join(img_type, filename)
+                                ),
+                            },
+                            "base64": {"content": img_output},
+                            "oss": {
+                                "region": self.oss_store.region,
+                                "bucket": self.oss_store.bucket_name,
+                                "object": oss_object_key,
+                                "url": oss_url,
+                            },
                         },
-                        "base64": {"content": img_output},
-
-                        "oss": {
-                            "region": self.oss_store.region,
-                            "bucket": self.oss_store.bucket_name,
-                            "object": oss_object_key,
-                            "url": oss_url,
-                        },
-                    },
-                }
-
-                if len(error_message):
-                    result["error_message"] = "\n".join([str(e) for e in error_message])
-
-                results.append(result)
+                    }
+                )
 
         return {
             "type": "serverless_api",

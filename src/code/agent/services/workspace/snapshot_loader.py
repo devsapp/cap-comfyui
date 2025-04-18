@@ -132,7 +132,7 @@ class SDSnapshotLoader(SnapshotLoader):
         file_ops.copy(f"{snapshot_path}/stable-diffusion-webui.zip", f"{constants.WORK_DIR}/stable-diffusion-webui.zip")
         cache_path = f"{snapshot_path}/.cache.zip"
         if os.path.exists(cache_path):
-            file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache")
+            file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache.zip")
 
     def _extract(self):
         file_ops.extract(f"{constants.WORK_DIR}/venv.tar")

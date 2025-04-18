@@ -1,8 +1,8 @@
 # 定义变量
 REGION ?= cn-hangzhou
-COMFYUI_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-comfyui-v21
+COMFYUI_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-comfyui
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-alpha.3
+OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
 
 .PHONY: upgrade
 upgrade: build upload-base
@@ -33,7 +33,7 @@ pull:
 # ossutil config
 # endpoint: 内网oss-cn-hangzhou-internal.aliyuncs.com 公网oss-cn-hangzhou.aliyuncs.com
 # ak & sk: fc-ide-prod账号包含OSS账号写权限的一组AK SK，可联系zijian
-SNAPSHOT_NAME := dev-$(shell date +%Y%m%d-%H%M%S)
+SNAPSHOT_NAME := dev-$(shell date -u +%Y%m%d-%H%M%S)
 .PHONY: upload-base
 upload-base:
 	@echo "Starting upload process..."
@@ -47,13 +47,14 @@ upload-base:
 	docker cp comfyuiImage:/root/venv ./tmp/venv
 	@docker rm comfyuiImage
 
-	@echo "Creating venv.tar..."
+	@echo "Creating snapshot..."
 	@tar -C ./tmp -cf ./tmp/venv.tar venv
+	@cd ./tmp && mv ./comfyui/custom_nodes ./ && mv ./comfyui/models ./ && zip -rq comfyui.zip comfyui
 
 	@echo "Uploading files to OSS..."
-	@ossutil cp -r ./tmp/comfyui/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
-	rm -rf ./tmp/comfyui/models && \
-	ossutil cp -r ./tmp/comfyui oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui && \
+	@ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
+	ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/custom_nodes && \
+	ossutil cp ./tmp/comfyui.zip oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui.zip && \
 	ossutil cp ./tmp/venv.tar oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar
 
 	@rm -rf tmp

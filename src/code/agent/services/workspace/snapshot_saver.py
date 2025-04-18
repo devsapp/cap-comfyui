@@ -19,7 +19,7 @@ class SnapshotSaver(ABC):
         service = ManagementService()
 
         service.sub_status = SavingSubStatus.PACKAGING.value
-        with self.timer("Compressing dependencies") as t_compress:
+        with self.timer("Compressing snapshot") as t_compress:
             self._compress()
         stage_cost["time_compress"] = round(t_compress.elapsed, 2)
 
@@ -27,8 +27,6 @@ class SnapshotSaver(ABC):
         with self.timer(f"Uploading snapshot to {snapshot_path}") as t_upload:
             self._upload(snapshot_path)
         stage_cost["time_upload"] = round(t_upload.elapsed, 2)
-
-        self._delete_symlinks(snapshot_path)
 
         if remove_old and old_snapshot_name is not None:
             old_snapshot_path = os.path.join(constants.SNAPSHOT_DIR, old_snapshot_name)
@@ -49,11 +47,6 @@ class SnapshotSaver(ABC):
         pass
 
     @abstractmethod
-    def _delete_symlinks(self, snapshot_path: str):
-        """删除工作空间快照中的软链接"""
-        pass
-
-    @abstractmethod
     def _clear(self, snapshot_path: str):
         """清理旧工作空间快照"""
         pass
@@ -62,13 +55,16 @@ class SnapshotSaver(ABC):
 class ComfyUISnapshotSaver(SnapshotSaver):
     def _compress(self):
         file_ops.compress(f"{constants.WORK_DIR}/venv.tar", constants.WORK_DIR, ["venv"])
+        file_ops.compress(f"{constants.WORK_DIR}/comfyui.zip", constants.WORK_DIR, ["comfyui"])
+        if os.path.exists(f"{constants.WORK_DIR}/.cache"):
+            file_ops.compress(f"{constants.WORK_DIR}/.cache.zip", constants.WORK_DIR, [".cache"])
 
     def _upload(self, snapshot_path: str):
-        file_ops.copy(constants.COMFYUI_DIR, f"{snapshot_path}/comfyui")
         file_ops.copy(f"{constants.WORK_DIR}/venv.tar", f"{snapshot_path}/venv.tar")
-
-    def _delete_symlinks(self, snapshot_path: str):
-        file_ops.remove(f"{snapshot_path}/comfyui/models")
+        file_ops.copy(f"{constants.WORK_DIR}/comfyui.zip", f"{snapshot_path}/comfyui.zip")
+        cache_path = f"{constants.WORK_DIR}/.cache.zip"
+        if os.path.exists(cache_path):
+            file_ops.copy(cache_path, f"{snapshot_path}/.cache.zip")
 
     def _clear(self, snapshot_path: str):
         file_ops.remove(snapshot_path)
@@ -77,15 +73,16 @@ class ComfyUISnapshotSaver(SnapshotSaver):
 class SDSnapshotSaver(SnapshotSaver):
     def _compress(self):
         file_ops.compress(f"{constants.WORK_DIR}/venv.tar", constants.WORK_DIR, ["venv"])
+        file_ops.compress(f"{constants.WORK_DIR}/stable-diffusion-webui.zip", constants.WORK_DIR, ["stable-diffusion-webui"])
+        if os.path.exists(f"{constants.WORK_DIR}/.cache"):
+            file_ops.compress(f"{constants.WORK_DIR}/.cache.zip", constants.WORK_DIR, [".cache"])
 
     def _upload(self, snapshot_path: str):
-        file_ops.copy(constants.SD_DIR, f"{snapshot_path}/stable-diffusion-webui")
         file_ops.copy(f"{constants.WORK_DIR}/venv.tar", f"{snapshot_path}/venv.tar")
-        file_ops.copy(f"{constants.WORK_DIR}/.cache", f"{snapshot_path}/.cache")
-
-    def _delete_symlinks(self, snapshot_path: str):
-        file_ops.remove(f"{snapshot_path}/stable-diffusion-webui/models")
-        file_ops.remove(f"{snapshot_path}/stable-diffusion-webui/config.json")
+        file_ops.copy(f"{constants.WORK_DIR}/stable-diffusion-webui.zip", f"{snapshot_path}/stable-diffusion-webui.zip")
+        cache_path = f"{constants.WORK_DIR}/.cache.zip"
+        if os.path.exists(cache_path):
+            file_ops.copy(cache_path, f"{snapshot_path}/.cache.zip")
 
     def _clear(self, snapshot_path: str):
         file_ops.remove(snapshot_path)

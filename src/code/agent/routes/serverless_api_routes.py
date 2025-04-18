@@ -194,11 +194,7 @@ class ServerlessApiRoutes:
                 print(e)
 
                 try:
-                    ws.send(
-                        {
-                            "error_message": str(e),
-                        }
-                    )
+                    ws.send(json.dumps({"error_message": str(e)}))
                 except:
                     pass
                 return

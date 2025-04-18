@@ -6,7 +6,7 @@ ifeq ($(filter $(REGION),$(VALID_REGIONS)),)
 $(error Invalid REGION: $(REGION). Must be one of: $(VALID_REGIONS))
 endif
 
-VERSION := $(shell date "+%Y%m%d%H%M%S")
+VERSION ?= $(shell date "+%Y%m%d%H%M%S")
 AGENT_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:agent-$(VERSION)
 export OSS_BUCKET = dipper-cache-$(REGION)
 
@@ -14,6 +14,7 @@ export OSS_BUCKET = dipper-cache-$(REGION)
 # make all
 # CR_PWD=xxx make all
 # REGIONS="cn-hangzhou cn-shanghai" CR_PWD=xxx make all
+# CR_PWD=xxx VERSION=v0.0.1-alpha.0 make all
 .PHONY: all
 all:
 	@REGIONS_TO_DEPLOY="$${REGIONS:-$(VALID_REGIONS)}"; \

@@ -153,47 +153,57 @@ class ServerlessApiService:
                 img_output = None
                 oss_object_key = None
                 oss_url = None
+                error_message = []
 
                 if output_base64 or output_oss:
                     img_bytes = self.api_view_image(filename, img_type, sub_folder)
 
                     if output_base64:
-                        img_output = base64.b64encode(img_bytes).decode("ascii")
+                        try:
+                            img_output = base64.b64encode(img_bytes).decode("ascii")
+                        except Exception as e:
+                            error_message.append(e)
 
                     if output_oss:
-                        if not self.oss_store.ready():
-                            print("oss client is not init")
-                        else:
-                            oss_filename = f"{str(uuid4())}.png"
-                            self.oss_store.put(oss_filename, img_bytes)
-                            oss_object_key = self.oss_store.object_key(oss_filename)
-                            oss_url = self.oss_store.sign(oss_filename)
+                        try:
+                            if not self.oss_store.ready():
+                                print("oss client is not init")
+                            else:
+                                oss_filename = f"{str(uuid4())}.png"
+                                self.oss_store.put(oss_filename, img_bytes)
+                                oss_object_key = self.oss_store.object_key(oss_filename)
+                                oss_url = self.oss_store.sign(oss_filename)
+                        except Exception as e:
+                            error_message.append(e)
 
-                results.append(
-                    {
-                        "node_id": node_id,
-                        "batch_id": index,
-                        "output": {
-                            "raw": {
-                                "filename": filename,
-                                "type": img_type,
-                                "subfolder": sub_folder,
-                                "filepath": (
-                                    os.path.join(img_type, sub_folder, filename)
-                                    if sub_folder
-                                    else os.path.join(img_type, filename)
-                                ),
-                            },
-                            "base64": {"content": img_output},
-                            "oss": {
-                                "region": self.oss_store.region,
-                                "bucket": self.oss_store.bucket_name,
-                                "object": oss_object_key,
-                                "url": oss_url,
-                            },
+                result = {
+                    "node_id": node_id,
+                    "batch_id": index,
+                    "output": {
+                        "raw": {
+                            "filename": filename,
+                            "type": img_type,
+                            "subfolder": sub_folder,
+                            "filepath": (
+                                os.path.join(img_type, sub_folder, filename)
+                                if sub_folder
+                                else os.path.join(img_type, filename)
+                            ),
                         },
-                    }
-                )
+                        "base64": {"content": img_output},
+                        "oss": {
+                            "region": self.oss_store.region,
+                            "bucket": self.oss_store.bucket_name,
+                            "object": oss_object_key,
+                            "url": oss_url,
+                        },
+                    },
+                }
+
+                if len(error_message):
+                    result["error_message"] = "\n".join([str(e) for e in error_message])
+
+                results.append(result)
 
         return {
             "type": "serverless_api",

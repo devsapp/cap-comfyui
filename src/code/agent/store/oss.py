@@ -83,22 +83,17 @@ class OSS:
         针对特定的数据进行签名，允许匿名访问
         """
         if not self.ready():
-            print("oss client is not init")
-            return ""
+            raise Exception("oss client is not init")
 
         if expires_in_second is None:
             expires_in_second = self.oss_expires
 
-        try:
-            if expires_in_second > 0:
-                return self.oss_bucket.sign_url(
-                    "GET", self.__file_path(key), expires_in_second,
-                    slash_safe=True
-                )
-        except Exception as e:
-            print(e)
-        
-        return "1"
+        if expires_in_second > 0:
+            return self.oss_bucket.sign_url(
+                "GET", self.__file_path(key), expires_in_second, slash_safe=True
+            )
+
+        raise Exception("oss expires must greater than 0")
 
     def object_key(self, key: str):
         """

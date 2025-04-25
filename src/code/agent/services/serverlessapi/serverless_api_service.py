@@ -12,21 +12,12 @@ import constants
 from store import Store, FileSystem, OSS
 
 from uuid import uuid4
+from flask import request
 
 
 class ServerlessApiService:
     def __init__(self):
         self.endpoint = f"http://{constants.APP_HOST}"
-
-        # OSS 存储，需要时，可以将生成的图片同步至 OSS 中
-        self.oss_store = OSS(
-            constants.OSS_BUCKET_DOMAIN,
-            constants.ALIBABA_CLOUD_ACCESS_KEY_ID,
-            constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
-            constants.ALIBABA_CLOUD_SECURITY_TOKEN,
-            constants.OSS_KEY_PREFIX,
-            constants.OSS_EXPIRES_IN_SECOND,
-        )
 
         # 状态持久化
         # 在异步调用 Serverless API 时，可以通过将状态写至持久化存储来确保在多个实例同时出图时仍然可以正确获取状态
@@ -37,6 +28,42 @@ class ServerlessApiService:
         #
         # 必要时，也可以参考对应代码实现基于 Redis、TableStore、MySQL 等方式的状态持久化
         self.store: Store = FileSystem(f"{constants.MNT_DIR}/output/serverless_api")
+
+    def get_credentials(self):
+        ak = ""
+        sk = ""
+        sts = ""
+
+        # 优先尝试从 header 获取
+        try:
+            ak = request.headers.get(constants.HEADER_KEY_ACCESS_KEY_ID, "")
+            sk = request.headers.get(constants.HEADER_KEY_ACCESS_KEY_SECRET, "")
+            sts = request.headers.get(constants.HEADER_KEY_SECURITY_TOKEN, "")
+        except Exception as e:
+            print_exception(e)
+            print(f"get credentials from header failed, reason: {e}")
+            
+
+        # 如果 header 没有，尝试从 env 获取
+        if ak == "" or sk == "":
+            ak = constants.ALIBABA_CLOUD_ACCESS_KEY_ID
+            sk = constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET
+            sts = constants.ALIBABA_CLOUD_SECURITY_TOKEN
+
+        return ak, sk, sts
+    
+    def get_oss_store(self):
+        ak, sk, sts = self.get_credentials()
+
+        # OSS 存储，需要时，可以将生成的图片同步至 OSS 中
+        return OSS(
+            constants.OSS_BUCKET_DOMAIN,
+            ak,
+            sk,
+            sts,
+            constants.OSS_KEY_PREFIX,
+            constants.OSS_EXPIRES_IN_SECOND,
+        )
 
     def api_prompt(self, client_id: str, prompt: Any):
         """
@@ -102,6 +129,8 @@ class ServerlessApiService:
         预处理 prompt 的内容
         - 如果以 base64、url 形式传输的图片，自动完成上传行为
         """
+        ak, sk, sts = self.get_credentials()
+
         for key, value in prompt.items():
             if type(value) == dict and value.get("class_type") == "LoadImage":
 
@@ -124,14 +153,7 @@ class ServerlessApiService:
                     arr = image.split("/")
                     host = arr[2]
                     path = "/".join(arr[3:])
-                    oss = OSS(
-                        host,
-                        constants.ALIBABA_CLOUD_ACCESS_KEY_ID,
-                        constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
-                        constants.ALIBABA_CLOUD_SECURITY_TOKEN,
-                        "",
-                        0,
-                    )
+                    oss = OSS(host, ak, sk, sts, "", 0)
                     content = oss.get(path)
 
                     if content == "":
@@ -156,6 +178,8 @@ class ServerlessApiService:
         results = []
         history = self.api_get_history(prompt_id)
 
+        oss_store = self.get_oss_store()
+
         for node_id, output in history.get(prompt_id, {}).get("outputs", {}).items():
             images = output.get("images", [])
             for index, img in enumerate(images):
@@ -174,13 +198,13 @@ class ServerlessApiService:
 
                     if output_oss:
                         try:
-                            if not self.oss_store.ready():
+                            if not oss_store.ready():
                                 print("oss client is not init")
                             else:
                                 oss_filename = f"{str(uuid4())}.png"
-                                self.oss_store.put(oss_filename, img_bytes)
-                                oss_object_key = self.oss_store.object_key(oss_filename)
-                                oss_url = self.oss_store.sign(oss_filename)
+                                oss_store.put(oss_filename, img_bytes)
+                                oss_object_key = oss_store.object_key(oss_filename)
+                                oss_url = oss_store.sign(oss_filename)
                         except Exception as e:
                             print(e)
                             pass
@@ -202,8 +226,8 @@ class ServerlessApiService:
                             },
                             "base64": {"content": img_output},
                             "oss": {
-                                "region": self.oss_store.region,
-                                "bucket": self.oss_store.bucket_name,
+                                "region": oss_store.region,
+                                "bucket": oss_store.bucket_name,
                                 "object": oss_object_key,
                                 "url": oss_url,
                             },

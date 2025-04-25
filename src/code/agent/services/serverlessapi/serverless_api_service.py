@@ -4,6 +4,7 @@ import json
 import base64
 import random
 import threading
+from traceback import print_exception
 import requests
 import websocket
 from typing import Any

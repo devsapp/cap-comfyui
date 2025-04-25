@@ -1,6 +1,7 @@
 import os
 from urllib.parse import urlparse, urlunparse
 import oss2
+import constants
 
 
 class OSS:
@@ -98,7 +99,10 @@ class OSS:
             parsed = urlparse(u)
             host_parts = parsed.hostname.split(".")
 
-            if (
+            if (constants.OSS_OUTPUT_DOMAIN):
+                parsed = parsed._replace(netloc=constants.OSS_OUTPUT_DOMAIN)
+                u = urlunparse(parsed)
+            elif (
                 len(host_parts) == 4
                 and host_parts[2] == "aliyuncs"
                 and host_parts[3] == "com"

@@ -1,13 +1,14 @@
 import json
 import threading
 from queue import Queue
+from traceback import print_exception
 
 from utils.bool import is_true
 from services.serverlessapi.serverless_api_service import ServerlessApiService
 
 from flask_sock import Sock
 from simple_websocket import Server
-from flask import Blueprint, Flask, request, Response
+from flask import Blueprint, Flask, request, Response, copy_current_request_context
 from flask_cors import cross_origin
 
 
@@ -65,7 +66,6 @@ class ServerlessApiRoutes:
             返回值:
               输出的图片数组
             """
-
             body = request.get_json()
             stream = is_true(request.args.get("stream"))
             output_base64 = is_true(request.args.get("output_base64"))
@@ -86,7 +86,7 @@ class ServerlessApiRoutes:
                         task_id=task_id,
                     )
                 except Exception as e:
-                    print(e)
+                    print_exception(e)
                     return {
                         "error_message": str(e),
                     }, 500
@@ -111,6 +111,7 @@ class ServerlessApiRoutes:
                         if not type(item) == str:
                             return
 
+                @copy_current_request_context
                 def run_prompt_task():
                     """
                     单独线程需要执行的任务
@@ -124,7 +125,7 @@ class ServerlessApiRoutes:
                             task_id=task_id,
                         )
                     except Exception as e:
-                        print(e)
+                        print_exception(e)
                         q.put(
                             {
                                 "error_message": str(e),
@@ -191,7 +192,7 @@ class ServerlessApiRoutes:
 
                 ws.send(json.dumps(results))
             except Exception as e:
-                print(e)
+                print_exception(e)
 
                 try:
                     ws.send(json.dumps({"error_message": str(e)}))

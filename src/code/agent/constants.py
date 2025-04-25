@@ -1,4 +1,5 @@
 import os
+import socket
 
 TYPE_COMFYUI = 'comfyui'
 TYPE_SD = 'sd'
@@ -64,4 +65,5 @@ ALIBABA_CLOUD_ACCESS_KEY_SECRET = os.getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET", "
 ALIBABA_CLOUD_SECURITY_TOKEN = os.getenv("ALIBABA_CLOUD_SECURITY_TOKEN", "")
 OSS_BUCKET_DOMAIN = os.getenv("OSS_BUCKET_DOMAIN", "")
 OSS_KEY_PREFIX = os.getenv("OSS_KEY_PREFIX", "comfyui_serverless_api")
+OSS_OUTPUT_DOMAIN = os.getenv("OSS_OUTPUT_DOMAIN", "")
 OSS_EXPIRES_IN_SECOND = os.getenv("OSS_EXPIRES_IN_SECOND", "")

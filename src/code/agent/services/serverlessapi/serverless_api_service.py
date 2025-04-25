@@ -172,6 +172,13 @@ class ServerlessApiService:
             if type(value) == dict and value.get("class_type") == "KSampler":
                 if value.get("inputs", {}).get("seed") == -1:
                     prompt[key]["inputs"]["seed"] = random.randint(0, 4294967296)
+
+            if type(value) == dict and value.get("class_type") == "SaveImage":
+                try: 
+                    value["inputs"]["filename_prefix"] = value.get("inputs", {}).get("filename_prefix", "ComfyUI") + "_" + constants.INSTANCE_ID
+                except:
+                    pass
+
         return prompt
 
     def get_history_result(self, prompt_id: str, output_base64=False, output_oss=False):

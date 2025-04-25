@@ -54,6 +54,7 @@ DEFAULT_LIVENESS_POLL_INTERVAL = 5
 USE_API_MODE = bool(os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME"))
 AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
 
+INSTANCE_ID = os.getenv("FC_INSTANCE_ID", socket.gethostname())
 # OSS
 HEADER_KEY_ACCESS_KEY_ID = "x-fc-access-key-id"
 HEADER_KEY_ACCESS_KEY_SECRET = "x-fc-access-key-secret"

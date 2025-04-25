@@ -7,7 +7,7 @@ from services.serverlessapi.serverless_api_service import ServerlessApiService
 
 from flask_sock import Sock
 from simple_websocket import Server
-from flask import Blueprint, Flask, request, Response
+from flask import Blueprint, Flask, request, Response, copy_current_request_context
 from flask_cors import cross_origin
 
 
@@ -111,6 +111,7 @@ class ServerlessApiRoutes:
                         if not type(item) == str:
                             return
 
+                @copy_current_request_context
                 def run_prompt_task():
                     """
                     单独线程需要执行的任务

@@ -16,6 +16,7 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
 
 FROM python:3.10.16-slim AS models
 
+# TODO: use models on oss
 RUN apt update && apt install -y aria2
 
 COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
@@ -91,6 +92,7 @@ ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
+# TODO: rm built-in
 ENV BUILT_IN_DIR="/built-in"
 COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}

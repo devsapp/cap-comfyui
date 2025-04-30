@@ -1,0 +1,52 @@
+edition: 3.0.0
+name: image-generation-app
+access: default
+resources:
+  fcDemo:
+    component: fc3
+    props:
+      region: cn-hangzhou
+      handler: index.handler
+      role: ''
+      disableOndemand: false
+      description: ''
+      timeout: 3600
+      diskSize: 512
+      internetAccess: true
+      logConfig: auto
+      # 在这里更改 functionName，默认为 image-generation-app
+      functionName: image-generation-app
+      instanceLifecycleConfig:
+        initializer:
+          handler: 'true'
+          timeout: 300
+      runtime: custom-container
+      cpu: 4
+      customContainerConfig:
+        # 这里配置镜像地址，我打了两个镜像：
+        # 1. 包含 ComfyUI-Manager 的镜像：registry.cn-hangzhou.aliyuncs.com/fc-demo2/test-xiliu:comfyui-jushuitan-v2
+        # 2. 不包含 ComfyUI-Manager 的镜像：registry.cn-hangzhou.aliyuncs.com/fc-demo2/test-xiliu:comfyui-jushuitan-v2-without-manager
+        image: >-
+          registry.cn-hangzhou.aliyuncs.com/fc-demo2/test-xiliu:comfyui-jushuitan-v2
+        port: 9000
+      instanceConcurrency: 10
+      memorySize: 8192
+      environmentVariables:
+        # 这个环境变量配置启动命令参数，用 , 分隔
+        LAUNCH_OPTIONS: '--disable-metadata,--cpu'
+        # 这个环境变量由系统使用，勿删
+        AUTO_LAUNCH_SNAPSHOT_NAME: ''
+      triggers:
+        - triggerConfig:
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            authType: anonymous
+            disableURLInternet: false
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http

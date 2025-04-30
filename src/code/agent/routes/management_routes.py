@@ -15,7 +15,6 @@ class ManagementRoutes:
 
     # TODO: Runfunction -> /initialize & /management/* 配置http trigger匿名访问，防止拿到域名的人管控实例
     def setup_routes(self):
-
         @self.bp.post("/start")
         def start():
             snapshot = request.args.get('snapshot')

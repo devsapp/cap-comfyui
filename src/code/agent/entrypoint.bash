@@ -41,13 +41,13 @@ init_mitmproxy(){
 check_and_init_mitmproxy(){
   echo "Check and init mitmproxy..."
 
-  # 根据AUTO_LAUNCH_SNAPSHOT_NAME是否为空来判断当前函数是否use_api_mode
+  # 若 AUTO_LAUNCH_SNAPSHOT_NAME 非空，则当前是 api_mode
   use_api_mode=false
   if [[ -n "${AUTO_LAUNCH_SNAPSHOT_NAME}" ]]; then
       use_api_mode=true
   fi
 
-  # 根据当前REGION判断是否处于国内
+  # 根据 REGION 判断是否处于国内
   domestic_regions=("cn-hangzhou" "cn-shanghai" "cn-shenzhen" "cn-beijing")
   region="${REGION}"
   is_domestic=false

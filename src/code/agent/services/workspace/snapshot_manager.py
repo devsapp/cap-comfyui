@@ -41,7 +41,7 @@ class SnapshotManager:
         if target_snapshot_name == self.cur_snapshot_name:  # 若已加载，则跳过
             return {"snapshot": self.cur_snapshot_name}
 
-        if target_snapshot_name is None:  # 若找不到目标快照，则跳过，使用镜像内快照
+        if target_snapshot_name is None or target_snapshot_name == "":  # 若找不到目标快照，则跳过，使用镜像内快照
             return {"snapshot": self.cur_snapshot_name}
 
         snapshot_path = os.path.join(constants.SNAPSHOT_DIR, target_snapshot_name)  # 若目标快照目录不存在，则跳过

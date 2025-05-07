@@ -5,6 +5,10 @@ TYPE_COMFYUI = 'comfyui'
 TYPE_SD = 'sd'
 BACKEND_TYPE = os.getenv('BACKEND_TYPE', TYPE_COMFYUI)
 
+# API Mode
+USE_API_MODE = bool(os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME"))
+AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
+
 WORK_DIR = os.getenv('WORK_DIR', '/root')
 MNT_DIR = os.getenv('MODEL_ASSET_DIR', '/mnt/auto')
 VENV_DIR = os.getenv('VENV_DIR', WORK_DIR + '/venv')
@@ -39,6 +43,9 @@ SD_BOOT_CMD = [
     "--no-download-sd-model",
     "--gradio-allowed-path=/"
 ]
+if USE_API_MODE:
+    SD_BOOT_CMD.extend(["--no-webui", "--api"])
+
 if BACKEND_TYPE == TYPE_COMFYUI:
     BACKEND_PROCESS_PORT = COMFYUI_PROCESS_PORT
     BOOT_CMD = COMFYUI_BOOT_CMD
@@ -50,10 +57,6 @@ APP_HOST = f"127.0.0.1:{BACKEND_PROCESS_PORT}"
 DEFAULT_READINESS_POLL_INTERVAL = 3
 DEFAULT_READINESS_TIMEOUT = 300
 DEFAULT_LIVENESS_POLL_INTERVAL = 5
-
-# API Mode
-USE_API_MODE = bool(os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME"))
-AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
 
 INSTANCE_ID = os.getenv("FC_INSTANCE_ID", socket.gethostname())
 # OSS

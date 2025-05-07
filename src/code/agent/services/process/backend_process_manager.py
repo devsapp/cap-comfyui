@@ -34,6 +34,9 @@ class BackendProcessManager(ProcessManager):
         Returns:
             bool: 如果在2秒内收到正常响应则返回True，否则返回False
         """
+        if constants.USE_API_MODE:  # TODO: 针对ComfyUI和SD各类子进程崩溃情况作梳理，此前API模式忽略监控检查
+            return True
+
         try:
             response = requests.get(f'http://127.0.0.1:{constants.BACKEND_PROCESS_PORT}', timeout=2)
             return response.status_code == 200

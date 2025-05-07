@@ -44,7 +44,7 @@ SD_BOOT_CMD = [
     "--gradio-allowed-path=/"
 ]
 if USE_API_MODE:
-    SD_BOOT_CMD.extend(["--no-webui", "--api"])
+    SD_BOOT_CMD.extend(["--nowebui", "--api"])
 
 if BACKEND_TYPE == TYPE_COMFYUI:
     BACKEND_PROCESS_PORT = COMFYUI_PROCESS_PORT

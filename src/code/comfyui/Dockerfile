@@ -6,7 +6,7 @@ ENV COMFYUI_DIR="/root/comfyui"
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
-    git checkout "v0.3.10"
+    git checkout "v0.3.34"
 
 # add built-in custom-nodes
 RUN cd ${COMFYUI_DIR}/custom_nodes && \
@@ -49,16 +49,20 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 方式二: pip install使用comfyui源码中requirements.txt, 缺点：每次ComfyUI版本升级都需要手动维护依赖列表
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir \
+    comfyui-frontend-package==1.18.10 \
+    comfyui-workflow-templates==0.1.14 \
     torch \
     torchsde \
     torchvision \
     torchaudio \
+    numpy>=1.25.0 \
     einops \
     transformers>=4.28.1 \
     tokenizers>=0.13.3 \
     sentencepiece \
     safetensors>=0.4.2 \
-    aiohttp \
+    aiohttp>=3.11.8 \
+    yarl>=1.18.0 \
     pyyaml \
     Pillow \
     scipy \
@@ -66,7 +70,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     psutil \
     kornia>=0.7.1 \
     spandrel \
-    soundfile
+    soundfile \
+    av>=14.2.0 \
+    pydantic~=2.0
 
 # 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"

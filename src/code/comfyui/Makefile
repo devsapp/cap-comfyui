@@ -2,7 +2,7 @@
 REGION ?= cn-hangzhou
 COMFYUI_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-comfyui
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
+OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.34-alpha
 
 .PHONY: upgrade
 upgrade: build upload-base

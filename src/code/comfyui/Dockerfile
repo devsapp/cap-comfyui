@@ -14,6 +14,11 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     cd ComfyUI-Manager && \
     git checkout "3.31.8"
 
+RUN cd ${COMFYUI_DIR}/custom_nodes && \
+    git clone https://github.com/mit-han-lab/ComfyUI-nunchaku && \
+    cd ComfyUI-nunchaku && \
+    git checkout "v0.2.0"
+
 FROM python:3.10.16-slim AS models
 
 RUN apt update && apt install -y aria2
@@ -49,7 +54,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 方式二: pip install使用comfyui源码中requirements.txt, 缺点：每次ComfyUI版本升级都需要手动维护依赖列表
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir \
-    torch \
+    torch==2.6.0 \
     torchsde \
     torchvision \
     torchaudio \
@@ -66,6 +71,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     psutil \
     kornia>=0.7.1 \
     spandrel \
+    https://huggingface.co/mit-han-lab/nunchaku/resolve/main/nunchaku-0.2.0+torch2.6-cp310-cp310-linux_x86_64.whl \
     soundfile
 
 # 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装

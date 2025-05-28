@@ -20,8 +20,17 @@
 # ---- comfyui
 # ---- venv.tar
 init_mitmproxy(){
+  echo 'export NO_PROXY="127.0.0.1,mirrors.aliyun.com,ghfast.top,ghgo.xyz,ghp.ci,ghproxy.com,hf-mirror.com"'>> ~/.bashrc
+  echo 'export no_proxy="127.0.0.1,mirrors.aliyun.com,ghfast.top,ghgo.xyz,ghp.ci,ghproxy.com,hf-mirror.com"'>> ~/.bashrc
+
   echo 'export HTTP_PROXY="http://127.0.0.1:8080"' >> ~/.bashrc
+  echo 'export http_proxy="http://127.0.0.1:8080"' >> ~/.bashrc
+
   echo 'export HTTPS_PROXY="http://127.0.0.1:8080"' >> ~/.bashrc
+  echo 'export https_proxy="http://127.0.0.1:8080"' >> ~/.bashrc
+
+  echo 'export HF_ENDPOINT="https://hf-mirror.com"' >> ~/.bashrc
+
   echo 'export REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc
   echo 'export SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc
   echo 'export CURL_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc

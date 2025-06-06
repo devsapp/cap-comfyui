@@ -1,6 +1,7 @@
 import re
 import os
 import json
+import time
 import base64
 import random
 import threading
@@ -187,61 +188,67 @@ class ServerlessApiService:
         history = self.api_get_history(prompt_id)
 
         oss_store = self.get_oss_store()
-
         for node_id, output in history.get(prompt_id, {}).get("outputs", {}).items():
-            images = output.get("images", [])
-            for index, img in enumerate(images):
-                filename = img.get("filename", "")
-                img_type = img.get("type", "")
-                sub_folder = img.get("subfolder", "")
-                img_output = None
-                oss_object_key = None
-                oss_url = None
+            for output_type, imgs in output.items():
+                for index, img in enumerate(imgs):
+                    if type(img) != dict or not img.get("filename"):
+                        continue
 
-                if output_base64 or output_oss:
-                    img_bytes = self.api_view_image(filename, img_type, sub_folder)
+                    filename = img.get("filename", "")
+                    img_type = img.get("type", "")
+                    sub_folder = img.get("subfolder", "")
+                    img_output = None
+                    oss_object_key = None
+                    oss_url = None
 
-                    if output_base64:
-                        img_output = base64.b64encode(img_bytes).decode("ascii")
+                    if output_base64 or output_oss:
+                        img_bytes = self.api_view_image(filename, img_type, sub_folder)
 
-                    if output_oss:
-                        try:
-                            if not oss_store.ready():
-                                print("oss client is not init")
-                            else:
-                                oss_filename = f"{str(uuid4())}.png"
-                                oss_store.put(oss_filename, img_bytes)
-                                oss_object_key = oss_store.object_key(oss_filename)
-                                oss_url = oss_store.sign(oss_filename)
-                        except Exception as e:
-                            print(e)
-                            pass
+                        if output_base64:
+                            img_output = base64.b64encode(img_bytes).decode("ascii")
 
-                results.append(
-                    {
-                        "node_id": node_id,
-                        "batch_id": index,
-                        "output": {
-                            "raw": {
-                                "filename": filename,
-                                "type": img_type,
-                                "subfolder": sub_folder,
-                                "filepath": (
-                                    os.path.join(img_type, sub_folder, filename)
-                                    if sub_folder
-                                    else os.path.join(img_type, filename)
-                                ),
+                        if output_oss:
+                            try:
+                                if not oss_store.ready():
+                                    print("oss client is not init")
+                                else:
+                                    oss_filename = (
+                                        f"{str(uuid4())}.{filename.split(".")[-1]}"
+                                    )
+                                    oss_store.put(oss_filename, img_bytes)
+                                    oss_object_key = oss_store.object_key(oss_filename)
+                                    oss_url = oss_store.sign(oss_filename)
+                            except Exception as e:
+                                print(e)
+                                pass
+
+                    results.append(
+                        {
+                            "node_id": node_id,
+                            "batch_id": index,
+                            "output": {
+                                "type": output_type,
+                                "raw": {
+                                    **img,
+                                    "filename": filename,
+                                    "type": img_type,
+                                    "subfolder": sub_folder,
+                                    "filepath": (
+                                        os.path.join(img_type, sub_folder, filename)
+                                        if sub_folder
+                                        else os.path.join(img_type, filename)
+                                    ),
+                                },
+                                "base64": {"content": img_output},
+                                "oss": {
+                                    "region": oss_store.region,
+                                    "bucket": oss_store.bucket_name,
+                                    "object": oss_object_key,
+                                    "url": oss_url,
+                                },
                             },
-                            "base64": {"content": img_output},
-                            "oss": {
-                                "region": oss_store.region,
-                                "bucket": oss_store.bucket_name,
-                                "object": oss_object_key,
-                                "url": oss_url,
-                            },
-                        },
-                    }
-                )
+                        }
+                    )
 
         return {
             "type": "serverless_api",
@@ -287,7 +294,7 @@ class ServerlessApiService:
         # 解析请求中是否存在 base64、http url 形式的图片
         prompt = self.parse_prompt(prompt)
 
-        client_id = str(uuid4())
+        client_id = ""
         prompt_id = ""
 
         def on_message(ws: websocket.WebSocket, message: str):
@@ -296,7 +303,11 @@ class ServerlessApiService:
 
                 msg_type = msg.get("type", "")
                 node_id = msg.get("data", {}).get("node", "")
-                # current_prompt_id = msg.get("data", {}).get("prompt_id", "")
+                current_prompt_id = msg.get("data", {}).get("prompt_id", "")
+
+                if msg_type == "status":
+                    nonlocal client_id
+                    client_id = msg.get("data", {}).get("sid", "")
 
                 if callback and hasattr(callback, "__call__"):
                     callback(message)
@@ -306,7 +317,7 @@ class ServerlessApiService:
 
                 if msg_type == "executing":
                     # 节点执行
-                    if not node_id:
+                    if not node_id and current_prompt_id == prompt_id:
                         # 当前正在执行的 node 为空，说明 prompt 执行结束了
                         ws.close()
                         pass
@@ -325,6 +336,9 @@ class ServerlessApiService:
         ws_threading.start()
 
         # 提交出图任务
+        while client_id == "":
+            time.sleep(0.1)
+
         prompt_result = self.api_prompt(client_id, prompt)
         prompt_id = prompt_result.get("prompt_id", "")
 

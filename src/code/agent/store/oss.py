@@ -39,6 +39,7 @@ class OSS:
 
         self.bucket_name = arr[0].split("/")[-1] if "/" in arr[0] else arr[0]
         self.region = arr[1].removeprefix("oss-").removesuffix("-internal")
+        protocol = "https://" if self.oss_endpoint.startswith("https://") else "http://"
 
         self.oss_bucket = oss2.Bucket(
             (
@@ -46,7 +47,7 @@ class OSS:
                 if security_token
                 else oss2.Auth(access_key_id, access_key_secret)
             ),
-            ".".join(arr[1:]),
+            protocol + ".".join(arr[1:]),
             self.bucket_name,
         )
 
@@ -122,7 +123,7 @@ class OSS:
             return u
 
         raise Exception(
-            "oss expires must greater than 0, current is {expires_in_second}"
+            f"oss expires must greater than 0, current is {expires_in_second}"
         )
 
     def object_key(self, key: str):

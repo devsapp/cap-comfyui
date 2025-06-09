@@ -44,7 +44,6 @@ class ServerlessApiService:
         except Exception as e:
             print_exception(e)
             print(f"get credentials from header failed, reason: {e}")
-            
 
         # 如果 header 没有，尝试从 env 获取
         if ak == "" or sk == "":
@@ -53,7 +52,7 @@ class ServerlessApiService:
             sts = constants.ALIBABA_CLOUD_SECURITY_TOKEN
 
         return ak, sk, sts
-    
+
     def get_oss_store(self):
         ak, sk, sts = self.get_credentials()
 
@@ -175,8 +174,12 @@ class ServerlessApiService:
                     prompt[key]["inputs"]["seed"] = random.randint(0, 4294967296)
 
             if type(value) == dict and value.get("class_type") == "SaveImage":
-                try: 
-                    value["inputs"]["filename_prefix"] = value.get("inputs", {}).get("filename_prefix", "ComfyUI") + "_" + constants.INSTANCE_ID
+                try:
+                    value["inputs"]["filename_prefix"] = (
+                        value.get("inputs", {}).get("filename_prefix", "ComfyUI")
+                        + "_"
+                        + constants.INSTANCE_ID
+                    )
                 except:
                     pass
 
@@ -212,9 +215,9 @@ class ServerlessApiService:
                                 if not oss_store.ready():
                                     print("oss client is not init")
                                 else:
-                                    oss_filename = (
-                                        f"{str(uuid4())}.{filename.split(".")[-1]}"
-                                    )
+                                    ext = filename.split(".")[-1]
+                                    uuid = str(uuid4())
+                                    oss_filename = f"{uuid}.{ext}" if ext else uuid
                                     oss_store.put(oss_filename, img_bytes)
                                     oss_object_key = oss_store.object_key(oss_filename)
                                     oss_url = oss_store.sign(oss_filename)

@@ -95,6 +95,13 @@ pull-comfyui:
 upload-comfyui-base:
 	@make -C src/code/comfyui upload-base
 
+# 根据已发布的snapshot构建comfyui生产镜像
+# BUILD_ENV_SNAPSHOT_DIR=/mnt/cap-models/4a34adf1-4b55-5ee7-b997-9f0414bb30c8/snapshots/prod-20250609-092136
+# make build-comfyui-from-snapshot
+.PHONY: build-comfyui-from-snapshot
+build-comfyui-from-snapshot: build
+	@make -C src/code/comfyui build-from-snapshot
+
 # ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 .PHONY: build-sd
 build-sd: build

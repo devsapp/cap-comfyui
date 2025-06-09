@@ -75,27 +75,16 @@ check_and_init_mitmproxy(){
 
 
 MNT_DIR=${MODEL_ASSET_DIR:="/mnt/auto"}
-echo "Mount dir: ${MNT_DIR}"
-if [ ! -e "${MNT_DIR}/models" ] || [ ! -e "${MNT_DIR}/snapshots" ] || [ -z "$(find "${MNT_DIR}/snapshots" -type d -mindepth 1 2>/dev/null)" ]; then
-  echo "Missing models and snapshots folders in your mount dir"
-  # exit 1
-  # FIXME: 以下逻辑服务于带comfyui/sd环境的完整镜像；当支持启动阶段从官方源拉取comfyui源码和模型后，将以下逻辑可换为exit 1
-  if [ "${BACKEND_TYPE}" = "comfyui" ]; then
-    cp -r ${COMFYUI_DIR}/models ${MNT_DIR}/models
-    rm -rf ${COMFYUI_DIR}/models
-    ln -sf ${MNT_DIR}/models ${COMFYUI_DIR}/models
-    ln -sf ${BUILT_IN_DIR}/models/checkpoints/sd-v1-5-inpainting.ckpt ${COMFYUI_DIR}/models/checkpoints/sd-v1-5-inpainting.ckpt
-    mkdir -p ${MNT_DIR}/snapshots
-    mkdir -p ${MNT_DIR}/input
-    mkdir -p ${MNT_DIR}/output
-  else
-    # SD-WebUI
-    cp -r ${SD_DIR}/models ${MNT_DIR}/models
-    rm -rf ${SD_DIR}/models
-    ln -sf ${MNT_DIR}/models ${SD_DIR}/models
-    ln -sf ${BUILT_IN_DIR}/models/checkpoints/sd-v1-5-inpainting.ckpt ${SD_DIR}/models/Stable-diffusion/sd-v1-5-inpainting.ckpt
-    mkdir -p ${MNT_DIR}/snapshots
-  fi
+SKIP_SNAPSHOT_LOADING_LOWER=$(echo "${SKIP_SNAPSHOT_LOADING:-false}" | tr '[:upper:]' '[:lower:]')
+echo "[INFO] Configuration:"
+echo "  - Mount Directory: ${MNT_DIR}"
+echo "  - Skip Snapshot Loading: ${SKIP_SNAPSHOT_LOADING_LOWER}"
+
+if [ "${SKIP_SNAPSHOT_LOADING_LOWER}" != "true" ]; then
+    if [ ! -e "${MNT_DIR}/snapshots" ] || [ -z "$(find "${MNT_DIR}/snapshots" -type d -mindepth 1 2>/dev/null)" ]; then
+        echo "[ERROR] Missing snapshots folder in your mount dir"
+        exit 1
+    fi
 fi
 
 mkdir -p ${MNT_DIR}/input

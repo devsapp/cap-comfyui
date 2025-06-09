@@ -98,7 +98,12 @@ class ManagementService:
         self.sub_status = StartingSubStatus.DOWNLOADING.value
 
         try:
-            result_map = self._snapshot_mgr.load(snapshot_name)
+            result_map = {}
+            if str(constants.SKIP_SNAPSHOT_LOADING).lower() == 'true':
+                self._snapshot_mgr.prepare_link()
+            else:
+                result_map = self._snapshot_mgr.load(snapshot_name)
+
             self.sub_status = StartingSubStatus.BOOTING.value
             with timer("Start process") as t_start_process:
                 self._process_mgr.start(constants.BOOT_CMD)

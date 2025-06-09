@@ -1,0 +1,5 @@
+FROM agent
+
+WORKDIR /root
+
+COPY tmp/ /root/

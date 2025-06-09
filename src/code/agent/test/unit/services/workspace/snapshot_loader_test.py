@@ -27,6 +27,7 @@ def setup_dirs(tmp_path):
     # 设置基础目录
     constants.WORK_DIR = str(tmp_path / "work")
     constants.MNT_DIR = str(tmp_path / "mnt")
+    constants.MODEL_DIR = str(tmp_path / "mnt/models")
     constants.COMFYUI_DIR = str(tmp_path / "work/comfyui")
     constants.SD_DIR = str(tmp_path / "work/stable-diffusion-webui")
     constants.VENV_DIR = str(tmp_path / "work/venv")
@@ -34,18 +35,19 @@ def setup_dirs(tmp_path):
     # 创建必要的目录
     os.makedirs(constants.WORK_DIR, exist_ok=True)
     os.makedirs(constants.MNT_DIR, exist_ok=True)
-    os.makedirs(os.path.join(constants.MNT_DIR, "models"), exist_ok=True)
+    os.makedirs(constants.MODEL_DIR, exist_ok=True)
     os.makedirs(os.path.join(constants.MNT_DIR, "custom_nodes"), exist_ok=True)
 
     return tmp_path
 
 
-def create_mock_zip(path, content_dir=None, extra_files=None):
+def create_mock_zip(path, content_dir=None, extra_files=None, flat=False):
     """
     创建测试用zip文件
     :param path: zip文件路径
     :param content_dir: 内容目录
     :param extra_files: 额外要添加的文件字典 {"相对路径": "内容"}
+    :param flat: 是否将文件直接放在根目录下，而不是在子目录中
     """
     with zipfile.ZipFile(path, 'w') as zf:
         if content_dir:
@@ -56,7 +58,9 @@ def create_mock_zip(path, content_dir=None, extra_files=None):
             test_file = os.path.join(content_dir, "test.txt")
             with open(test_file, 'w') as f:
                 f.write("test content")
-            zf.write(test_file, os.path.join(os.path.basename(content_dir), "test.txt"))
+
+            arcname = "test.txt" if flat else os.path.join(os.path.basename(content_dir), "test.txt")
+            zf.write(test_file, arcname)
 
             # 添加额外文件
             if extra_files:
@@ -68,7 +72,8 @@ def create_mock_zip(path, content_dir=None, extra_files=None):
                             json.dump(content, f, indent=4)
                         else:
                             f.write(content)
-                    zf.write(full_path, os.path.join(os.path.basename(content_dir), file_path))
+                    arcname = file_path if flat else os.path.join(os.path.basename(content_dir), file_path)
+                    zf.write(full_path, arcname)
         else:
             zf.writestr("test.txt", "test content")
 
@@ -134,7 +139,8 @@ class TestComfyUIProdSnapshotLoader:
         create_mock_zip(os.path.join(snapshot_path, "comfyui.zip"),
                         content_dir=os.path.join(setup_dirs, "comfyui"))
         create_mock_zip(os.path.join(snapshot_path, "custom_nodes.zip"),
-                        content_dir=os.path.join(setup_dirs, "custom_nodes"))
+                        content_dir=os.path.join(setup_dirs, "custom_nodes"),
+                        flat=True)
         create_mock_zip(os.path.join(snapshot_path, ".cache.zip"),
                         content_dir=os.path.join(setup_dirs, ".cache"))
 
@@ -167,7 +173,8 @@ class TestComfyUIProdSnapshotLoader:
         create_mock_zip(os.path.join(snapshot_path, "comfyui.zip"),
                         content_dir=os.path.join(setup_dirs, "comfyui"))
         create_mock_zip(os.path.join(snapshot_path, "custom_nodes.zip"),
-                        content_dir=os.path.join(setup_dirs, "custom_nodes"))
+                        content_dir=os.path.join(setup_dirs, "custom_nodes"),
+                        flat=True)
 
         stage_cost = loader.load(snapshot_path)
 

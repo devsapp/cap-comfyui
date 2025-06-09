@@ -25,11 +25,15 @@ class SnapshotManager:
 
     def load(self, snapshot_name: str) -> Dict:
         """
-        加载快照
+        加载快照。
+
         Args:
-            snapshot_name: 目标快照名称；若为USE_LATEST_XX，则从用户挂载目录中寻找对应类别最近一次快照并加载；若快照已加载则不会重复加载。
+            snapshot_name (str): 目标快照名称。
+                若为USE_LATEST_XX，则从用户挂载目录中寻找对应类别最近一次快照并加载。
+                若快照已加载或找不到对应快照，则直接跳过。
+
         Returns:
-            最终使用的快照名称；None表示不加载任何快照，使用镜像中的comfyui/sd环境
+            Dict: 快照名称及各阶段耗时信息。
         """
         target_snapshot_name = snapshot_name
         if snapshot_name == self.USE_LATEST_DEV:
@@ -40,7 +44,7 @@ class SnapshotManager:
         if target_snapshot_name == self.cur_snapshot_name:  # 若已加载，则跳过
             return {"snapshot": self.cur_snapshot_name}
 
-        if target_snapshot_name is None:  # 若找不到目标快照，则跳过，使用镜像内快照
+        if target_snapshot_name is None:  # 若找不到目标快照，则跳过
             return {"snapshot": self.cur_snapshot_name}
 
         snapshot_path = os.path.join(constants.SNAPSHOT_DIR, target_snapshot_name)  # 若目标快照目录不存在，则跳过
@@ -64,6 +68,55 @@ class SnapshotManager:
         self.cur_snapshot_name = target_snapshot_name
         result_map["snapshot"] = target_snapshot_name
         return result_map
+
+    def save(self, snapshot_type: str) -> Dict:
+        """
+        保存快照。
+
+        Args:
+            snapshot_type (str): 目标快照类型。可选值"dev"和"prod"
+
+        Returns:
+            Dict: 已保存的快照名称及各阶段耗时信息。
+        """
+
+        snapshot_name_suffix = datetime.utcnow().strftime(constants.SNAPSHOT_PATTERN)
+        snapshot_name = f"{snapshot_type}-{snapshot_name_suffix}"
+
+        from services.workspace.snapshot_saver import ComfyUISnapshotSaver
+        from services.workspace.snapshot_saver import SDSnapshotSaver
+        saver = (
+            ComfyUISnapshotSaver(timer) if constants.BACKEND_TYPE == constants.TYPE_COMFYUI
+            else SDSnapshotSaver(timer)
+        )
+
+        if snapshot_type == self.TYPE_DEV:
+            result_map = saver.save(snapshot_name, remove_old=True, old_snapshot_name=self.cur_snapshot_name)
+        elif snapshot_type == self.TYPE_PROD:
+            result_map = saver.save(snapshot_name)
+        else:
+            raise RuntimeError("Unsupported snapshot type")
+
+        self.cur_snapshot_name = snapshot_name
+        result_map["snapshot"] = snapshot_name
+        return result_map
+
+    def prepare_link(self):
+        """
+        跳过快照加载时，仍需在启动时创建到NAS/OSS的软链接，适用于通过镜像发布的场景。
+        """
+        from services.workspace.snapshot_loader import ComfyUIDevSnapshotLoader
+        from services.workspace.snapshot_loader import ComfyUIProdSnapshotLoader
+        from services.workspace.snapshot_loader import SDSnapshotLoader
+        if constants.BACKEND_TYPE == constants.TYPE_COMFYUI:
+            if constants.USE_API_MODE:
+                loader = ComfyUIProdSnapshotLoader(timer)
+            else:
+                loader = ComfyUIDevSnapshotLoader(timer)
+        else:
+            loader = SDSnapshotLoader(timer)
+
+        loader.prepare_link()
 
     def _select_latest_snapshot(self, snapshot_type: str):
         """
@@ -116,26 +169,3 @@ class SnapshotManager:
             return True
         except ValueError:
             return False
-
-    def save(self, snapshot_type: str) -> Dict:
-        snapshot_name_suffix = datetime.utcnow().strftime(constants.SNAPSHOT_PATTERN)
-        snapshot_name = f"{snapshot_type}-{snapshot_name_suffix}"
-
-        from services.workspace.snapshot_saver import ComfyUISnapshotSaver
-        from services.workspace.snapshot_saver import SDSnapshotSaver
-        saver = (
-            ComfyUISnapshotSaver(timer) if constants.BACKEND_TYPE == constants.TYPE_COMFYUI
-            else SDSnapshotSaver(timer)
-        )
-
-        result_map = {}
-        if snapshot_type == self.TYPE_DEV:
-            result_map = saver.save(snapshot_name, remove_old=True, old_snapshot_name=self.cur_snapshot_name)
-        elif snapshot_type == self.TYPE_PROD:
-            result_map = saver.save(snapshot_name)
-        else:
-            raise RuntimeError("Unsupported snapshot type")
-
-        self.cur_snapshot_name = snapshot_name
-        result_map["snapshot"] = snapshot_name
-        return result_map

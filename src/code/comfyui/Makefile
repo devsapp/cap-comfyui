@@ -59,3 +59,39 @@ upload-base:
 
 	@rm -rf tmp
 	@echo "Upload completed successfully"
+
+# 根据已发布的snapshot构建生产用的ComfyUI镜像
+COMFYUI_IMAGE_PROD = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-comfyui-prod
+BUILD_ENV_SNAPSHOT_DIR ?= /mnt/cap-models/your-project-dir/snapshots/your-snapshot-name
+.PHONY: build-from-snapshot
+build-from-snapshot:
+	@echo "Starting build comfyui-image from snapshot..."
+	@rm -rf tmp
+	@mkdir -p tmp
+
+	@echo "Handling .cache if necessary..."
+	@if [ -f $(BUILD_ENV_SNAPSHOT_DIR)/.cache.zip ]; then \
+		cp $(BUILD_ENV_SNAPSHOT_DIR)/.cache.zip ./tmp/ && \
+		cd ./tmp && unzip -q .cache.zip && rm .cache.zip; \
+	fi
+
+	@echo "Handling comfyui source code..."
+	@cp $(BUILD_ENV_SNAPSHOT_DIR)/comfyui.zip ./tmp/ && \
+	cd ./tmp && unzip -q comfyui.zip && rm comfyui.zip
+
+	@echo "Handling custom_nodes source code..."
+	@mkdir -p ./tmp/comfyui/custom_nodes && \
+	cp $(BUILD_ENV_SNAPSHOT_DIR)/custom_nodes.zip ./tmp/ && \
+	cd ./tmp && unzip -q custom_nodes.zip -d comfyui/custom_nodes && rm custom_nodes.zip
+
+	@echo "Handling python dependencies..."
+	@cp $(BUILD_ENV_SNAPSHOT_DIR)/venv.tar ./tmp/ && \
+	cd ./tmp && tar xf venv.tar && rm venv.tar
+
+	@echo "Building comfyui-image..."
+	@docker build \
+		-f Dockerfile.from_snapshot \
+		-t $(COMFYUI_IMAGE_PROD) .
+
+	@rm -rf tmp
+	@echo "Build completed successfully"

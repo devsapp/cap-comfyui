@@ -32,6 +32,10 @@ class SnapshotLoader(ABC):
         self._create_symlinks()
         return stage_cost
 
+    def prepare_link(self):
+        with self.timer("Creating symbolic link"):
+            self._create_symlinks()
+
     @abstractmethod
     def _clear(self):
         """清理工作目录"""
@@ -77,7 +81,7 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
 
     def _create_symlinks(self):
         file_ops.create_symlink(
-            source_path=f"{constants.MNT_DIR}/models",
+            source_path=f"{constants.MODEL_DIR}",
             link_path=f"{constants.COMFYUI_DIR}/models",
             force=True
         )
@@ -116,7 +120,7 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
 
     def _create_symlinks(self):
         file_ops.create_symlink(
-            source_path=f"{constants.MNT_DIR}/models",
+            source_path=f"{constants.MODEL_DIR}",
             link_path=f"{constants.COMFYUI_DIR}/models",
             force=True
         )
@@ -146,7 +150,7 @@ class SDSnapshotLoader(SnapshotLoader):
 
     def _create_symlinks(self):
         file_ops.create_symlink(
-            source_path=f"{constants.MNT_DIR}/models",
+            source_path=f"{constants.MODEL_DIR}",
             link_path=f"{constants.SD_DIR}/models",
             force=True
         )

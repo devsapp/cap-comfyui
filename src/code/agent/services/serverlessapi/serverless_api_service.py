@@ -396,7 +396,11 @@ class ServerlessApiService:
             if not prompt_id:
                 raise Exception("can not get prompt_id from ComfyUI")
 
-            ws_threading.join()
+            # 已经有结果，则不必等待
+            if len(self.api_get_history(prompt_id)) > 0:
+                ws.close()
+            else:
+                ws_threading.join()
 
             if ws_err:
                 raise ws_err

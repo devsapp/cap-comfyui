@@ -17,6 +17,25 @@ from uuid import uuid4
 from flask import request
 
 
+class ComfyUIException(Exception):
+    def __init__(self, message: str, raw: str):
+        super().__init__(message)
+        self.raw = raw
+
+    def response(self):
+        raw = self.raw
+        try:
+            raw = json.loads(raw)
+        except:
+            pass
+
+        return {
+            "type": "error",
+            "error_message": str(self),
+            "data": {"message": str(self), "raw": raw},
+        }
+
+
 class ServerlessApiService:
     def __init__(self):
         self.endpoint = f"http://{constants.APP_HOST}"
@@ -78,8 +97,16 @@ class ServerlessApiService:
 
         if res.status_code != 200:
             print({"prompt request": req})
-            raise Exception(
-                f"ComfyUI prompt api failed with {res.status_code}: {res.text}"
+
+            data = {}
+            try:
+                data = res.json()
+            except:
+                pass            
+
+            raise ComfyUIException(
+                f"ComfyUI prompt api failed with {res.status_code}: {data.get("error", {}).get("message", res.text)}",
+                res.text,
             )
 
         return res.json()
@@ -137,40 +164,44 @@ class ServerlessApiService:
 
         for key, value in prompt.items():
             if type(value) == dict and value.get("class_type") == "LoadImage":
+                try:
+                    image = value.get("inputs", {}).get("image", "")
+                    content = ""
 
-                image = value.get("inputs", {}).get("image", "")
-                content = ""
+                    if image.startswith("http://") or image.startswith("https://"):
+                        # 图片来源于 url
+                        
+                            response = requests.get(image)
+                            if response.status_code >= 400:
+                                raise Exception(
+                                    f"can not get image {image} from http url, got status code {response.status_code}"
+                                )
 
-                if image.startswith("http://") or image.startswith("https://"):
-                    # 图片来源于 url
-                    response = requests.get(image)
-                    if response.status_code >= 400:
-                        raise Exception(
-                            f"can not get image {image} from http url, got status code {response.status_code}"
-                        )
+                            content = response.content
+                            if content == "":
+                                raise Exception(f"can not get image {image} from http url")
+                    
+                    elif image.startswith("oss://"):
+                        # 图片来源于 oss
+                        arr = image.split("/")
+                        host = arr[2]
+                        path = "/".join(arr[3:])
+                        oss = OSS(host, ak, sk, sts, "", 0)
+                        content = oss.get(path)
 
-                    content = response.content
-                    if content == "":
-                        raise Exception(f"can not get image {image} from http url")
-                elif image.startswith("oss://"):
-                    # 图片来源于 oss
-                    arr = image.split("/")
-                    host = arr[2]
-                    path = "/".join(arr[3:])
-                    oss = OSS(host, ak, sk, sts, "", 0)
-                    content = oss.get(path)
-
-                    if content == "":
-                        raise Exception(f"can not get image {image} from oss")
-                elif len(image) > 64:
-                    # 图像可能是 base64，尝试使用 base64 解析
-                    try:
-                        content = base64.b64decode(image.strip())
-                    except:
-                        pass
-                if content:
-                    res = self.api_upload_image(content, False)
-                    prompt[key]["inputs"]["image"] = res["name"]
+                        if content == "":
+                            raise Exception(f"can not get image {image} from oss")
+                    elif len(image) > 64:
+                        # 图像可能是 base64，尝试使用 base64 解析
+                        try:
+                            content = base64.b64decode(image.strip())
+                        except:
+                            pass
+                    if content:
+                        res = self.api_upload_image(content, False)
+                        prompt[key]["inputs"]["image"] = res["name"]
+                except Exception as e:
+                    raise Exception(f"LoadImage failed: {e}")
 
             if type(value) == dict and value.get("class_type") == "KSampler":
                 if value.get("inputs", {}).get("seed") == -1:
@@ -297,68 +328,94 @@ class ServerlessApiService:
         Serverless API 的核心逻辑
         """
 
-        # 解析请求中是否存在 base64、http url 形式的图片
-        prompt = self.parse_prompt(prompt)
+        try:
 
-        client_id = ""
-        prompt_id = ""
+            # 解析请求中是否存在 base64、http url 形式的图片
+            prompt = self.parse_prompt(prompt)
 
-        def on_message(ws: websocket.WebSocket, message: str):
-            try:
-                msg = json.loads(message)
+            client_id = ""
+            prompt_id = ""
 
-                msg_type = msg.get("type", "")
-                node_id = msg.get("data", {}).get("node", "")
-                current_prompt_id = msg.get("data", {}).get("prompt_id", "")
+            ws_err = None
 
-                if msg_type == "status":
-                    nonlocal client_id
-                    client_id = msg.get("data", {}).get("sid", "")
+            def on_message(ws: websocket.WebSocket, message: str):
+                try:
+                    msg = json.loads(message)
 
-                if callback and hasattr(callback, "__call__"):
-                    callback(message)
+                    msg_type = msg.get("type", "")
+                    node_id = msg.get("data", {}).get("node", "")
+                    current_prompt_id = msg.get("data", {}).get("prompt_id", "")
 
-                if task_id:
-                    self.put_status_to_store(task_id, message)
+                    if msg_type == "status":
+                        nonlocal client_id
+                        client_id = msg.get("data", {}).get("sid", "")
 
-                if msg_type == "executing":
-                    # 节点执行
-                    if not node_id and current_prompt_id == prompt_id:
-                        # 当前正在执行的 node 为空，说明 prompt 执行结束了
+                    if callback and hasattr(callback, "__call__"):
+                        callback(message)
+
+                    if task_id:
+                        self.put_status_to_store(task_id, message)
+
+                    if msg_type == "executing":
+                        # 节点执行
+                        if not node_id and current_prompt_id == prompt_id:
+                            # 当前正在执行的 node 为空，说明 prompt 执行结束了
+                            ws.close()
+                    elif msg_type == "execution_error":
+                        # 执行出错
                         ws.close()
+
+                        raise ComfyUIException(
+                            f"ComfyUI execution error: {msg.get("data", {}).get("exception_message", "")}", msg.get("data")
+                        )
+                    else:
+                        # 其他不处理的类型，如 "execution_start", "status", "progress", "execution_cached", "executed"
                         pass
-                elif msg_type == "execution_error":
-                    # 执行出错
-                    pass
-                else:
-                    # 其他不处理的类型，如 "execution_start", "status", "progress", "execution_cached", "executed"
-                    pass
 
-            except Exception as e:
-                print(e)
+                except Exception as e:
+                    print(e)
+                    nonlocal ws_err
+                    ws_err = e
+                    ws.close()
 
-        ws = self.api_websocket(client_id, on_message)
-        ws_threading = threading.Thread(target=ws.run_forever)
-        ws_threading.start()
+            ws = self.api_websocket(client_id, on_message)
+            ws_threading = threading.Thread(target=ws.run_forever)
+            ws_threading.start()
 
-        # 提交出图任务
-        while client_id == "":
-            time.sleep(0.1)
+            # 提交出图任务
+            while client_id == "":
+                time.sleep(0.1)
 
-        prompt_result = self.api_prompt(client_id, prompt)
-        prompt_id = prompt_result.get("prompt_id", "")
+            prompt_result = self.api_prompt(client_id, prompt)
+            prompt_id = prompt_result.get("prompt_id", "")
 
-        # 如果 task id 未指定，则使用 prompt id
-        if not task_id:
-            task_id = prompt_id
+            # 如果 task id 未指定，则使用 prompt id
+            if not task_id:
+                task_id = prompt_id
 
-        if not prompt_id:
-            raise Exception("can not get prompt_id from ComfyUI")
+            if not prompt_id:
+                raise Exception("can not get prompt_id from ComfyUI")
 
-        ws_threading.join()
+            ws_threading.join()
 
-        result = self.get_history_result(
-            prompt_id, output_base64=output_base64, output_oss=output_oss
-        )
-        self.put_status_to_store(task_id, json.dumps(result))
-        return result
+            if ws_err:
+                raise ws_err
+
+            result = self.get_history_result(
+                prompt_id, output_base64=output_base64, output_oss=output_oss
+            )
+            self.put_status_to_store(task_id, json.dumps(result))
+            return result
+        except ComfyUIException as e:
+            self.put_status_to_store(
+                task_id,
+                json.dumps(e.response()),
+            )
+
+            raise e
+        except Exception as e:
+            self.put_status_to_store(
+                task_id, json.dumps({"type": "error", "data": {"message": str(e)}})
+            )
+
+            raise e

@@ -4,7 +4,10 @@ from queue import Queue
 from traceback import print_exception
 
 from utils.bool import is_true
-from services.serverlessapi.serverless_api_service import ServerlessApiService
+from services.serverlessapi.serverless_api_service import (
+    ComfyUIException,
+    ServerlessApiService,
+)
 
 from flask_sock import Sock
 from simple_websocket import Server
@@ -36,7 +39,11 @@ class ServerlessApiRoutes:
             task_id = request.args.get("task_id", "")
             if not task_id:
                 return {
+                    "type": "error",
                     "error_message": "task_id is required",
+                    "data": {
+                        "message": "task_id is required",
+                    },
                 }, 400
 
             return self.service.get_status_from_store(task_id)
@@ -85,10 +92,15 @@ class ServerlessApiRoutes:
                         output_oss=output_oss,
                         task_id=task_id,
                     )
+                except ComfyUIException as e:
+                    print_exception(e)
+                    return e.response(), 500
                 except Exception as e:
                     print_exception(e)
                     return {
+                        "type": "error",
                         "error_message": str(e),
+                        "data": {"message": str(e)},
                     }, 500
 
             else:
@@ -124,14 +136,16 @@ class ServerlessApiRoutes:
                             callback=do_streaming,
                             task_id=task_id,
                         )
+                    except ComfyUIException as e:
+                        print_exception(e)
+                        return e.response(), 500
                     except Exception as e:
                         print_exception(e)
-                        q.put(
-                            {
-                                "error_message": str(e),
-                            }
-                        )
-                        return
+                        return {
+                            "type": "error",
+                            "error_message": str(e),
+                            "data": {"message": str(e)},
+                        }, 500
 
                     # 推送最终结果
                     q.put(result)
@@ -191,11 +205,25 @@ class ServerlessApiRoutes:
                 )
 
                 ws.send(json.dumps(results))
+            except ComfyUIException as e:
+                print_exception(e)
+                try:
+                    ws.send(json.dumps(e.response()))
+                except:
+                    pass
             except Exception as e:
                 print_exception(e)
 
                 try:
-                    ws.send(json.dumps({"error_message": str(e)}))
+                    ws.send(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "error_message": str(e),
+                                "data": {"message": str(e)},
+                            }
+                        )
+                    )
                 except:
                     pass
                 return

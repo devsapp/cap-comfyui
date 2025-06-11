@@ -125,6 +125,9 @@ class ServerlessApiService:
             },
         ).content
 
+    def api_clear_history(self):
+        requests.post(os.path.join(self.endpoint, "history"), json={"clear": True})
+
     def parse_prompt(self, prompt: map):
         """
         预处理 prompt 的内容

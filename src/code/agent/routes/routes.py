@@ -13,6 +13,7 @@ from exceptions.exceptions import CustomError
 from services.management_service import BackendStatus, ManagementService, Action
 from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
+from services.serverlessapi.serverless_api_service import ServerlessApiService
 
 
 class Routes:
@@ -28,9 +29,10 @@ class Routes:
 
         management = ManagementRoutes()
         management.register(self.app)
-        
-        serverless_api = ServerlessApiRoutes()
-        serverless_api.register(self.app)
+
+        if constants.BACKEND_TYPE == constants.TYPE_COMFYUI:
+            serverless_api = ServerlessApiRoutes()
+            serverless_api.register(self.app)
 
         @self.app.route("/initialize", methods=["POST"])
         def initialize():
@@ -47,6 +49,21 @@ class Routes:
             # TODO 防止抛出5xx导致函数计算一直重试产生大量费用
             service = ManagementService()
             service.start(constants.AUTO_LAUNCH_SNAPSHOT_NAME)
+
+            if (
+                constants.PREWARM_PROMPT
+                and constants.BACKEND_TYPE == constants.TYPE_COMFYUI
+            ):
+                try:
+                    print("prewarm models")
+                    prompt = json.loads(constants.PREWARM_PROMPT)
+                    api = ServerlessApiService()
+                    api.run(prompt)
+                    api.api_clear_history()
+                    print("prewarm models done")
+                except Exception as e:
+                    print("prewarm got exception")
+                    _handle_exception(e)
 
             print("FC Initialize End RequestId: " + request_id)
             return "Function is initialized, request_id: " + request_id + "\n"

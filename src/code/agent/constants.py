@@ -73,3 +73,5 @@ OSS_BUCKET_DOMAIN = os.getenv("OSS_BUCKET_DOMAIN", "")
 OSS_KEY_PREFIX = os.getenv("OSS_KEY_PREFIX", "comfyui_serverless_api")
 OSS_OUTPUT_DOMAIN = os.getenv("OSS_OUTPUT_DOMAIN", "")
 OSS_EXPIRES_IN_SECOND = os.getenv("OSS_EXPIRES_IN_SECOND", "")
+
+PREWARM_PROMPT = os.getenv("PREWARM_PROMPT", "")

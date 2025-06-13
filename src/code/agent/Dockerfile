@@ -17,9 +17,9 @@ ENV PATH="${VENV_DIR}/bin:$PATH"
 
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
-COPY . ${AGENT_DIR}/
+RUN pip install --no-cache-dir mitmproxy huggingface_hub[cli]
 
-RUN pip install --no-cache-dir mitmproxy
+COPY . ${AGENT_DIR}/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \

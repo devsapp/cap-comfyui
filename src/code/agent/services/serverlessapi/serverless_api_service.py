@@ -102,10 +102,10 @@ class ServerlessApiService:
             try:
                 data = res.json()
             except:
-                pass            
+                pass
 
             raise ComfyUIException(
-                f"ComfyUI prompt api failed with {res.status_code}: {data.get("error", {}).get("message", res.text)}",
+                f"ComfyUI prompt api failed with {res.status_code}: {data.get('error', {}).get('message', res.text)}",
                 res.text,
             )
 
@@ -170,17 +170,17 @@ class ServerlessApiService:
 
                     if image.startswith("http://") or image.startswith("https://"):
                         # 图片来源于 url
-                        
-                            response = requests.get(image)
-                            if response.status_code >= 400:
-                                raise Exception(
-                                    f"can not get image {image} from http url, got status code {response.status_code}"
-                                )
 
-                            content = response.content
-                            if content == "":
-                                raise Exception(f"can not get image {image} from http url")
-                    
+                        response = requests.get(image)
+                        if response.status_code >= 400:
+                            raise Exception(
+                                f"can not get image {image} from http url, got status code {response.status_code}"
+                            )
+
+                        content = response.content
+                        if content == "":
+                            raise Exception(f"can not get image {image} from http url")
+
                     elif image.startswith("oss://"):
                         # 图片来源于 oss
                         arr = image.split("/")
@@ -366,7 +366,8 @@ class ServerlessApiService:
                         ws.close()
 
                         raise ComfyUIException(
-                            f"ComfyUI execution error: {msg.get("data", {}).get("exception_message", "")}", msg.get("data")
+                            f"ComfyUI execution error: {msg.get('data', {}).get('exception_message', '')}",
+                            msg.get("data"),
                         )
                     else:
                         # 其他不处理的类型，如 "execution_start", "status", "progress", "execution_cached", "executed"

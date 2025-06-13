@@ -62,8 +62,7 @@ class Routes:
                     api.api_clear_history()
                     print("prewarm models done")
                 except Exception as e:
-                    print("prewarm got exception")
-                    _handle_exception(e)
+                    print(f"prewarm models got exception:\n{e}")
 
             print("FC Initialize End RequestId: " + request_id)
             return "Function is initialized, request_id: " + request_id + "\n"

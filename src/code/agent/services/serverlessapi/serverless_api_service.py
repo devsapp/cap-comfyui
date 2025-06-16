@@ -1,6 +1,7 @@
 import re
 import os
 import json
+import time
 import base64
 import random
 import threading
@@ -14,6 +15,31 @@ from store import Store, FileSystem, OSS
 
 from uuid import uuid4
 from flask import request
+
+
+class ComfyUIException(Exception):
+    def __init__(self, message: str, code: str, raw: str):
+        super().__init__(message)
+        self.raw = raw
+        self.code = code
+
+    def response(self):
+        raw = self.raw
+        try:
+            raw = json.loads(raw)
+        except:
+            pass
+
+        res = {
+            "type": "error",
+            "error_code": self.code or constants.ERROR_CODE.UNCLASSIFY.value,
+            "error_message": str(self),
+        }
+
+        if raw:
+            res["raw"] = raw
+
+        return res
 
 
 class ServerlessApiService:
@@ -43,7 +69,6 @@ class ServerlessApiService:
         except Exception as e:
             print_exception(e)
             print(f"get credentials from header failed, reason: {e}")
-            
 
         # 如果 header 没有，尝试从 env 获取
         if ak == "" or sk == "":
@@ -52,7 +77,7 @@ class ServerlessApiService:
             sts = constants.ALIBABA_CLOUD_SECURITY_TOKEN
 
         return ak, sk, sts
-    
+
     def get_oss_store(self):
         ak, sk, sts = self.get_credentials()
 
@@ -78,8 +103,17 @@ class ServerlessApiService:
 
         if res.status_code != 200:
             print({"prompt request": req})
-            raise Exception(
-                f"ComfyUI prompt api failed with {res.status_code}: {res.text}"
+
+            data = {}
+            try:
+                data = res.json()
+            except:
+                pass
+
+            raise ComfyUIException(
+                f"ComfyUI prompt api failed with {res.status_code}: {data.get('error', {}).get('message', res.text)}",
+                constants.ERROR_CODE.PROMPT_ERROR.value,
+                res.text,
             )
 
         return res.json()
@@ -125,6 +159,9 @@ class ServerlessApiService:
             },
         ).content
 
+    def api_clear_history(self):
+        requests.post(os.path.join(self.endpoint, "history"), json={"clear": True})
+
     def parse_prompt(self, prompt: map):
         """
         预处理 prompt 的内容
@@ -134,48 +171,56 @@ class ServerlessApiService:
 
         for key, value in prompt.items():
             if type(value) == dict and value.get("class_type") == "LoadImage":
+                try:
+                    image = value.get("inputs", {}).get("image", "")
+                    content = ""
 
-                image = value.get("inputs", {}).get("image", "")
-                content = ""
+                    if image.startswith("http://") or image.startswith("https://"):
+                        # 图片来源于 url
 
-                if image.startswith("http://") or image.startswith("https://"):
-                    # 图片来源于 url
-                    response = requests.get(image)
-                    if response.status_code >= 400:
-                        raise Exception(
-                            f"can not get image {image} from http url, got status code {response.status_code}"
-                        )
+                        response = requests.get(image)
+                        if response.status_code >= 400:
+                            raise Exception(
+                                f"can not get image {image} from http url, got status code {response.status_code}"
+                            )
 
-                    content = response.content
-                    if content == "":
-                        raise Exception(f"can not get image {image} from http url")
-                elif image.startswith("oss://"):
-                    # 图片来源于 oss
-                    arr = image.split("/")
-                    host = arr[2]
-                    path = "/".join(arr[3:])
-                    oss = OSS(host, ak, sk, sts, "", 0)
-                    content = oss.get(path)
+                        content = response.content
+                        if content == "":
+                            raise Exception(f"can not get image {image} from http url")
 
-                    if content == "":
-                        raise Exception(f"can not get image {image} from oss")
-                elif len(image) > 64:
-                    # 图像可能是 base64，尝试使用 base64 解析
-                    try:
-                        content = base64.b64decode(image.strip())
-                    except:
-                        pass
-                if content:
-                    res = self.api_upload_image(content, False)
-                    prompt[key]["inputs"]["image"] = res["name"]
+                    elif image.startswith("oss://"):
+                        # 图片来源于 oss
+                        arr = image.split("/")
+                        host = arr[2]
+                        path = "/".join(arr[3:])
+                        oss = OSS(host, ak, sk, sts, "", 0)
+                        content = oss.get(path)
+
+                        if content == "":
+                            raise Exception(f"can not get image {image} from oss")
+                    elif len(image) > 64:
+                        # 图像可能是 base64，尝试使用 base64 解析
+                        try:
+                            content = base64.b64decode(image.strip())
+                        except:
+                            pass
+                    if content:
+                        res = self.api_upload_image(content, False)
+                        prompt[key]["inputs"]["image"] = res["name"]
+                except Exception as e:
+                    raise Exception(f"LoadImage failed: {e}")
 
             if type(value) == dict and value.get("class_type") == "KSampler":
                 if value.get("inputs", {}).get("seed") == -1:
                     prompt[key]["inputs"]["seed"] = random.randint(0, 4294967296)
 
             if type(value) == dict and value.get("class_type") == "SaveImage":
-                try: 
-                    value["inputs"]["filename_prefix"] = value.get("inputs", {}).get("filename_prefix", "ComfyUI") + "_" + constants.INSTANCE_ID
+                try:
+                    value["inputs"]["filename_prefix"] = (
+                        value.get("inputs", {}).get("filename_prefix", "ComfyUI")
+                        + "_"
+                        + constants.INSTANCE_ID
+                    )
                 except:
                     pass
 
@@ -187,61 +232,67 @@ class ServerlessApiService:
         history = self.api_get_history(prompt_id)
 
         oss_store = self.get_oss_store()
-
         for node_id, output in history.get(prompt_id, {}).get("outputs", {}).items():
-            images = output.get("images", [])
-            for index, img in enumerate(images):
-                filename = img.get("filename", "")
-                img_type = img.get("type", "")
-                sub_folder = img.get("subfolder", "")
-                img_output = None
-                oss_object_key = None
-                oss_url = None
+            for output_type, imgs in output.items():
+                for index, img in enumerate(imgs):
+                    if type(img) != dict or not img.get("filename"):
+                        continue
 
-                if output_base64 or output_oss:
-                    img_bytes = self.api_view_image(filename, img_type, sub_folder)
+                    filename = img.get("filename", "")
+                    img_type = img.get("type", "")
+                    sub_folder = img.get("subfolder", "")
+                    img_output = None
+                    oss_object_key = None
+                    oss_url = None
 
-                    if output_base64:
-                        img_output = base64.b64encode(img_bytes).decode("ascii")
+                    if output_base64 or output_oss:
+                        img_bytes = self.api_view_image(filename, img_type, sub_folder)
 
-                    if output_oss:
-                        try:
-                            if not oss_store.ready():
-                                print("oss client is not init")
-                            else:
-                                oss_filename = f"{str(uuid4())}.png"
-                                oss_store.put(oss_filename, img_bytes)
-                                oss_object_key = oss_store.object_key(oss_filename)
-                                oss_url = oss_store.sign(oss_filename)
-                        except Exception as e:
-                            print(e)
-                            pass
+                        if output_base64:
+                            img_output = base64.b64encode(img_bytes).decode("ascii")
 
-                results.append(
-                    {
-                        "node_id": node_id,
-                        "batch_id": index,
-                        "output": {
-                            "raw": {
-                                "filename": filename,
-                                "type": img_type,
-                                "subfolder": sub_folder,
-                                "filepath": (
-                                    os.path.join(img_type, sub_folder, filename)
-                                    if sub_folder
-                                    else os.path.join(img_type, filename)
-                                ),
+                        if output_oss:
+                            try:
+                                if not oss_store.ready():
+                                    print("oss client is not init")
+                                else:
+                                    ext = filename.split(".")[-1]
+                                    uuid = str(uuid4())
+                                    oss_filename = f"{uuid}.{ext}" if ext else uuid
+                                    oss_store.put(oss_filename, img_bytes)
+                                    oss_object_key = oss_store.object_key(oss_filename)
+                                    oss_url = oss_store.sign(oss_filename)
+                            except Exception as e:
+                                print(e)
+                                pass
+
+                    results.append(
+                        {
+                            "node_id": node_id,
+                            "batch_id": index,
+                            "output": {
+                                "type": output_type,
+                                "raw": {
+                                    **img,
+                                    "filename": filename,
+                                    "type": img_type,
+                                    "subfolder": sub_folder,
+                                    "filepath": (
+                                        os.path.join(img_type, sub_folder, filename)
+                                        if sub_folder
+                                        else os.path.join(img_type, filename)
+                                    ),
+                                },
+                                "base64": {"content": img_output},
+                                "oss": {
+                                    "region": oss_store.region,
+                                    "bucket": oss_store.bucket_name,
+                                    "object": oss_object_key,
+                                    "url": oss_url,
+                                },
                             },
-                            "base64": {"content": img_output},
-                            "oss": {
-                                "region": oss_store.region,
-                                "bucket": oss_store.bucket_name,
-                                "object": oss_object_key,
-                                "url": oss_url,
-                            },
-                        },
-                    }
-                )
+                        }
+                    )
 
         return {
             "type": "serverless_api",
@@ -284,61 +335,107 @@ class ServerlessApiService:
         Serverless API 的核心逻辑
         """
 
-        # 解析请求中是否存在 base64、http url 形式的图片
-        prompt = self.parse_prompt(prompt)
+        try:
 
-        client_id = str(uuid4())
-        prompt_id = ""
+            # 解析请求中是否存在 base64、http url 形式的图片
+            prompt = self.parse_prompt(prompt)
 
-        def on_message(ws: websocket.WebSocket, message: str):
-            try:
-                msg = json.loads(message)
+            client_id = ""
+            prompt_id = ""
 
-                msg_type = msg.get("type", "")
-                node_id = msg.get("data", {}).get("node", "")
-                # current_prompt_id = msg.get("data", {}).get("prompt_id", "")
+            ws_err = None
 
-                if callback and hasattr(callback, "__call__"):
-                    callback(message)
+            def on_message(ws: websocket.WebSocket, message: str):
+                try:
+                    msg = json.loads(message)
 
-                if task_id:
-                    self.put_status_to_store(task_id, message)
+                    msg_type = msg.get("type", "")
+                    node_id = msg.get("data", {}).get("node", "")
+                    current_prompt_id = msg.get("data", {}).get("prompt_id", "")
 
-                if msg_type == "executing":
-                    # 节点执行
-                    if not node_id:
-                        # 当前正在执行的 node 为空，说明 prompt 执行结束了
+                    if msg_type == "status":
+                        nonlocal client_id
+                        client_id = msg.get("data", {}).get("sid", "")
+
+                    if callback and hasattr(callback, "__call__"):
+                        callback(message)
+
+                    if task_id:
+                        self.put_status_to_store(task_id, message)
+
+                    if msg_type == "executing":
+                        # 节点执行
+                        if not node_id and current_prompt_id == prompt_id:
+                            # 当前正在执行的 node 为空，说明 prompt 执行结束了
+                            ws.close()
+                    elif msg_type == "execution_error":
+                        # 执行出错
                         ws.close()
+
+                        raise ComfyUIException(
+                            f"ComfyUI execution error: {msg.get('data', {}).get('exception_message', '')}",
+                            constants.ERROR_CODE.EXECUTION_FAILED.value,
+                            msg.get("data"),
+                        )
+                    else:
+                        # 其他不处理的类型，如 "execution_start", "status", "progress", "execution_cached", "executed"
                         pass
-                elif msg_type == "execution_error":
-                    # 执行出错
-                    pass
-                else:
-                    # 其他不处理的类型，如 "execution_start", "status", "progress", "execution_cached", "executed"
-                    pass
 
-            except Exception as e:
-                print(e)
+                except Exception as e:
+                    print(e)
+                    nonlocal ws_err
+                    ws_err = e
+                    ws.close()
 
-        ws = self.api_websocket(client_id, on_message)
-        ws_threading = threading.Thread(target=ws.run_forever)
-        ws_threading.start()
+            ws = self.api_websocket(client_id, on_message)
+            ws_threading = threading.Thread(target=ws.run_forever)
+            ws_threading.start()
 
-        # 提交出图任务
-        prompt_result = self.api_prompt(client_id, prompt)
-        prompt_id = prompt_result.get("prompt_id", "")
+            # 提交出图任务
+            while client_id == "":
+                time.sleep(0.1)
 
-        # 如果 task id 未指定，则使用 prompt id
-        if not task_id:
-            task_id = prompt_id
+            prompt_result = self.api_prompt(client_id, prompt)
+            prompt_id = prompt_result.get("prompt_id", "")
 
-        if not prompt_id:
-            raise Exception("can not get prompt_id from ComfyUI")
+            # 如果 task id 未指定，则使用 prompt id
+            if not task_id:
+                task_id = prompt_id
 
-        ws_threading.join()
+            if not prompt_id:
+                raise Exception("can not get prompt_id from ComfyUI")
 
-        result = self.get_history_result(
-            prompt_id, output_base64=output_base64, output_oss=output_oss
-        )
-        self.put_status_to_store(task_id, json.dumps(result))
-        return result
+            # 已经有结果，则不必等待
+            if len(self.api_get_history(prompt_id)) > 0:
+                ws.close()
+            else:
+                ws_threading.join()
+
+            if ws_err:
+                raise ws_err
+
+            result = self.get_history_result(
+                prompt_id, output_base64=output_base64, output_oss=output_oss
+            )
+            self.put_status_to_store(task_id, json.dumps(result))
+            return result
+        except ComfyUIException as e:
+            self.put_status_to_store(
+                task_id,
+                json.dumps(e.response()),
+            )
+
+            raise e
+        except Exception as e:
+            self.put_status_to_store(
+                task_id,
+                json.dumps(
+                    {
+                        "type": "error",
+                        "error_code": constants.ERROR_CODE.UNCLASSIFY.value,
+                        "error_message": str(e),
+                    }
+                ),
+            )
+
+            raise e

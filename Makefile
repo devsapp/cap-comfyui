@@ -38,7 +38,7 @@ all:
 # 构建Agent镜像
 .PHONY: build
 build:
-	cd src/code/agent && docker build -t $(AGENT_IMAGE) .
+	cd src/code/agent && docker build --platform linux/amd64 -t $(AGENT_IMAGE) .
 	docker tag $(AGENT_IMAGE) agent
 
 # 本地测试运行

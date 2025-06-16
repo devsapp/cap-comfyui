@@ -18,9 +18,10 @@ from flask import request
 
 
 class ComfyUIException(Exception):
-    def __init__(self, message: str, raw: str):
+    def __init__(self, message: str, code: str, raw: str):
         super().__init__(message)
         self.raw = raw
+        self.code = code
 
     def response(self):
         raw = self.raw
@@ -29,11 +30,16 @@ class ComfyUIException(Exception):
         except:
             pass
 
-        return {
+        res = {
             "type": "error",
+            "error_code": self.code or constants.ERROR_CODE.UNCLASSIFY.value,
             "error_message": str(self),
-            "data": {"message": str(self), "raw": raw},
         }
+
+        if raw:
+            res["raw"] = raw
+
+        return res
 
 
 class ServerlessApiService:
@@ -106,6 +112,7 @@ class ServerlessApiService:
 
             raise ComfyUIException(
                 f"ComfyUI prompt api failed with {res.status_code}: {data.get('error', {}).get('message', res.text)}",
+                constants.ERROR_CODE.PROMPT_ERROR.value,
                 res.text,
             )
 
@@ -367,6 +374,7 @@ class ServerlessApiService:
 
                         raise ComfyUIException(
                             f"ComfyUI execution error: {msg.get('data', {}).get('exception_message', '')}",
+                            constants.ERROR_CODE.EXECUTION_FAILED.value,
                             msg.get("data"),
                         )
                     else:
@@ -420,7 +428,14 @@ class ServerlessApiService:
             raise e
         except Exception as e:
             self.put_status_to_store(
-                task_id, json.dumps({"type": "error", "data": {"message": str(e)}})
+                task_id,
+                json.dumps(
+                    {
+                        "type": "error",
+                        "error_code": constants.ERROR_CODE.UNCLASSIFY.value,
+                        "error_message": str(e),
+                    }
+                ),
             )
 
             raise e

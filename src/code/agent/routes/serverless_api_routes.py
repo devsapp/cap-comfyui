@@ -3,6 +3,7 @@ import threading
 from queue import Queue
 from traceback import print_exception
 
+import constants
 from utils.bool import is_true
 from services.serverlessapi.serverless_api_service import (
     ComfyUIException,
@@ -40,10 +41,8 @@ class ServerlessApiRoutes:
             if not task_id:
                 return {
                     "type": "error",
+                    "error_code": constants.ERROR_CODE.INVALID_PARAMS.value,
                     "error_message": "task_id is required",
-                    "data": {
-                        "message": "task_id is required",
-                    },
                 }, 400
 
             return self.service.get_status_from_store(task_id)
@@ -99,8 +98,8 @@ class ServerlessApiRoutes:
                     print_exception(e)
                     return {
                         "type": "error",
+                        "error_code": constants.ERROR_CODE.UNCLASSIFY.value,
                         "error_message": str(e),
-                        "data": {"message": str(e)},
                     }, 500
 
             else:
@@ -143,8 +142,8 @@ class ServerlessApiRoutes:
                         print_exception(e)
                         return {
                             "type": "error",
+                            "error_code": constants.ERROR_CODE.UNCLASSIFY.value,
                             "error_message": str(e),
-                            "data": {"message": str(e)},
                         }, 500
 
                     # 推送最终结果
@@ -219,8 +218,8 @@ class ServerlessApiRoutes:
                         json.dumps(
                             {
                                 "type": "error",
+                                "error_code": constants.ERROR_CODE.UNCLASSIFY.value,
                                 "error_message": str(e),
-                                "data": {"message": str(e)},
                             }
                         )
                     )

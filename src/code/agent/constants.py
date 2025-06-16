@@ -1,3 +1,4 @@
+from enum import Enum
 import os
 import socket
 
@@ -75,3 +76,9 @@ OSS_OUTPUT_DOMAIN = os.getenv("OSS_OUTPUT_DOMAIN", "")
 OSS_EXPIRES_IN_SECOND = os.getenv("OSS_EXPIRES_IN_SECOND", "")
 
 PREWARM_PROMPT = os.getenv("PREWARM_PROMPT", "")
+
+class ERROR_CODE(Enum):
+    UNCLASSIFY = "UNCLASSIFY"
+    INVALID_PARAMS = "INVALID_PARAMS"
+    PROMPT_ERROR = "PROMPT_ERROR"
+    EXECUTION_FAILED = "EXECUTION_FAILED"

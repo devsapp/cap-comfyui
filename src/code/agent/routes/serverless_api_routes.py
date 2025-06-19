@@ -93,7 +93,7 @@ class ServerlessApiRoutes:
                     )
                 except ComfyUIException as e:
                     print_exception(e)
-                    return e.response(), 500
+                    return e.response(), 502
                 except Exception as e:
                     print_exception(e)
                     return {
@@ -137,7 +137,7 @@ class ServerlessApiRoutes:
                         )
                     except ComfyUIException as e:
                         print_exception(e)
-                        return e.response(), 500
+                        return e.response(), 502
                     except Exception as e:
                         print_exception(e)
                         return {

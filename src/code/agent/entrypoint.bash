@@ -67,7 +67,7 @@ check_and_init_mitmproxy(){
       fi
   done
 
-  if [[ ${use_api_mode} == false ]] && [[ ${is_domestic} == true ]]; then
+  if [[ ${is_domestic} == true ]]; then
       echo "Init mitmproxy..."
       init_mitmproxy
   fi

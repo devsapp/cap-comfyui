@@ -18,13 +18,26 @@ class ManagementRoutes:
 
         @self.bp.post("/start")
         def start():
-            snapshot = request.args.get('snapshot')
-            result_map = self.service.start(snapshot)
+            # --- 步骤 1: 从 URL 查询参数获取 snapshot (向下兼容) ---
+            snap = request.args.get('snapshot')
+
+            # --- 步骤 2: 从请求体 (JSON) 获取可选的 nodes_map ---
+            data = request.get_json(force=True, silent=True)  # 尝试获取JSON，如果请求体为空或非JSON，data会是None
+            if isinstance(data, dict):
+                # - 如果请求体是有效的JSON字典，则尝试获取 'nodes'。否则，置为哨兵值跳过依赖安装
+                # 注意: "nodes": null时，nodes_map为None，表示全部安装
+                nodes_map = data.get('nodes', self.service.SKIP_INSTALL_SENTINEL)
+            else:
+                # - 请求体为空、不是JSON、或者是JSON但不是字典(例如 "[]" 或 "null")时，跳过依赖安装。
+                nodes_map = self.service.SKIP_INSTALL_SENTINEL
+
+            # --- 步骤 3: 调用 service 方法 ---
+            result_map = self.service.start(snap, nodes_map=nodes_map)
             return jsonify({
                 "data": result_map,
                 "status": "success",
-                "message": "Successfully load snapshot and start backend process"
-            }), 200
+                "message": "Successfully initiated backend start process."
+            })
 
         @self.bp.post("/stop")
         def stop():

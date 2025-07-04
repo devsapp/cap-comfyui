@@ -26,6 +26,7 @@ class Action(Enum):
 class StartingSubStatus(Enum):
     DOWNLOADING = "Downloading"
     EXTRACTING = "Extracting"
+    INSTALLING = "Installing"
     BOOTING = "Booting"
 
 
@@ -92,23 +93,58 @@ class ManagementService:
     def cur_snapshot_name(self) -> Optional[str]:
         return self._snapshot_mgr.snapshot_name
 
-    def start(self, snapshot_name: str) -> Dict:
+    # 哨兵对象，表示启动时是否跳过依赖安装流程
+    _SKIP_INSTALL_SENTINEL = object()
+
+    def start(self, snapshot_name: str, nodes_map: Optional[Dict] = _SKIP_INSTALL_SENTINEL) -> Dict:
+        """
+        启动ComfyUI服务。
+
+        Args:
+            snapshot_name: 要加载的快照名称。
+            nodes_map: 控制插件依赖的安装行为。它的值决定了是否以及如何执行安装。
+
+                - 不提供此参数 (默认行为):
+                  完全跳过安装流程。不会创建 `PIPInstaller` 实例，也不会有任何安装相关的操作和计时。通过内部的哨兵对象实现。
+
+                - 提供 `None`:
+                  执行安装流程，并尝试安装所有在 `custom_nodes` 目录中找到的可用插件。
+
+                - 提供一个字典 (`dict`):
+                  执行安装流程。具体的安装内容由字典决定：
+                    - 非空字典 (例: `{'NodeA': 'v1'}`): 只安装字典中指定的有效插件。
+                    - 空字典 (`{}`): 启动安装流程，但不安装任何插件。这个场景可用于获取环境的依赖基线(`install_baseline`)而不执行任何实际安装。
+        """
         print(f"Starting backend process using snapshot '{snapshot_name}'...")
         self._transition_to(BackendStatus.STARTING, Action.START)
         self.sub_status = StartingSubStatus.DOWNLOADING.value
 
         try:
             result_map = {}
+
+            # 加载快照逻辑
             if str(constants.SKIP_SNAPSHOT_LOADING).lower() == 'true':
                 self._snapshot_mgr.prepare_link()
             else:
                 result_map = self._snapshot_mgr.load(snapshot_name)
 
+            # 安装缺失插件依赖
+            if nodes_map is not self._SKIP_INSTALL_SENTINEL:
+                self.sub_status = StartingSubStatus.INSTALLING.value
+                with timer("Install custom_nodes packages") as t_install_process:
+                    from services.pip.pip_installer import PIPInstaller
+                    installer = PIPInstaller()
+                    result_map["install_baseline"] = installer.get_origin_packages()
+                    result_map["install_history"] = installer.install_all(nodes_map=nodes_map)
+                result_map["time_install_process"] = round(t_install_process.elapsed, 2)
+
+            # 启动ComfyUI服务子进程
             self.sub_status = StartingSubStatus.BOOTING.value
             with timer("Start process") as t_start_process:
                 self._process_mgr.start(constants.BOOT_CMD)
                 self._process_mgr.wait_until_ready()
             result_map["time_start_process"] = round(t_start_process.elapsed, 2)
+
             self._transition_to(BackendStatus.RUNNING, Action.START)
             self.sub_status = ""
             return result_map
@@ -153,3 +189,7 @@ class ManagementService:
         stop_result_map = self.stop()
         result_map.update(stop_result_map)
         return result_map
+
+    @property
+    def SKIP_INSTALL_SENTINEL(self):
+        return self._SKIP_INSTALL_SENTINEL

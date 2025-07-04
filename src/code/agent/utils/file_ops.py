@@ -194,3 +194,31 @@ def create_symlink(source_path, link_path, force=False):
     except Exception as e:
         print(f"Failed to create symlink from {source_path} to {link_path}, reason: {e}")
         raise
+
+def robust_readlines(fullpath):
+    """
+    健壮的文件读取方法，可处理不同编码的文本文件，当前业务场景下主要用于读取requirements.txt
+
+    Args:
+        fullpath: 待读取文件的完整路径
+
+    Returns:
+        list: 文件内容的行列表，读取失败时返回空列表
+    """
+    import chardet
+    try:
+        with open(fullpath, "r") as f:
+            return f.readlines()
+    except:
+        encoding = None
+        with open(fullpath, "rb") as f:
+            raw_data = f.read()
+            result = chardet.detect(raw_data)
+            encoding = result['encoding']
+
+        if encoding is not None:
+            with open(fullpath, "r", encoding=encoding) as f:
+                return f.readlines()
+
+        print(f"Failed to recognize encoding for: {fullpath}")
+        return []

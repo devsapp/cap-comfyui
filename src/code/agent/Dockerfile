@@ -5,7 +5,7 @@ WORKDIR /root
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
     apt install -y \
-    git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0
+    git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping
 
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
@@ -17,7 +17,7 @@ ENV PATH="${VENV_DIR}/bin:$PATH"
 
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
-RUN pip install --no-cache-dir mitmproxy huggingface_hub[cli]
+RUN pip install --no-cache-dir mitmproxy huggingface_hub[cli] modelscope
 
 COPY . ${AGENT_DIR}/
 

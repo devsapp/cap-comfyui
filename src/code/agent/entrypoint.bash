@@ -20,8 +20,8 @@
 # ---- comfyui
 # ---- venv.tar
 init_mitmproxy(){
-  echo 'export NO_PROXY="127.0.0.1,mirrors.aliyun.com,ghfast.top,ghgo.xyz,ghp.ci,ghproxy.com,hf-mirror.com"'>> ~/.bashrc
-  echo 'export no_proxy="127.0.0.1,mirrors.aliyun.com,ghfast.top,ghgo.xyz,ghp.ci,ghproxy.com,hf-mirror.com"'>> ~/.bashrc
+  echo 'export NO_PROXY="127.0.0.1,mirrors.aliyun.com,ghfast.top,ghgo.xyz,ghp.ci,ghproxy.com,hf-mirror.com,deb.debian.org,www.modelscope.cn"'>> ~/.bashrc
+  echo 'export no_proxy="127.0.0.1,mirrors.aliyun.com,ghfast.top,ghgo.xyz,ghp.ci,ghproxy.com,hf-mirror.com,deb.debian.org,www.modelscope.cn"'>> ~/.bashrc
 
   echo 'export HTTP_PROXY="http://127.0.0.1:8080"' >> ~/.bashrc
   echo 'export http_proxy="http://127.0.0.1:8080"' >> ~/.bashrc
@@ -93,4 +93,8 @@ source ${AGENT_DIR}/venv/bin/activate
 echo "Using python venv, python path '$(which python)', pip path '$(which pip)'... "
 
 check_and_init_mitmproxy
+
+# git diff 忽略文件权限变化，ComfyUI 中 Windows 可执行文件在 Linux 中自动没有可执行权限，导致有 git diff，影响 ComfyUI 版本升级
+git config --global core.fileMode false
+
 python ${AGENT_DIR}/main.py

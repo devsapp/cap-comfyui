@@ -330,6 +330,7 @@ class ServerlessApiService:
         output_oss=False,
         callback=None,
         task_id: str = None,
+        timeout_seconds=None,
     ):
         """
         Serverless API 的核心逻辑
@@ -409,7 +410,19 @@ class ServerlessApiService:
             if len(self.api_get_history(prompt_id)) > 0:
                 ws.close()
             else:
-                ws_threading.join()
+                if timeout_seconds is not None:
+                    print(f"Waiting for prompt completion with timeout: {timeout_seconds} seconds")
+                    ws_threading.join(timeout=timeout_seconds)
+                    if ws_threading.is_alive():
+                        print(f"Prompt execution timed out after {timeout_seconds} seconds")
+                        ws.close()
+                        ws_threading.join(timeout=5)  # Give it a few seconds to clean up
+                        raise Exception(f"Prompt execution timed out after {timeout_seconds} seconds")
+                    else:
+                        print("Prompt execution completed within timeout")
+                else:
+                    print("Waiting for prompt completion (no timeout)")
+                    ws_threading.join()
 
             if ws_err:
                 raise ws_err

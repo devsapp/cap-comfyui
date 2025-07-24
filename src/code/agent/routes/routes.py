@@ -55,10 +55,19 @@ class Routes:
                 and constants.BACKEND_TYPE == constants.TYPE_COMFYUI
             ):
                 try:
-                    print("prewarm models")
+                    timeout_seconds = None
+                    if constants.PREWARM_TIMEOUT_SECONDS:
+                        try:
+                            timeout_seconds = int(constants.PREWARM_TIMEOUT_SECONDS)
+                            print(f"prewarm models with timeout: {timeout_seconds} seconds")
+                        except ValueError:
+                            print(f"Invalid PREWARM_TIMEOUT_SECONDS value: {constants.PREWARM_TIMEOUT_SECONDS}, proceeding without timeout")
+                    else:
+                        print("prewarm models without timeout (will wait indefinitely)")
+                    
                     prompt = json.loads(constants.PREWARM_PROMPT)
                     api = ServerlessApiService()
-                    api.run(prompt)
+                    api.run(prompt, timeout_seconds=timeout_seconds)
                     api.api_clear_history()
                     print("prewarm models done")
                 except Exception as e:

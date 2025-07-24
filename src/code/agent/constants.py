@@ -75,7 +75,9 @@ OSS_KEY_PREFIX = os.getenv("OSS_KEY_PREFIX", "comfyui_serverless_api")
 OSS_OUTPUT_DOMAIN = os.getenv("OSS_OUTPUT_DOMAIN", "")
 OSS_EXPIRES_IN_SECOND = os.getenv("OSS_EXPIRES_IN_SECOND", "")
 
+
 PREWARM_PROMPT = os.getenv("PREWARM_PROMPT", "")
+PREWARM_TIMEOUT = int(os.getenv("PREWARM_TIMEOUT", "600"))  # 单位：秒，默认10分钟
 
 class ERROR_CODE(Enum):
     UNCLASSIFY = "UNCLASSIFY"

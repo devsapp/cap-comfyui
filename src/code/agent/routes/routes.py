@@ -2,6 +2,7 @@ import json
 import logging
 import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 import requests
 import websocket
@@ -54,13 +55,22 @@ class Routes:
                 constants.PREWARM_PROMPT
                 and constants.BACKEND_TYPE == constants.TYPE_COMFYUI
             ):
-                try:
+                def prewarm_models():
+                    """预热模型的核心逻辑"""
                     print("prewarm models")
                     prompt = json.loads(constants.PREWARM_PROMPT)
                     api = ServerlessApiService()
                     api.run(prompt)
                     api.api_clear_history()
                     print("prewarm models done")
+
+                try:
+                    # 使用 ThreadPoolExecutor 设置5分钟超时
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(prewarm_models)
+                        future.result(timeout=300)  # 300秒 = 5分钟
+                except TimeoutError:
+                    print("prewarm models timeout after 5 minutes, continuing with initialization")
                 except Exception as e:
                     print(f"prewarm models got exception:\n{e}")
 

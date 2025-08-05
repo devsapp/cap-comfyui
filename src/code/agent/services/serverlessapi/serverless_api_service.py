@@ -60,7 +60,7 @@ class ServerlessApiService:
         ak = ""
         sk = ""
         sts = ""
-
+        print(f"====start get credentials==")
         # 优先尝试从 header 获取
         try:
             ak = request.headers.get(constants.HEADER_KEY_ACCESS_KEY_ID, "")
@@ -69,13 +69,14 @@ class ServerlessApiService:
         except Exception as e:
             print_exception(e)
             print(f"get credentials from header failed, reason: {e}")
+        print(f"====got credentials from header:", ak, sk, sts)
 
         # 如果 header 没有，尝试从 env 获取
         if ak == "" or sk == "":
             ak = constants.ALIBABA_CLOUD_ACCESS_KEY_ID
             sk = constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET
             sts = constants.ALIBABA_CLOUD_SECURITY_TOKEN
-
+        print(f"====got credentials from env:", ak, sk, sts)
         return ak, sk, sts
 
     def get_oss_store(self):

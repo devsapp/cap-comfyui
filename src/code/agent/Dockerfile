@@ -7,6 +7,13 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt install -y \
     git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping
 
+RUN wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda-repo-debian12-12-4-local_12.4.0-550.54.14-1_amd64.deb \
+    dpkg -i cuda-repo-debian12-12-4-local_12.4.0-550.54.14-1_amd64.deb \
+    cp /var/cuda-repo-debian12-12-4-local/cuda-*-keyring.gpg /usr/share/keyrings/ \
+    add-apt-repository contrib \
+    apt-get update \
+    apt-get -y install cuda-toolkit-12-4
+
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV SD_DIR="${WORK_DIR}/stable-diffusion-webui"

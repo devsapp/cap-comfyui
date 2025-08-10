@@ -74,10 +74,10 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
         file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
         file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
         file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
-        cache_path = f"{constants.WORK_DIR}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.extract(cache_path)
-            file_ops.remove(cache_path)
+        # cache_path = f"{constants.WORK_DIR}/.cache.zip"
+        # if os.path.exists(cache_path):
+        #     file_ops.extract(cache_path)
+        #     file_ops.remove(cache_path)
 
     def _create_symlinks(self):
         file_ops.create_symlink(
@@ -88,6 +88,11 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
         file_ops.create_symlink(
             source_path=f"{constants.MNT_DIR}/custom_nodes",
             link_path=f"{constants.COMFYUI_DIR}/custom_nodes",
+            force=True
+        )
+        file_ops.create_symlink(
+            source_path=f"{constants.MNT_DIR}/.cache",
+            link_path=f"{constants.COMFYUI_DIR}/.cache",
             force=True
         )
 
@@ -111,9 +116,9 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
         file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
         cache_path = f"{constants.WORK_DIR}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.extract(cache_path)
-            file_ops.remove(cache_path)
+        # if os.path.exists(cache_path):
+        #     file_ops.extract(cache_path)
+        #     file_ops.remove(cache_path)
         file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
         file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
         file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
@@ -122,6 +127,11 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         file_ops.create_symlink(
             source_path=f"{constants.MODEL_DIR}",
             link_path=f"{constants.COMFYUI_DIR}/models",
+            force=True
+        )
+        file_ops.create_symlink(
+            source_path=f"{constants.MODEL_DIR}",
+            link_path=f"{constants.COMFYUI_DIR}/.cache",
             force=True
         )
 

@@ -130,7 +130,7 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
             force=True
         )
         file_ops.create_symlink(
-            source_path=f"{constants.MNT_DIR}",
+            source_path=f"{constants.MNT_DIR}/.cache",
             link_path=f"{constants.WORK_DIR}/.cache",
             force=True
         )

@@ -103,7 +103,7 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         cache_path = f"{snapshot_path}/.cache.zip"
         if os.path.exists(cache_path):
             file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache.zip")
-        file_ops.copy(f"{snapshot_path}/custom_nodes.zip", f"{constants.WORK_DIR}/custom_nodes.zip")
+        # file_ops.copy(f"{snapshot_path}/custom_nodes.zip", f"{constants.WORK_DIR}/custom_nodes.zip")
 
     def _extract(self):
         file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
@@ -114,14 +114,20 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         if os.path.exists(cache_path):
             file_ops.extract(cache_path)
             file_ops.remove(cache_path)
-        file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
-        file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
-        file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
+        # file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
+        # file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
+        # file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
 
     def _create_symlinks(self):
         file_ops.create_symlink(
             source_path=f"{constants.MODEL_DIR}",
             link_path=f"{constants.COMFYUI_DIR}/models",
+            force=True
+        )
+        # issue: 插件目录过大导致解压时超过磁盘空间限制，且API函数实例启动时间过长；API函数挂载使用调试函数的插件目录以解决以上问题，代价是无法做到环境隔离
+        file_ops.create_symlink(
+            source_path=f"{constants.MNT_DIR}/custom_nodes",
+            link_path=f"{constants.COMFYUI_DIR}/custom_nodes",
             force=True
         )
 

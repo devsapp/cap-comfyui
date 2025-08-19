@@ -8,11 +8,11 @@ RUN --mount=type=cache,target=/var/cache/apt \
     git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping procps
 
 # 安装 cuda-toolkit12-4: https://developer.nvidia.com/cuda-12-4-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Debian&target_version=10&target_type=deb_local
-RUN wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda-repo-debian10-12-4-local_12.4.0-550.54.14-1_amd64.deb \
-    dpkg -i cuda-repo-debian10-12-4-local_12.4.0-550.54.14-1_amd64.deb \
-    cp /var/cuda-repo-debian10-12-4-local/cuda-*-keyring.gpg /usr/share/keyrings \
-    add-apt-repository contrib \
-    apt-get update \
+RUN wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda-repo-debian10-12-4-local_12.4.0-550.54.14-1_amd64.deb && \
+    dpkg -i cuda-repo-debian10-12-4-local_12.4.0-550.54.14-1_amd64.deb && \
+    cp /var/cuda-repo-debian10-12-4-local/cuda-*-keyring.gpg /usr/share/keyrings && \
+    add-apt-repository contrib && \
+    apt-get update && \
     apt-get -y install cuda-toolkit-12-4
 
 ENV WORK_DIR='/root'

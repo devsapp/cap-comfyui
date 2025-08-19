@@ -1,0 +1,80 @@
+# 配置 initializer
+edition: 3.0.0
+name: comfyui
+access: "cici-qx"
+
+vars:
+  region: "cn-hangzhou"
+
+  # 镜像名称
+  image: "cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/image-generation-comfyui:v0.3.50_v1"
+
+  # 函数名称
+  functionName: "functionai-comfyui"
+
+  # 模型在 OSS 上的 Bucket 名称
+  bucketName: "cici-dev"
+
+  # 模型在 OSS 上的路径，该目录下需要有 /models 目录
+  comfyUIPath: "/functionai/comfyui"
+
+  # 设置实例并发度，如果是 WebUI 函数建议设置 100，如果是 API 函数建议设置 1
+  instanceConcurrency: 100
+
+resources:
+  comfyui:
+    component: fc3
+    props:
+      region: ${vars.region}
+      functionName: ${vars.functionName}
+      runtime: "custom-container"
+      description: 'Serverless ComfyUI powered by FunctionAI'
+      timeout: 600
+      memorySize: 65536
+      role: "acs:ram::${config(\"AccountID\")}:role/aliyunfcdefaultrole"
+      cpu: 8
+      diskSize: 61440
+      instanceLifecycleConfig:
+        initializer:
+          handler: 'true'
+          timeout: 600
+      gpuConfig:
+        gpuMemorySize: 49152
+        gpuType: fc.gpu.ada.1
+      internetAccess: true
+      instanceConcurrency: ${vars.instanceConcurrency}
+      customContainerConfig:
+        image: ${vars.image}
+      environmentVariables:
+        BACKEND_TYPE: 'comfyui'
+        SKIP_SNAPSHOT_LOADING: 'true'
+        AUTO_LAUNCH_SNAPSHOT_NAME: 'latest'
+      vpcConfig: auto
+      logConfig: auto
+      ossMountConfig:
+        mountPoints:
+          - bucketName: ${vars.bucketName}
+            endpoint: https://oss-${vars.region}.aliyuncs.com
+            bucketPath: ${vars.comfyUIPath}
+            mountDir: /mnt/auto/
+            readOnly: false
+      triggers:
+        - triggerConfig:
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            authType: anonymous
+            disableURLInternet: false
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http
+      customDomain:
+        protocol: "HTTP"
+        route:
+          path: "/*"
+          qualifier: "LATEST"
+        domainName: auto

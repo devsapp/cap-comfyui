@@ -13,7 +13,7 @@ RUN wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_install
     cp /var/cuda-repo-debian10-12-4-local/cuda-*-keyring.gpg /usr/share/keyrings \
     add-apt-repository contrib \
     apt-get update \
-    apt-get -y install cuda-toolkit-12-4 \
+    apt-get -y install cuda-toolkit-12-4
 
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"

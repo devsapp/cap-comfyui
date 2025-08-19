@@ -1,7 +1,6 @@
 # =============================================================================
 # 自定义 ComfyUI 镜像构建文件
 # =============================================================================
-# 这个 Dockerfile 基于原项目进行了优化，方便用户进行自定义
 # 你可以根据需要修改 ComfyUI 版本、添加自定义节点、预置模型等
 # =============================================================================
 
@@ -17,7 +16,6 @@ ENV COMFYUI_DIR="/root/comfyui"
 # 你可以修改下面的版本号来使用不同的 ComfyUI 版本
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
-    echo "hhh" && \
     git checkout "v0.3.50"  # 在这里修改版本号
 
 # 安装 ComfyUI-Manager（推荐保留，用于管理插件）
@@ -46,8 +44,6 @@ FROM python:3.10.16-slim AS models
 
 RUN apt update && apt install -y aria2
 
-#COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
-
 FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root
@@ -67,7 +63,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
 # 安装 ComfyUI源码 所使用的依赖
-## 方式一: pip install动态拉取comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致镜像层重新构建
 ENV COMFYUI_DIR="/root/comfyui"
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \

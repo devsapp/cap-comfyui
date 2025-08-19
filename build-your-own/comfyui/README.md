@@ -51,10 +51,11 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus
 ```
 
-#### 3. 预置模型（可选）
+#### 3. 预置模型（不建议）
+不建议将模型打到 ComfyUI 镜像中，这可能会导致镜像体积过大。
+更合理的方法是使用 OSS 存储，将模型上传至 OSS，在运行时挂载 OSS 的模型目录。
 
-在 `models` 阶段添加模型下载：
-
+在 `models` 阶段添加模型下载示例（不建议）：
 ```dockerfile
 # 使用 aria2c 下载大文件
 RUN aria2c -x 16 -s 16 -k 1M \
@@ -221,8 +222,6 @@ vars:
   instanceConcurrency: 1  # API 调用建议设置为 1
 ```
 调用方式参考 [文档](https://help.aliyun.com/zh/functioncompute/fc-3-0/call-the-comfyui-api)
-
-
 
 ## 🔧 高级配置
 

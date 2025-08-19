@@ -1,7 +1,7 @@
 # 配置 initializer
 edition: 3.0.0
 name: comfyui
-access: "cici-qx"
+access: "default"
 
 vars:
   region: "cn-hangzhou"
@@ -13,7 +13,7 @@ vars:
   functionName: "functionai-comfyui"
 
   # 模型在 OSS 上的 Bucket 名称
-  bucketName: "cici-dev"
+  bucketName: "functionai-dev"
 
   # 模型在 OSS 上的路径，该目录下需要有 /models 目录
   comfyUIPath: "/functionai/comfyui"

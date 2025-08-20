@@ -29,12 +29,12 @@ class SnapshotLoader(ABC):
             self._extract()
         stage_cost["time_extract"] = round(t_extract.elapsed, 2)
 
-        self._create_symlinks()
+        self._create_symlinks(snapshot_path)
         return stage_cost
 
     def prepare_link(self):
         with self.timer("Creating symbolic link"):
-            self._create_symlinks()
+            self._create_symlinks("")
 
     @abstractmethod
     def _clear(self):
@@ -52,7 +52,7 @@ class SnapshotLoader(ABC):
         pass
 
     @abstractmethod
-    def _create_symlinks(self):
+    def _create_symlinks(self, snapshot_path: str):
         """创建相关目录软链接"""
         pass
 
@@ -79,7 +79,7 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
             file_ops.extract(cache_path)
             file_ops.remove(cache_path)
 
-    def _create_symlinks(self):
+    def _create_symlinks(self, snapshot_path: str):
         file_ops.create_symlink(
             source_path=f"{constants.MODEL_DIR}",
             link_path=f"{constants.COMFYUI_DIR}/models",
@@ -103,7 +103,8 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         cache_path = f"{snapshot_path}/.cache.zip"
         if os.path.exists(cache_path):
             file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache.zip")
-        file_ops.copy(f"{snapshot_path}/custom_nodes.zip", f"{constants.WORK_DIR}/custom_nodes.zip")
+        if not constants.SKIP_NODES_LOADING:
+            file_ops.copy(f"{snapshot_path}/custom_nodes.zip", f"{constants.WORK_DIR}/custom_nodes.zip")
 
     def _extract(self):
         file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
@@ -114,16 +115,24 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         if os.path.exists(cache_path):
             file_ops.extract(cache_path)
             file_ops.remove(cache_path)
-        file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
-        file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
-        file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
+        if not constants.SKIP_NODES_LOADING:
+            file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
+            file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
+            file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
 
-    def _create_symlinks(self):
+    def _create_symlinks(self, snapshot_path: str):
         file_ops.create_symlink(
             source_path=f"{constants.MODEL_DIR}",
             link_path=f"{constants.COMFYUI_DIR}/models",
             force=True
         )
+        if constants.SKIP_NODES_LOADING and snapshot_path:
+            file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")
+            file_ops.create_symlink(
+                source_path=f"{snapshot_path}/custom_nodes",
+                link_path=f"{constants.COMFYUI_DIR}/custom_nodes",
+                force=True
+            )
 
 
 class SDSnapshotLoader(SnapshotLoader):
@@ -148,7 +157,7 @@ class SDSnapshotLoader(SnapshotLoader):
             file_ops.extract(cache_path)
             file_ops.remove(cache_path)
 
-    def _create_symlinks(self):
+    def _create_symlinks(self, snapshot_path: str):
         file_ops.create_symlink(
             source_path=f"{constants.MODEL_DIR}",
             link_path=f"{constants.SD_DIR}/models",

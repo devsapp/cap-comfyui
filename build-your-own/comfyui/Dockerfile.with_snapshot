@@ -1,0 +1,81 @@
+# =============================================================================
+# ComfyUI 快照镜像构建文件 - 使用预构建的快照
+# =============================================================================
+# 此 Dockerfile 用于构建包含预置快照的 ComfyUI 镜像
+# 快照包含：ComfyUI 源码、Python 虚拟环境、自定义节点等
+# =============================================================================
+
+FROM agent:latest AS agent
+
+WORKDIR /root
+
+ENV AGENT_DIR="/root/agent"
+ENV WORK_DIR="/root"
+ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
+ENV VENV_DIR="${WORK_DIR}/venv"
+
+# 安装系统依赖
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt update && \
+    apt install -y \
+    git curl wget jq ffmpeg gcc g++ build-essential unzip
+
+# 配置 pip 镜像源
+RUN mkdir -p ~/.pip \
+ && cp ${AGENT_DIR}/services/proxy/pip.conf ~/.pip/pip.conf
+
+# =============================================================================
+# 快照加载阶段
+# =============================================================================
+# 🔧 自定义点: 修改快照文件路径
+# 请将你的快照文件放在与此 Dockerfile 同一目录下，并修改下面的路径
+
+COPY /root/dehui/prod-20250724-1324236/comfyui.zip /tmp/comfyui.zip
+COPY /root/dehui/prod-20250724-1324236/venv.tar /tmp/venv.tar
+COPY /root/dehui/prod-20250724-1324236/custom_nodes.zip /tmp/custom_nodes.zip
+
+# 解压快照到指定目录
+# 注意：如果快照文件不存在，构建会失败，请确保快照文件已准备好
+RUN if [ -f "/tmp/comfyui.zip" ]; then \
+        echo "[INFO] 正在解压 ComfyUI 快照..."; \
+        unzip -q /tmp/comfyui.zip -d /tmp/ && \
+        mv /tmp/comfyui ${COMFYUI_DIR} && \
+        rm /tmp/comfyui.zip; \
+    else \
+        echo "[WARNING] ComfyUI 快照文件不存在，将使用空目录"; \
+        mkdir -p ${COMFYUI_DIR}; \
+    fi
+
+RUN if [ -f "/tmp/venv.tar" ]; then \
+        echo "[INFO] 正在解压 Python 虚拟环境快照..."; \
+        tar -xf /tmp/venv.tar -C /root/ && \
+        rm /tmp/venv.tar; \
+    else \
+        echo "[WARNING] venv 快照文件不存在，将创建空的虚拟环境"; \
+        python3 -m venv ${VENV_DIR}; \
+    fi
+
+RUN if [ -f "/tmp/custom_nodes.zip" ]; then \
+        echo "[INFO] 正在解压自定义节点快照..."; \
+        mkdir -p ${COMFYUI_DIR}/custom_nodes && \
+        unzip -q /tmp/custom_nodes.zip -d ${COMFYUI_DIR}/custom_nodes/ && \
+        rm /tmp/custom_nodes.zip; \
+    else \
+        echo "[WARNING] 自定义节点快照文件不存在，将使用空目录"; \
+        mkdir -p ${COMFYUI_DIR}/custom_nodes; \
+    fi
+
+# =============================================================================
+# 运行时配置
+# =============================================================================
+
+# 后端类型标识
+ENV BACKEND_TYPE="comfyui"
+
+# 时区设置
+ENV TZ="Asia/Shanghai"
+
+# =============================================================================
+# 启动入口
+# =============================================================================
+ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]

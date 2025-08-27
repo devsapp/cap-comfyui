@@ -217,9 +217,9 @@ class ServerlessApiService:
             if type(value) == dict and value.get("class_type") == "SaveImage":
                 try:
                     value["inputs"]["filename_prefix"] = (
-                        value.get("inputs", {}).get("filename_prefix", "ComfyUI")
-                        + "_"
-                        + constants.INSTANCE_ID
+                            value.get("inputs", {}).get("filename_prefix", "ComfyUI")
+                            + "_"
+                            + constants.INSTANCE_ID
                     )
                 except:
                     pass
@@ -324,12 +324,12 @@ class ServerlessApiService:
             return []
 
     def run(
-        self,
-        prompt: map,
-        output_base64=False,
-        output_oss=False,
-        callback=None,
-        task_id: str = None,
+            self,
+            prompt: map,
+            output_base64=False,
+            output_oss=False,
+            callback=None,
+            task_id: str = None,
     ):
         """
         Serverless API 的核心逻辑
@@ -347,7 +347,11 @@ class ServerlessApiService:
 
             def on_message(ws: websocket.WebSocket, message: str):
                 try:
-                    msg = json.loads(message)
+                    print("=========debug messages=========", message)
+                    message_str = message.decode('utf-8')
+                    print("=========debug message str=========", message)
+
+                    msg = json.loads(message_str)
 
                     msg_type = msg.get("type", "")
                     node_id = msg.get("data", {}).get("node", "")
@@ -382,7 +386,7 @@ class ServerlessApiService:
                         pass
 
                 except Exception as e:
-                    print(e)
+                    print("=====Debug==== error", e)
                     nonlocal ws_err
                     ws_err = e
                     ws.close()

@@ -65,19 +65,12 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
     def _download(self, snapshot_path: str):
         file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
         file_ops.copy(f"{snapshot_path}/comfyui.zip", f"{constants.WORK_DIR}/comfyui.zip")
-        cache_path = f"{snapshot_path}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache.zip")
 
     def _extract(self):
         file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
         file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
         file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
         file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
-        cache_path = f"{constants.WORK_DIR}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.extract(cache_path)
-            file_ops.remove(cache_path)
 
     def _create_symlinks(self, snapshot_path: str):
         file_ops.create_symlink(
@@ -90,6 +83,17 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
             link_path=f"{constants.COMFYUI_DIR}/custom_nodes",
             force=True
         )
+        
+        # 新建 .cache 目录软链接
+        mnt_cache_dir = f"{constants.MNT_DIR}/.cache"
+        work_cache_dir = f"{constants.WORK_DIR}/.cache"
+        if not os.path.exists(mnt_cache_dir):
+            os.makedirs(mnt_cache_dir, exist_ok=True)
+        file_ops.create_symlink(
+            source_path=mnt_cache_dir,
+            link_path=work_cache_dir,
+            force=True
+        )
 
 
 class ComfyUIProdSnapshotLoader(SnapshotLoader):
@@ -100,9 +104,9 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
     def _download(self, snapshot_path: str):
         file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
         file_ops.copy(f"{snapshot_path}/comfyui.zip", f"{constants.WORK_DIR}/comfyui.zip")
-        cache_path = f"{snapshot_path}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache.zip")
+        if os.path.exists(f"{snapshot_path}/.cache"):
+            file_ops.remove(f"{constants.WORK_DIR}/.cache")
+            file_ops.copy(f"{snapshot_path}/.cache", f"{constants.WORK_DIR}/.cache")
         if not constants.SKIP_NODES_LOADING:
             file_ops.copy(f"{snapshot_path}/custom_nodes.zip", f"{constants.WORK_DIR}/custom_nodes.zip")
 
@@ -111,10 +115,6 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
         file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
         file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
-        cache_path = f"{constants.WORK_DIR}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.extract(cache_path)
-            file_ops.remove(cache_path)
         if not constants.SKIP_NODES_LOADING:
             file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
             file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")

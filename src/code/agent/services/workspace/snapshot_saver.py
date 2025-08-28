@@ -56,15 +56,10 @@ class ComfyUISnapshotSaver(SnapshotSaver):
     def _compress(self):
         file_ops.compress(f"{constants.WORK_DIR}/venv.tar", constants.WORK_DIR, ["venv"])
         file_ops.compress(f"{constants.WORK_DIR}/comfyui.zip", constants.WORK_DIR, ["comfyui"])
-        if os.path.exists(f"{constants.WORK_DIR}/.cache"):
-            file_ops.compress(f"{constants.WORK_DIR}/.cache.zip", constants.WORK_DIR, [".cache"])
 
     def _upload(self, snapshot_path: str):
         file_ops.copy(f"{constants.WORK_DIR}/venv.tar", f"{snapshot_path}/venv.tar")
         file_ops.copy(f"{constants.WORK_DIR}/comfyui.zip", f"{snapshot_path}/comfyui.zip")
-        cache_path = f"{constants.WORK_DIR}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.copy(cache_path, f"{snapshot_path}/.cache.zip")
 
     def _clear(self, snapshot_path: str):
         file_ops.remove(snapshot_path)

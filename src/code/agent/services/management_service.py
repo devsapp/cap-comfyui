@@ -132,8 +132,8 @@ class ManagementService:
             if nodes_map is not self._SKIP_INSTALL_SENTINEL:
                 self.sub_status = StartingSubStatus.INSTALLING.value
                 with timer("Install custom_nodes packages") as t_install_process:
-                    from services.pip.pip_installer import PIPInstaller
-                    installer = PIPInstaller()
+                    from services.pip.pip_installer_optimized import PIPInstallerOptimized
+                    installer = PIPInstallerOptimized()
                     result_map["install_baseline"] = installer.get_origin_packages()
                     result_map["install_history"] = installer.install_all(nodes_map=nodes_map)
                 result_map["time_install_process"] = round(t_install_process.elapsed, 2)

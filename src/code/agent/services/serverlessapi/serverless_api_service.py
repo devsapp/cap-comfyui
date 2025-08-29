@@ -348,10 +348,10 @@ class ServerlessApiService:
             def on_message(ws: websocket.WebSocket, message: str):
                 try:
                     print("=========debug messages=========", message)
-                    message_str = message.decode('utf-8')
-                    print("=========debug message str=========", message)
+                    # message_str = message.decode('utf-8')
+                    # print("=========debug message str=========", message)
 
-                    msg = json.loads(message_str)
+                    msg = json.loads(message)
 
                     msg_type = msg.get("type", "")
                     node_id = msg.get("data", {}).get("node", "")

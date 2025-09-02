@@ -9,7 +9,7 @@ from pathlib import Path
 # 添加当前项目路径到Python路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
 
-from services.pip.pip_installer_optimized import PIPInstallerOptimized
+from services.pip.pip_installer import PIPInstaller
 
 
 class RealScenarioTest(unittest.TestCase):
@@ -155,7 +155,7 @@ git+https://github.com/python/cpython.git  # git依赖测试（仅用于演示�
         print("\n==== 直接调用install_all方法测试 ====\n")
         
         # 创建安装器实例
-        installer = PIPInstallerOptimized()
+        installer = PIPInstaller()
         
         # 打印环境信息
         print(f"虚拟环境: {self.venv_python}")

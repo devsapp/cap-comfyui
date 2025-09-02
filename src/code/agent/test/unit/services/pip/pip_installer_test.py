@@ -2,9 +2,9 @@ import os
 import shutil
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, mock_open
 
-from services.pip.pip_installer import PIPInstaller, DependencyInfo
+from services.pip.pip_installer import PIPInstaller, DependencyInfo, InstallRecord, DependencyInstallRecord
 
 
 class TestPIPInstaller(unittest.TestCase):
@@ -47,24 +47,80 @@ class TestPIPInstaller(unittest.TestCase):
         return install_file
 
 
+class TestDataStructures(TestPIPInstaller):
+    """测试数据结构"""
+
+    def test_install_record_creation(self):
+        """测试 InstallRecord 创建"""
+        record = InstallRecord(
+            node_name="test_node",
+            script_name="install.py",
+            duration=10.5,
+            success=True,
+            error_msg=""
+        )
+        
+        self.assertEqual(record.node_name, "test_node")
+        self.assertEqual(record.script_name, "install.py")
+        self.assertEqual(record.duration, 10.5)
+        self.assertTrue(record.success)
+        self.assertEqual(record.error_msg, "")
+        
+        # 测试 to_dict 方法
+        record_dict = record.to_dict()
+        expected = {
+            "node_name": "test_node",
+            "script_name": "install.py",
+            "duration": 10.5,
+            "success": True,
+            "error_msg": ""
+        }
+        self.assertEqual(record_dict, expected)
+
+    def test_dependency_install_record_creation(self):
+        """测试 DependencyInstallRecord 创建"""
+        requirements_txt = "torch>=1.8.0\nnumpy>=1.20.0"
+        record = DependencyInstallRecord(
+            requirements_txt=requirements_txt,
+            duration=120.0,
+            success=False,
+            error_msg="Installation timeout"
+        )
+        
+        self.assertEqual(record.requirements_txt, requirements_txt)
+        self.assertEqual(record.duration, 120.0)
+        self.assertFalse(record.success)
+        self.assertEqual(record.error_msg, "Installation timeout")
+        
+        # 测试 to_dict 方法
+        record_dict = record.to_dict()
+        expected = {
+            "requirements_txt": requirements_txt,
+            "duration": 120.0,
+            "success": False,
+            "error_msg": "Installation timeout"
+        }
+        self.assertEqual(record_dict, expected)
+
+
 class TestPIPInstallerInit(TestPIPInstaller):
     """测试初始化功能"""
 
     @patch('services.pip.pip_installer.subprocess.check_output')
     def test_init_without_blacklist(self, mock_subprocess):
         """测试不带黑名单的初始化"""
-        mock_subprocess.return_value = "Package Version\\nrequests 2.28.0\\nnumpy 1.21.0"
+        mock_subprocess.return_value = "Package Version\nrequests 2.28.0\nnumpy 1.21.0"
         
         installer = PIPInstaller()
         
         self.assertEqual(installer.blacklist, set())
         self.assertIsInstance(installer._origin_packages, dict)
-        self.assertEqual(len(installer._history), 0)
+        # 不再有 _history 成员变量
 
     @patch('services.pip.pip_installer.subprocess.check_output')
     def test_init_with_blacklist(self, mock_subprocess):
         """测试带黑名单的初始化"""
-        mock_subprocess.return_value = "Package Version\\nrequests 2.28.0"
+        mock_subprocess.return_value = "Package Version\nrequests 2.28.0"
         blacklist = ["torch", "tensorflow"]
         
         installer = PIPInstaller(blacklist=blacklist)
@@ -254,7 +310,7 @@ class TestDependencyFiltering(TestPIPInstaller):
         }
         
         with patch('builtins.print'):  # Suppress print output
-            filtered = self.installer._filter_dependencies()
+            filtered = self.installer._filter_merged_dependencies()  # 更新方法名
         
         self.assertNotIn("git+https://github.com/user/repo.git", filtered)
         # numpy虽然已安装，但有版本要求，不应被过滤（让pip处理版本升级）
@@ -278,7 +334,7 @@ class TestDependencyFiltering(TestPIPInstaller):
         }
         
         with patch('builtins.print'):
-            filtered = self.installer._filter_dependencies()
+            filtered = self.installer._filter_merged_dependencies()
         
         self.assertNotIn("torch", filtered)  # Blacklisted
         # requests虽然已安装，但有版本要求，不应被过滤（让pip处理版本升级）
@@ -302,7 +358,7 @@ class TestDependencyFiltering(TestPIPInstaller):
         }
         
         with patch('builtins.print'):
-            filtered = self.installer._filter_dependencies()
+            filtered = self.installer._filter_merged_dependencies()
         
         # numpy虽然已安装，但有版本要求，不应被过滤
         self.assertIn("numpy", filtered)
@@ -327,7 +383,7 @@ class TestDependencyFiltering(TestPIPInstaller):
         }
         
         with patch('builtins.print'):
-            filtered = self.installer._filter_dependencies()
+            filtered = self.installer._filter_merged_dependencies()
         
         # 无版本要求且已安装的包应被过滤
         self.assertNotIn("numpy", filtered)
@@ -395,6 +451,45 @@ class TestRequirementsMerging(TestPIPInstaller):
         self.assertIn("torch", self.installer._merged_dependencies)
 
 
+class TestRequirementsGeneration(TestPIPInstaller):
+    """测试 requirements.txt 生成功能"""
+
+    def setUp(self):
+        super().setUp()
+        with patch('services.pip.pip_installer.subprocess.check_output'):
+            self.installer = PIPInstaller()
+
+    def test_generate_requirements_content_with_dependencies(self):
+        """测试生成含有依赖的 requirements.txt 内容"""
+        filtered_deps = {
+            "torch": DependencyInfo(
+                package_name="torch",
+                version_spec=">=1.8.0",
+                original_line="torch>=1.8.0",
+                source_nodes=["node1", "node2"]
+            ),
+            "numpy": DependencyInfo(
+                package_name="numpy",
+                version_spec="==1.21.0",
+                original_line="numpy==1.21.0",
+                source_nodes=["node1"]
+            )
+        }
+        
+        with patch('builtins.print'):  # Suppress print output
+            content = self.installer._generate_requirements_content(filtered_deps)
+        
+        expected_lines = ["numpy==1.21.0", "torch>=1.8.0"]  # 按字母顺序排列
+        self.assertEqual(content, "\n".join(expected_lines))
+
+    def test_generate_requirements_content_empty(self):
+        """测试生成空的 requirements.txt 内容"""
+        with patch('builtins.print'):  # Suppress print output
+            content = self.installer._generate_requirements_content({})
+        
+        self.assertEqual(content, "")
+
+
 class TestInstallationProcess(TestPIPInstaller):
     """测试安装过程"""
 
@@ -407,46 +502,103 @@ class TestInstallationProcess(TestPIPInstaller):
         with patch('services.pip.pip_installer.subprocess.check_output'):
             self.installer = PIPInstaller()
 
-    @patch('services.pip.pip_installer.subprocess.check_call')
-    def test_do_install_dependency_success(self, mock_subprocess):
-        """测试依赖安装成功"""
-        mock_subprocess.return_value = 0
+    @patch('tempfile.NamedTemporaryFile')
+    @patch('subprocess.run')
+    @patch('os.unlink')
+    def test_install_merged_dependencies_success(self, mock_unlink, mock_subprocess_run, mock_tempfile):
+        """测试依赖批量安装成功"""
+        # Mock 临时文件
+        mock_file = MagicMock()
+        mock_file.name = "/tmp/test_requirements.txt"
+        mock_tempfile.return_value.__enter__.return_value = mock_file
         
-        with patch.object(self.installer, '_install_script', return_value=True):
-            self.installer._do_install_dependency(
-                ["node1"], "torch>=1.8.0", ["pip", "install", "torch>=1.8.0"]
-            )
+        # Mock subprocess.run 返回成功
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Successfully installed torch numpy"
+        mock_result.stderr = ""
+        mock_subprocess_run.return_value = mock_result
         
-        self.assertEqual(len(self.installer._history), 1)
-        record = self.installer._history[0]
-        self.assertEqual(record["package_name"], "torch>=1.8.0")
-        self.assertTrue(record["success"])
+        requirements_content = "torch>=1.8.0\nnumpy>=1.20.0"
+        
+        with patch('time.time', side_effect=[0, 10]):  # Mock start and end time
+            result = self.installer._install_merged_dependencies(requirements_content, timeout=300)
+        
+        # 验证结果
+        self.assertIsInstance(result, DependencyInstallRecord)
+        self.assertTrue(result.success)
+        self.assertEqual(result.requirements_txt, requirements_content)
+        self.assertEqual(result.duration, 10.0)
+        self.assertEqual(result.error_msg, "")
+        
+        # 验证调用
+        mock_tempfile.assert_called_once()
+        mock_file.write.assert_called_once_with(requirements_content)
+        mock_subprocess_run.assert_called_once()
+        mock_unlink.assert_called_once_with("/tmp/test_requirements.txt")
 
-    def test_do_install_dependency_failure(self):
-        """测试依赖安装失败"""
-        with patch.object(self.installer, '_install_script', side_effect=Exception("Install failed")):
-            self.installer._do_install_dependency(
-                ["node1"], "invalid-package", ["pip", "install", "invalid-package"]
-            )
+    @patch('tempfile.NamedTemporaryFile')
+    @patch('subprocess.run')
+    @patch('os.unlink')
+    def test_install_merged_dependencies_failure(self, mock_unlink, mock_subprocess_run, mock_tempfile):
+        """测试依赖批量安装失败"""
+        # Mock 临时文件
+        mock_file = MagicMock()
+        mock_file.name = "/tmp/test_requirements.txt"
+        mock_tempfile.return_value.__enter__.return_value = mock_file
         
-        self.assertEqual(len(self.installer._history), 1)
-        record = self.installer._history[0]
-        self.assertEqual(record["package_name"], "invalid-package")
-        self.assertFalse(record["success"])
-        self.assertEqual(record["error_msg"], "Install failed")
+        # Mock subprocess.run 返回失败
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "ERROR: No matching distribution found for invalid-package"
+        mock_subprocess_run.return_value = mock_result
+        
+        requirements_content = "invalid-package>=1.0.0"
+        
+        with patch('time.time', side_effect=[0, 5]):  # Mock start and end time
+            result = self.installer._install_merged_dependencies(requirements_content, timeout=300)
+        
+        # 验证结果
+        self.assertIsInstance(result, DependencyInstallRecord)
+        self.assertFalse(result.success)
+        self.assertEqual(result.requirements_txt, requirements_content)
+        self.assertEqual(result.duration, 5.0)
+        self.assertIn("pip install failed with return code 1", result.error_msg)
 
     def test_do_install_script_success(self):
         """测试 install.py 脚本执行成功"""
-        with patch.object(self.installer, '_install_script', return_value=True):
-            self.installer._do_install_script(
+        with patch.object(self.installer, '_install_script', return_value=True), \
+             patch('time.time', side_effect=[0, 2.5]):
+            
+            result = self.installer._do_install_script(
                 self.node1_dir, "node1", "install.py", ["python", "install.py"]
             )
         
-        self.assertEqual(len(self.installer._history), 1)
-        record = self.installer._history[0]
-        self.assertEqual(record["node_name"], "node1")
-        self.assertEqual(record["package_name"], "install.py")
-        self.assertTrue(record["success"])
+        # 验证结果是字典形式
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["node_name"], "node1")
+        self.assertEqual(result["script_name"], "install.py")
+        self.assertTrue(result["success"])
+        self.assertEqual(result["duration"], 2.5)
+        self.assertEqual(result["error_msg"], "")
+
+    def test_do_install_script_failure(self):
+        """测试 install.py 脚本执行失败"""
+        with patch.object(self.installer, '_install_script', side_effect=Exception("Script failed")), \
+             patch('time.time', side_effect=[0, 1.0]):
+            
+            result = self.installer._do_install_script(
+                self.node1_dir, "node1", "install.py", ["python", "install.py"]
+            )
+        
+        # 验证结果是字典形式
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["node_name"], "node1")
+        self.assertEqual(result["script_name"], "install.py")
+        self.assertFalse(result["success"])
+        self.assertEqual(result["duration"], 1.0)
+        self.assertEqual(result["error_msg"], "Script failed")
 
 
 class TestFullIntegration(TestPIPInstaller):
@@ -468,24 +620,37 @@ class TestFullIntegration(TestPIPInstaller):
         self.create_install_script(self.node2_dir, "print('Installing node2')\n")
 
     @patch('services.pip.pip_installer.subprocess.check_output')
-    @patch('services.pip.pip_installer.subprocess.check_call')
     @patch('builtins.print')
-    def test_install_all_full_process(self, mock_print, mock_check_call, mock_check_output):
-        """测试完整安装流程"""
+    def test_install_all_full_process(self, mock_print, mock_check_output):
+        """测试完整安装流程（不真正执行 pip）"""
         # Mock pip list 输出
-        mock_check_output.return_value = "Package Version\\nrequests 2.28.0"
-        mock_check_call.return_value = 0
+        mock_check_output.return_value = "Package Version\nrequests 2.28.0"
         
         installer = PIPInstaller()
         
-        # Mock 各种方法
-        with patch.object(installer, '_install_script', return_value=True):
-            history = installer.install_all()
+        # Mock 生成 requirements 内容
+        with patch.object(installer, '_install_merged_dependencies') as mock_dep_install, \
+             patch.object(installer, '_execute_install_scripts') as mock_scripts:
+            
+            # 假设依赖安装成功
+            dep_record = DependencyInstallRecord(requirements_txt="torch>=1.9.0\nnumpy>=1.20.0", duration=12.3, success=True, error_msg="")
+            mock_dep_install.return_value = dep_record
+            
+            # 假设脚本执行成功
+            mock_scripts.return_value = [
+                InstallRecord(node_name="node2", script_name="install.py", duration=1.2, success=True, error_msg="").to_dict()
+            ]
+            
+            result_map = installer.install_all()
         
-        # 验证安装历史记录
-        self.assertIsInstance(history, list)
-        # 应该有 torch, numpy 的安装记录，以及 node2 的 install.py 执行记录
-        # requests 被跳过（已安装），git+ 依赖被跳过
+        # 验证返回结构
+        self.assertIsInstance(result_map, dict)
+        self.assertIn("baseline", result_map)
+        self.assertIn("dependencies", result_map)
+        self.assertIn("scripts", result_map)
+        
+        self.assertTrue(result_map["dependencies"]["success"])  # 依赖安装成功
+        self.assertEqual(len(result_map["scripts"]), 1)  # 一个脚本被执行
         
         # 验证合并的依赖
         self.assertIn("torch", installer._merged_dependencies)
@@ -499,16 +664,20 @@ class TestFullIntegration(TestPIPInstaller):
     @patch('services.pip.pip_installer.subprocess.check_output')
     def test_install_all_with_nodes_map(self, mock_subprocess):
         """测试指定节点的安装"""
-        mock_subprocess.return_value = "Package Version\\n"
+        mock_subprocess.return_value = "Package Version\n"
         
         installer = PIPInstaller()
         nodes_map = {"node1": {}, "node3": {}}
         
-        with patch.object(installer, '_install_merged_dependencies'), \
-             patch.object(installer, '_execute_install_scripts'), \
+        with patch.object(installer, '_install_merged_dependencies') as mock_dep_install, \
+             patch.object(installer, '_execute_install_scripts') as mock_scripts, \
              patch('builtins.print'):
             
-            history = installer.install_all(nodes_map=nodes_map)
+            dep_record = DependencyInstallRecord(requirements_txt="numpy>=1.20.0\ntorch>=1.8.0", duration=1.0, success=True, error_msg="")
+            mock_dep_install.return_value = dep_record
+            mock_scripts.return_value = []
+            
+            result_map = installer.install_all(nodes_map=nodes_map)
         
         # 验证只处理了指定的节点
         merged_deps = installer._merged_dependencies
@@ -519,33 +688,30 @@ class TestFullIntegration(TestPIPInstaller):
 
     @patch('services.pip.pip_installer.subprocess.check_output')
     @patch('builtins.print')
-    def test_install_all_timeout_handling(self, mock_print, mock_subprocess):
-        """测试超时处理 - 验证超时时正常返回并打印日志"""
-        mock_subprocess.return_value = "Package Version\\n"
+    def test_install_all_timeout_behavior(self, mock_print, mock_subprocess):
+        """测试超时捕获行为（install_all 会捕获 TimeoutError 不再抛出）"""
+        mock_subprocess.return_value = "Package Version\n"
         
         installer = PIPInstaller()
         
-        # 需要确保有节点可以安装以触发超时检查
-        # 创建一个测试节点目录
+        # 创建一个测试节点目录，确保 _merge_requirements_from_nodes 有内容
         test_node_dir = self.create_test_node_dir("test_timeout_node")
         self.create_requirements_file(test_node_dir, "some-package>=1.0.0\n")
         
-        # 模拟时间流逝：
-        # 0: start_time
-        # 1000: 第一次检查时间（超时）
-        # 1100: 结束时间（用于计算 total_duration）
-        with patch('time.time', side_effect=[0, 1000, 1100]):
-            # 应该正常返回，不抛出异常
-            history = installer.install_all(soft_timeout=300)
-            
-        # 验证返回了历史记录（即使超时也应该返回）
-        self.assertIsInstance(history, list)
+        # 模拟时间推进，触发 _merge_requirements_from_nodes 的 timeout
+        # install_all 会捕获 TimeoutError 并打印日志，然后正常返回
+        with patch('time.time', side_effect=[0, 1000, 1001, 1002]):
+            result_map = installer.install_all(timeout=300)
+        
+        # 验证返回结果是有效的
+        self.assertIsInstance(result_map, dict)
+        self.assertIn("baseline", result_map)
+        self.assertIn("dependencies", result_map)
+        self.assertIn("scripts", result_map)
         
         # 验证打印了超时日志
-        timeout_logged = any(
-            "Soft timeout" in str(call) for call in mock_print.call_args_list
-        )
-        self.assertTrue(timeout_logged, "Should log timeout message")
+        printed_timeout = any("Timeout (" in str(call) for call in mock_print.call_args_list)
+        self.assertTrue(printed_timeout)  # 应该打印超时信息
 
 
 class TestUtilityMethods(TestPIPInstaller):
@@ -575,7 +741,6 @@ class TestUtilityMethods(TestPIPInstaller):
         # 当版本格式无效时，应该进行字符串比较
         self.assertTrue(self.installer._is_version_newer("b", "a"))
         self.assertFalse(self.installer._is_version_newer("a", "b"))
-
     @patch('services.pip.pip_installer.subprocess.check_output')
     def test_try_get_installed_packages_success(self, mock_subprocess):
         """测试获取已安装包列表成功"""
@@ -600,6 +765,69 @@ numpy      1.21.0"""
             installer = PIPInstaller()
         
         self.assertEqual(installer.get_origin_packages(), {})
+
+
+class TestNewIntegrationFlow(TestPIPInstaller):
+    """测试重构后的集成流程"""
+
+    def setUp(self):
+        super().setUp()
+        with patch('services.pip.pip_installer.subprocess.check_output'):
+            self.installer = PIPInstaller()
+
+    def test_empty_nodes_map(self):
+        """测试空节点映射的情况"""
+        with patch('services.pip.pip_installer.subprocess.check_output') as mock_subprocess:
+            mock_subprocess.return_value = "Package Version\n"
+            installer = PIPInstaller()
+            
+            # 传递空字典，应该不安装任何节点
+            result_map = installer.install_all(timeout=60, nodes_map={})
+            
+            # 验证返回结构
+            self.assertIsInstance(result_map, dict)
+            self.assertIn("baseline", result_map)
+            self.assertIn("dependencies", result_map)
+            self.assertIn("scripts", result_map)
+            
+            # 验证空节点映射的情况
+            self.assertEqual(len(result_map["scripts"]), 0)  # 无脚本执行
+            self.assertTrue(result_map["dependencies"]["success"])  # 依赖安装成功（但无内容）
+            self.assertEqual(result_map["dependencies"]["requirements_txt"], "")  # 无依赖内容
+
+    def test_return_structure_consistency(self):
+        """测试返回结构的一致性"""
+        with patch('services.pip.pip_installer.subprocess.check_output') as mock_subprocess:
+            mock_subprocess.return_value = "Package Version\n"
+            
+            installer = PIPInstaller()
+            
+            # 测试不同参数的情况
+            test_cases = [
+                None,  # 安装所有节点
+                {},    # 不安装任何节点
+                {"nonexistent": {}},  # 不存在的节点
+            ]
+            
+            for nodes_map in test_cases:
+                with self.subTest(nodes_map=nodes_map):
+                    result_map = installer.install_all(timeout=10, nodes_map=nodes_map)
+                    
+                    # 验证返回结构一致性
+                    self.assertIsInstance(result_map, dict)
+                    self.assertIn("baseline", result_map)
+                    self.assertIn("dependencies", result_map)
+                    self.assertIn("scripts", result_map)
+                    
+                    # 验证 dependencies 结构
+                    deps = result_map["dependencies"]
+                    self.assertIn("requirements_txt", deps)
+                    self.assertIn("duration", deps)
+                    self.assertIn("success", deps)
+                    self.assertIn("error_msg", deps)
+                    
+                    # 验证 scripts 结构
+                    self.assertIsInstance(result_map["scripts"], list)
 
 
 if __name__ == "__main__":

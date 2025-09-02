@@ -65,6 +65,9 @@ DEFAULT_READINESS_POLL_INTERVAL = 3
 DEFAULT_READINESS_TIMEOUT = 900  # 15min waiting for comfyui subprocess start
 DEFAULT_LIVENESS_POLL_INTERVAL = 5
 
+# 插件安装相关超时配置
+DEFAULT_INSTALL_TIMEOUT = 600  # 10min default timeout for custom nodes installation
+
 INSTANCE_ID = os.getenv("FC_INSTANCE_ID", socket.gethostname())
 # OSS
 HEADER_KEY_ACCESS_KEY_ID = "x-fc-access-key-id"

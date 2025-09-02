@@ -96,6 +96,25 @@ class ManagementService:
     # 哨兵对象，表示启动时是否跳过依赖安装流程
     _SKIP_INSTALL_SENTINEL = object()
 
+    def install_custom_nodes(self, nodes_map: Optional[Dict] = None, timeout: int = constants.DEFAULT_INSTALL_TIMEOUT) -> Dict:
+        """
+        安装自定义节点的依赖包。
+        
+        Args:
+            nodes_map: 控制插件依赖的安装行为。
+                - None: 尝试安装所有在 `custom_nodes` 目录中找到的可用插件。
+                - 字典: 具体的安装内容由字典决定：
+                    - 非空字典 (例: {'NodeA': 'v1'}): 只安装字典中指定的有效插件。
+                    - 空字典 ({}): 启动安装流程，但不安装任何插件。
+            timeout: 安装超时时间（秒），默认使用 constants.DEFAULT_INSTALL_TIMEOUT（10分钟）。
+        
+        Returns:
+            Dict: install_all 的返回结果，包含 baseline、dependencies 和 scripts
+        """
+        from services.pip.pip_installer import PIPInstaller
+        installer = PIPInstaller()
+        return installer.install_all(timeout=timeout, nodes_map=nodes_map)
+
     def start(self, snapshot_name: str, nodes_map: Optional[Dict] = _SKIP_INSTALL_SENTINEL) -> Dict:
         """
         启动ComfyUI服务。
@@ -132,10 +151,8 @@ class ManagementService:
             if nodes_map is not self._SKIP_INSTALL_SENTINEL:
                 self.sub_status = StartingSubStatus.INSTALLING.value
                 with timer("Install custom_nodes packages") as t_install_process:
-                    from services.pip.pip_installer import PIPInstaller
-                    installer = PIPInstaller()
-                    result_map["install_baseline"] = installer.get_origin_packages()
-                    result_map["install_history"] = installer.install_all(nodes_map=nodes_map)
+                    install_result = self.install_custom_nodes(nodes_map)
+                    result_map.update(install_result)
                 result_map["time_install_process"] = round(t_install_process.elapsed, 2)
 
             # 启动ComfyUI服务子进程

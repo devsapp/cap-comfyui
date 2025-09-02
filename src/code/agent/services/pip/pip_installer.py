@@ -11,8 +11,21 @@ from utils import file_ops
 
 @dataclass
 class InstallRecord:
+    """用于记录 install.py 脚本的执行结果"""
     node_name: str
-    package_name: str
+    script_name: str = "install.py"  # 脚本名称，通常是 install.py
+    duration: float = 0  # 耗时(秒)
+    success: bool = True
+    error_msg: str = ""
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class DependencyInstallRecord:
+    """用于记录 pip install -r 批量安装的结果"""
+    requirements_txt: str  # 实际安装的 requirements.txt 内容
     duration: float = 0  # 耗时(秒)
     success: bool = True
     error_msg: str = ""
@@ -40,8 +53,6 @@ class PIPInstaller:
         Args:
             blacklist: 黑名单包列表，这些包将被跳过安装
         """
-        self.processed_install = set()
-        self._history = []
         self._origin_packages = self._try_get_installed_packages()
         self.blacklist = set(blacklist) if blacklist else set()
         
@@ -51,13 +62,20 @@ class PIPInstaller:
     def get_origin_packages(self):
         return self._origin_packages
 
-    def install_all(self, soft_timeout=300, nodes_map=None):
+    def install_all(self, timeout=constants.DEFAULT_INSTALL_TIMEOUT, nodes_map=None):
         """
-        安装流程：先合并所有插件requirements.txt，再批量安装，最后逐个插件执行 install.py
-        
+        安装流程：先合并所有插件requirements.txt并批量安装，然后逐个插件执行 install.py
+
         Args:
-            soft_timeout: 软超时时间（秒），逐个pip install requirements.txt中的依赖时，若超时，则会在安装完当前依赖后退出
+            timeout: 超时时间（秒），默认使用 constants.DEFAULT_INSTALL_TIMEOUT（10分钟）。在 pip install -r 阶段强制中止安装进程
             nodes_map: 节点映射，控制安装行为
+            
+        Returns:
+            Dict: {
+                "baseline": Dict[str, str],                       # 安装前的包基线（包名 -> 版本）
+                "dependencies": DependencyInstallRecord.to_dict(), # 依赖安装结果
+                "scripts": [InstallRecord.to_dict(), ...]          # install.py 脚本安装结果列表
+            }
         """
         nodes_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes")
         all_available_nodes = self._get_possible_nodes(nodes_path)
@@ -65,31 +83,53 @@ class PIPInstaller:
         # --- 确定要安装的节点列表 ---
         nodes_to_install = self._determine_nodes_to_install(all_available_nodes, nodes_map)
         
+        # 初始化结果映射
+        result_map = {
+            "baseline": self._origin_packages,  # 安装前的包基线
+            "dependencies": None,             # 依赖安装结果
+            "scripts": []                     # install.py 脚本安装结果列表
+        }
+        
         if not nodes_to_install:
             print("\n[Installer] No nodes to install. Skipping.")
-            return self._history
+            # 返回空的依赖安装记录
+            empty_dep_record = DependencyInstallRecord(requirements_txt="")
+            empty_dep_record.success = True
+            empty_dep_record.duration = 0
+            result_map["dependencies"] = empty_dep_record.to_dict()
+            return result_map
 
         print(f"\n[Installer] Starting installation for {len(nodes_to_install)} nodes...")
         start_time = time.time()
 
         try:
-            # 步骤1: 合并所有 requirements.txt
-            self._merge_requirements_from_nodes(nodes_to_install, soft_timeout, start_time)
+            # 步骤1: 合并所有 requirements.txt 并应用过滤
+            requirements_content = self._merge_requirements_from_nodes(nodes_to_install, timeout, start_time)
             
-            # 步骤2: 过滤并批量安装依赖包
-            self._install_merged_dependencies(soft_timeout, start_time)
+            # 步骤2: 使用 pip install -r 批量安装依赖包（强制超旲）
+            dependency_record = self._install_merged_dependencies(requirements_content, timeout)
+            result_map["dependencies"] = dependency_record.to_dict()
             
-            # 步骤3: 执行各插件的 install.py 脚本
-            self._execute_install_scripts(nodes_to_install, soft_timeout, start_time)
+            # 步骤3: 执行各插件的 install.py 脚本（强制超时机制）
+            script_records = self._execute_install_scripts(nodes_to_install, timeout, start_time)
+            result_map["scripts"] = script_records
             
         except TimeoutError as e:
             print(f"\n[Installer] {e}")
+            # 即使超时，也返回已经完成的部分
         
         total_duration = time.time() - start_time
         print(f"\n[Installer] Installation completed. Total time: {total_duration:.1f}s")
-        print(f"[Installer] Total operations: {len(self._history)}")
         
-        return self._history
+        # 统计信息
+        dep_success = result_map["dependencies"]["success"] if result_map["dependencies"] else True
+        script_success_count = len([r for r in result_map["scripts"] if r["success"]])
+        script_total_count = len(result_map["scripts"])
+        
+        print(f"[Installer] Dependencies: {'Success' if dep_success else 'Failed'}")
+        print(f"[Installer] Scripts: {script_success_count}/{script_total_count} successful")
+        
+        return result_map
 
     def _determine_nodes_to_install(self, all_available_nodes: List[str], nodes_map) -> List[str]:
         """
@@ -119,15 +159,15 @@ class PIPInstaller:
 
         return nodes_to_install
 
-    def _merge_requirements_from_nodes(self, nodes_to_install: List[str], soft_timeout: float, start_time: float):
-        """步骤1: 遍历并合并所有节点的 requirements.txt"""
+    def _merge_requirements_from_nodes(self, nodes_to_install: List[str], timeout: float, start_time: float) -> str:
+        """步骤1: 遍历并合并所有节点的 requirements.txt，应用过滤逻辑（如黑名单），输出最终的 requirements.txt 内容"""
         print(f"\n[Installer] ## Step 1: Merging requirements.txt from {len(nodes_to_install)} nodes...")
         
         self._merged_dependencies = {}
-        
+        # TODO: 支持定制化插件依赖安装逻辑，例如Nunchaku，需要解析请求中的Nunchaku版本并安装对应轮子
         for node_name in nodes_to_install:
-            if time.time() - start_time >= soft_timeout:
-                raise TimeoutError(f"Soft timeout ({soft_timeout}s) reached during requirements merging")
+            if time.time() - start_time >= timeout:
+                raise TimeoutError(f"Timeout ({timeout}s) reached during requirements merging")
                 
             node_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes", node_name)
             requirements_path = os.path.join(node_path, "requirements.txt")
@@ -136,6 +176,14 @@ class PIPInstaller:
                 self._merge_requirements_file(requirements_path, node_name)
         
         print(f"[Installer] ## Merged {len(self._merged_dependencies)} unique dependencies from requirements.txt files")
+        
+        # 应用过滤逻辑
+        filtered_deps = self._filter_merged_dependencies()
+        
+        # 生成最终的 requirements.txt 内容
+        requirements_content = self._generate_requirements_content(filtered_deps)
+        
+        return requirements_content
 
     def _merge_requirements_file(self, requirements_path: str, node_name: str):
         """合并单个 requirements.txt 文件"""
@@ -166,55 +214,8 @@ class PIPInstaller:
                     source_nodes=[node_name]
                 )
 
-    def _install_merged_dependencies(self, soft_timeout: float, start_time: float):
-        """步骤2: 过滤并批量安装合并后的依赖"""
-        print(f"\n[Installer] ## Step 2: Filtering and installing merged dependencies...")
-        
-        # 过滤依赖
-        filtered_deps = self._filter_dependencies()
-        
-        if not filtered_deps:
-            print("[Installer] ## No dependencies to install after filtering.")
-            return
-        
-        # 打印过滤后的依赖信息，以 requirements.txt 样式
-        self._print_filtered_dependencies_as_requirements(filtered_deps)
-            
-        print(f"[Installer] ## Installing {len(filtered_deps)} filtered dependencies...")
-        
-        for i, (base_name, dep_info) in enumerate(filtered_deps.items(), 1):
-            if time.time() - start_time >= soft_timeout:
-                raise TimeoutError(f"Soft timeout ({soft_timeout}s) reached during dependency installation")
-            
-            package_to_install = f"{base_name}{dep_info.version_spec}" if dep_info.version_spec else base_name
-            print(f"[Installer] ## Installing dependency {i}/{len(filtered_deps)}: {package_to_install}")
-            
-            # 执行安装
-            install_cmd = self._construct_pip_cmd(["install", package_to_install])
-            self._do_install_dependency(dep_info.source_nodes, package_to_install, install_cmd)
-
-    def _execute_install_scripts(self, nodes_to_install: List[str], soft_timeout: float, start_time: float):
-        """步骤3: 执行各插件的 install.py 脚本"""
-        print(f"\n[Installer] ## Step 3: Executing install.py scripts...")
-        
-        install_scripts_found = 0
-        for node_name in nodes_to_install:
-            if time.time() - start_time >= soft_timeout:
-                raise TimeoutError(f"Soft timeout ({soft_timeout}s) reached during install.py execution")
-                
-            node_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes", node_name)
-            install_script_path = os.path.join(node_path, "install.py")
-            
-            if os.path.exists(install_script_path):
-                install_scripts_found += 1
-                print(f"[Installer] ## Executing install.py for node: {node_name}")
-                install_cmd = [constants.VENV_EXECUTABLE, "install.py"]
-                self._do_install_script(node_path, node_name, "install.py", install_cmd)
-        
-        print(f"[Installer] ## Executed {install_scripts_found} install.py scripts")
-
-    def _filter_dependencies(self) -> Dict[str, DependencyInfo]:
-        """过滤合并后的依赖列表"""
+    def _filter_merged_dependencies(self) -> Dict[str, DependencyInfo]:
+        """过滤合并后的依赖列表，应用黑名单、已安装包和 git+ 依赖过滤"""
         filtered = {}
         
         skipped_already_installed = []
@@ -237,7 +238,7 @@ class PIPInstaller:
             # 如果有版本要求，则交给pip处理版本升级/降级
             if base_name in self._origin_packages and not dep_info.version_spec:
                 # 包已安装且无特定版本要求，跳过安装
-                skipped_already_installed.append(f"{base_name} ")
+                skipped_already_installed.append(f"{base_name}")
                 continue
                 
             filtered[base_name] = dep_info
@@ -256,24 +257,25 @@ class PIPInstaller:
         
         return filtered
 
-    def _print_filtered_dependencies_as_requirements(self, filtered_deps: Dict[str, DependencyInfo]):
-        """以 requirements.txt 格式打印过滤后的依赖信息"""
-        print("[Installer] ## Filtered dependencies (requirements.txt format):")
-        print("[Installer] ## " + "=" * 60)
-        
+    def _generate_requirements_content(self, filtered_deps: Dict[str, DependencyInfo]) -> str:
+        """生成最终的 requirements.txt 内容"""
         if not filtered_deps:
-            print("[Installer] ## # No dependencies to install")
-            print("[Installer] ## " + "=" * 60)
-            return
+            print("[Installer] ## No dependencies to install after filtering.")
+            return ""
+        
+        print(f"[Installer] ## Generated requirements.txt with {len(filtered_deps)} dependencies:")
+        print("[Installer] ## " + "=" * 60)
         
         # 按包名排序
         sorted_deps = sorted(filtered_deps.items())
+        requirements_lines = []
         
         for base_name, dep_info in sorted_deps:
             # 构建 requirements.txt 格式的行
             package_line = f"{base_name}{dep_info.version_spec}" if dep_info.version_spec else base_name
+            requirements_lines.append(package_line)
             
-            # 添加来源节点注释
+            # 添加来源节点注释（只用于日志显示）
             if len(dep_info.source_nodes) == 1:
                 comment = f"  # required by {dep_info.source_nodes[0]}"
             else:
@@ -289,6 +291,101 @@ class PIPInstaller:
         print("[Installer] ## " + "=" * 60)
         print(f"[Installer] ## Total: {len(filtered_deps)} packages to install")
         print("")
+        
+        return "\n".join(requirements_lines)
+
+    def _install_merged_dependencies(self, requirements_content: str, timeout: float) -> DependencyInstallRecord:
+        """步骤2: 使用 pip install -r 批量安装合并后的依赖"""
+        print(f"\n[Installer] ## Step 2: Installing dependencies with pip install -r (timeout: {timeout}s)...")
+        
+        # 创建安装记录
+        install_record = DependencyInstallRecord(requirements_txt=requirements_content)
+        
+        if not requirements_content.strip():
+            print("[Installer] ## No dependencies to install.")
+            install_record.success = True
+            install_record.duration = 0
+            return install_record
+        
+        start_install_time = time.time()
+        try:
+            # 创建临时 requirements.txt 文件
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                f.write(requirements_content)
+                temp_requirements_path = f.name
+            
+            try:
+                # 构建 pip install -r 命令
+                install_cmd = self._construct_pip_cmd(["install", "-r", temp_requirements_path])
+                
+                print(f"[Installer] ## Executing: {' '.join(install_cmd)}")
+
+                try:
+                    # 不捕获输出，让 pip 日志实时打印到控制台
+                    result = subprocess.run(
+                        install_cmd, 
+                        timeout=timeout,  # 子进程超时
+                        env=self._get_script_env()
+                    )
+                    
+                    if result.returncode == 0:
+                        install_record.success = True
+                        print("[Installer] ## Dependencies installed successfully.")
+                    else:
+                        install_record.success = False
+                        install_record.error_msg = f"pip install failed with return code {result.returncode}"
+                        print(f"[Installer] ## Error: {install_record.error_msg}")
+                        
+                except subprocess.TimeoutExpired:
+                    install_record.success = False
+                    install_record.error_msg = f"pip install timed out after {timeout} seconds"
+                    print(f"[Installer] ## Error: {install_record.error_msg}")
+            finally:
+                # 清理临时文件
+                try:
+                    os.unlink(temp_requirements_path)
+                except OSError:
+                    pass
+                    
+        except Exception as e:
+            install_record.success = False
+            install_record.error_msg = f"Unexpected error during installation: {str(e)}"
+            print(f"[Installer] ## Error: {install_record.error_msg}")
+            
+        finally:
+            install_record.duration = round(time.time() - start_install_time, 1)
+            
+        return install_record
+
+    def _execute_install_scripts(self, nodes_to_install: List[str], timeout: float, start_time: float) -> List[Dict]:
+        """步骤3: 执行各插件的 install.py 脚本，返回安装记录列表"""
+        # 在开始 Step 3 之前检查是否已经超时
+        if time.time() - start_time >= timeout:
+            print(f"\n[Installer] ## Step 3 skipped: Already timed out ({timeout}s)")
+            return []  # 直接返回空列表，不执行 install.py 脚本
+        
+        print(f"\n[Installer] ## Step 3: Executing install.py scripts...")
+        
+        script_records = []
+        install_scripts_found = 0
+        
+        for node_name in nodes_to_install:
+            if time.time() - start_time >= timeout:
+                raise TimeoutError(f"Timeout ({timeout}s) reached during install.py execution")
+                
+            node_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes", node_name)
+            install_script_path = os.path.join(node_path, "install.py")
+            
+            if os.path.exists(install_script_path):
+                install_scripts_found += 1
+                print(f"[Installer] ## Executing install.py for node: {node_name}")
+                install_cmd = [constants.VENV_EXECUTABLE, "install.py"]
+                record = self._do_install_script(node_path, node_name, "install.py", install_cmd)
+                script_records.append(record)
+        
+        print(f"[Installer] ## Executed {install_scripts_found} install.py scripts")
+        return script_records
 
     def _parse_package_spec(self, package_spec: str) -> Tuple[str, str]:
         """
@@ -351,29 +448,12 @@ class PIPInstaller:
         print(f"[Installer] ## Version conflict for {package_name}: '{existing_spec}' vs '{new_spec}' -> '{resolved_spec}'")
         return resolved_spec
 
-    def _do_install_dependency(self, source_nodes: List[str], package_name: str, install_cmd: List[str]):
-        """执行依赖安装并记录结果"""
-        start_time = time.time()
-        record = InstallRecord(
-            node_name=f"[{','.join(source_nodes[:3])}{'...' if len(source_nodes) > 3 else ''}]",  # 限制显示的节点数量
-            package_name=package_name,
-        )
-
-        try:
-            record.success = self._install_script("", install_cmd)  # 依赖安装不需要特定目录
-        except Exception as e:
-            record.error_msg = str(e)
-            record.success = False
-        finally:
-            record.duration = round(time.time() - start_time, 1)
-            self._history.append(record.to_dict())
-
-    def _do_install_script(self, node_path: str, node_name: str, script_name: str, install_cmd: List[str]):
-        """执行 install.py 脚本并记录结果"""
+    def _do_install_script(self, node_path: str, node_name: str, script_name: str, install_cmd: List[str]) -> Dict:
+        """执行 install.py 脚本并记录结果，返回安装记录字典"""
         start_time = time.time()
         record = InstallRecord(
             node_name=node_name,
-            package_name=script_name,
+            script_name=script_name,
         )
 
         try:
@@ -383,13 +463,14 @@ class PIPInstaller:
             record.success = False
         finally:
             record.duration = round(time.time() - start_time, 1)
-            self._history.append(record.to_dict())
+            
+        return record.to_dict()
 
     # === 以下方法与原版保持一致 ===
     
     def _try_get_installed_packages(self):
         """
-        获取已安装的包信息并添加到processed_install集合中
+        获取已安装的包信息
 
         Returns:
             Dict[str, str]: 包名到版本的映射，例如 {'package1': '1.0.0', 'package2': '2.1.0'}
@@ -407,7 +488,6 @@ class PIPInstaller:
                         continue
 
                     version = parts[1]
-                    self.processed_install.add(package_name)
                     installed_packages[package_name] = version
 
         except subprocess.CalledProcessError:
@@ -417,7 +497,6 @@ class PIPInstaller:
 
     def _install_script(self, node_path: str, install_cmd: List[str]):
         print(f"\n[Installer] ## Execute => '{' '.join(install_cmd)}' in '{node_path if node_path else 'current env'}'")
-        # FIXME: pip install --timeout 可能会导致依赖安装不完整，因此每个包安装时暂未引入超时时间
         code = subprocess.check_call(install_cmd, cwd=node_path if node_path else None, env=self._get_script_env())
 
         if code != 0:

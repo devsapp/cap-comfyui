@@ -1,5 +1,6 @@
 from flask import Blueprint, Flask, request, jsonify
 
+import constants
 from services.management_service import ManagementService
 
 
@@ -89,6 +90,37 @@ class ManagementRoutes:
                 },
                 "status": "success"
             }), 200
+
+        @self.bp.post('/install')
+        def install():
+            """
+            安装自定义节点依赖的独立接口。
+            请求体格式: {"nodes": {...}, "timeout": 300} 或 {"nodes": null} 或 空请求体
+            - 不提供或 nodes: null -> 安装所有可用插件
+            - nodes: {...} -> 按字典内容安装指定插件
+            - timeout: 安装超时时间（秒），默认使用 constants.DEFAULT_INSTALL_TIMEOUT
+            """
+            # 从请求体获取 nodes_map 和 timeout
+            data = request.get_json(force=True, silent=True)
+            if isinstance(data, dict):
+                nodes_map = data.get('nodes', None)  # 默认None表示安装所有
+                timeout = data.get('timeout', constants.DEFAULT_INSTALL_TIMEOUT)    # 默认使用常量超时
+            else:
+                nodes_map = None  # 请求体为空或非JSON时，也表示安装所有
+                timeout = constants.DEFAULT_INSTALL_TIMEOUT     # 默认超时时间
+
+            try:
+                result_map = self.service.install_custom_nodes(nodes_map=nodes_map, timeout=timeout)
+                return jsonify({
+                    "data": result_map,
+                    "status": "success",
+                    "message": "Successfully installed custom nodes dependencies."
+                }), 200
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "message": f"Failed to install dependencies: {str(e)}"
+                }), 500
 
         @self.bp.post('/shutdown')
         def shutdown():

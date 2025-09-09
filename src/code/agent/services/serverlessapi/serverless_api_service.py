@@ -91,11 +91,11 @@ class ServerlessApiService:
             constants.OSS_EXPIRES_IN_SECOND,
         )
 
-    def api_prompt(self, client_id: str, prompt: Any):
+    def api_prompt(self, client_id: str, payload: Any):
         """
         出图
         """
-        req = {"client_id": client_id, "prompt": prompt}
+        req = {"client_id": client_id, **payload}
         res = requests.post(
             os.path.join(self.endpoint, "prompt"),
             json=req,
@@ -325,7 +325,7 @@ class ServerlessApiService:
 
     def run(
         self,
-        prompt: map,
+        payload: map,
         output_base64=False,
         output_oss=False,
         callback=None,
@@ -338,7 +338,7 @@ class ServerlessApiService:
         try:
 
             # 解析请求中是否存在 base64、http url 形式的图片
-            prompt = self.parse_prompt(prompt)
+            payload["prompt"] = self.parse_prompt(payload.get("prompt", {}))
 
             client_id = ""
             prompt_id = ""
@@ -395,7 +395,7 @@ class ServerlessApiService:
             while client_id == "":
                 time.sleep(0.1)
 
-            prompt_result = self.api_prompt(client_id, prompt)
+            prompt_result = self.api_prompt(client_id, payload)
             prompt_id = prompt_result.get("prompt_id", "")
 
             # 如果 task id 未指定，则使用 prompt id

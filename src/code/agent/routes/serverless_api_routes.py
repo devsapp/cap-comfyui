@@ -72,7 +72,7 @@ class ServerlessApiRoutes:
             返回值:
               输出的图片数组
             """
-            body = request.get_json()
+            payload = request.get_json()
             stream = is_true(request.args.get("stream"))
             output_base64 = is_true(request.args.get("output_base64"))
             output_oss = is_true(request.args.get("output_oss"))
@@ -86,7 +86,7 @@ class ServerlessApiRoutes:
             if not stream:
                 try:
                     return self.service.run(
-                        body,
+                        payload,
                         output_base64=output_base64,
                         output_oss=output_oss,
                         task_id=task_id,
@@ -129,7 +129,7 @@ class ServerlessApiRoutes:
                     """
                     try:
                         result = self.service.run(
-                            body,
+                            payload,
                             output_base64=output_base64,
                             output_oss=output_oss,
                             callback=do_streaming,
@@ -188,15 +188,15 @@ class ServerlessApiRoutes:
                     ),
                 )
 
-                # 获取第一个 message 作为输入的 prompt
+                # 获取第一个 message 作为输入有效载荷 payload
                 data = ws.receive()
-                prompt = json.loads(data)
+                payload = json.loads(data)
 
                 def callback(msg):
                     ws.send(msg)
 
                 results = self.service.run(
-                    prompt,
+                    payload,
                     output_base64=output_base64,
                     output_oss=output_oss,
                     callback=callback,

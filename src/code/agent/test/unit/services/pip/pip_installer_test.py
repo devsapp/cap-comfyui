@@ -830,5 +830,474 @@ class TestNewIntegrationFlow(TestPIPInstaller):
                     self.assertIsInstance(result_map["scripts"], list)
 
 
+class TestCustomDependencyStrategies(TestPIPInstaller):
+    """测试定制化依赖策略功能"""
+
+    def setUp(self):
+        super().setUp()
+        with patch('services.pip.pip_installer.subprocess.check_output'):
+            self.installer = PIPInstaller()
+
+    def test_apply_custom_dependency_strategies_basic(self):
+        """测试定制化依赖策略基本功能"""
+        filtered_deps = {
+            "requests": DependencyInfo(
+                package_name="requests",
+                version_spec=">=2.25.0",
+                original_line="requests>=2.25.0",
+                source_nodes=["test_node"]
+            )
+        }
+        
+        nodes_to_install = ["test_node"]
+        nodes_map = {"test_node": {}}
+        
+        with patch('builtins.print'):  # Suppress print output
+            result = self.installer._apply_custom_dependency_strategies(
+                filtered_deps, nodes_to_install, nodes_map
+            )
+        
+        # 应该返回原始的 filtered_deps（无 nunchaku 节点）
+        self.assertEqual(result, filtered_deps)
+        self.assertIn("requests", result)
+
+    def test_handle_nunchaku_strategy_no_nunchaku_node(self):
+        """测试无 ComfyUI-nunchaku 节点的情况"""
+        filtered_deps = {
+            "torch": DependencyInfo(
+                package_name="torch",
+                version_spec=">=1.8.0",
+                original_line="torch>=1.8.0",
+                source_nodes=["other_node"]
+            )
+        }
+        
+        nodes_to_install = ["other_node"]
+        nodes_map = {"other_node": {}}
+        
+        result = self.installer._handle_nunchaku_strategy(
+            filtered_deps, nodes_to_install, nodes_map
+        )
+        
+        # 无 nunchaku 节点，应该直接返回原始 deps
+        self.assertEqual(result, filtered_deps)
+        self.assertNotIn("https://modelscope.cn", str(result))
+
+    def test_handle_nunchaku_strategy_v1_0_0(self):
+        """测试 ComfyUI-nunchaku v1.0.0 的特殊处理"""
+        filtered_deps = {
+            "requests": DependencyInfo(
+                package_name="requests",
+                version_spec=">=2.25.0",
+                original_line="requests>=2.25.0",
+                source_nodes=["ComfyUI-nunchaku"]
+            )
+        }
+        
+        nodes_to_install = ["ComfyUI-nunchaku"]
+        nodes_map = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "source": {
+                    "webUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku",
+                    "type": "github",
+                    "cloneUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku.git"
+                },
+                "version": {
+                    "type": "tag",
+                    "value": "v1.0.0"
+                }
+            }
+        }
+        
+        with patch('builtins.print'):  # Suppress print output
+            result = self.installer._handle_nunchaku_strategy(
+                filtered_deps, nodes_to_install, nodes_map
+            )
+        
+        # 应该添加 nunchaku wheel URL
+        expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+        
+        self.assertIn(expected_wheel_url, result)
+        self.assertIn("requests", result)  # 原有依赖仍在
+        
+        # 验证 wheel 依赖的结构
+        wheel_dep = result[expected_wheel_url]
+        self.assertEqual(wheel_dep.package_name, expected_wheel_url)
+        self.assertEqual(wheel_dep.version_spec, "")
+        self.assertEqual(wheel_dep.source_nodes, ["ComfyUI-nunchaku"])
+
+    def test_handle_nunchaku_strategy_other_version(self):
+        """测试 ComfyUI-nunchaku 其他版本的处理"""
+        filtered_deps = {
+            "requests": DependencyInfo(
+                package_name="requests",
+                version_spec=">=2.25.0",
+                original_line="requests>=2.25.0",
+                source_nodes=["ComfyUI-nunchaku"]
+            )
+        }
+        
+        nodes_to_install = ["ComfyUI-nunchaku"]
+        nodes_map = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "version": {
+                    "type": "tag",
+                    "value": "v0.2.0"
+                }
+            }
+        }
+        
+        with patch('builtins.print'):  # Suppress print output
+            result = self.installer._handle_nunchaku_strategy(
+                filtered_deps, nodes_to_install, nodes_map
+            )
+        
+        # v0.2.0 不应该添加 wheel URL
+        self.assertEqual(result, filtered_deps)
+        self.assertNotIn("https://modelscope.cn", str(result))
+
+    def test_extract_nunchaku_version_valid_structure(self):
+        """测试从正确的 nodes_map 结构中提取版本"""
+        nodes_map = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "version": {
+                    "type": "tag",
+                    "value": "v1.0.0"
+                }
+            }
+        }
+        
+        with patch('builtins.print'):  # Suppress print output
+            version = self.installer._extract_nunchaku_version(nodes_map, "ComfyUI-nunchaku")
+        
+        self.assertEqual(version, "v1.0.0")
+
+    def test_extract_nunchaku_version_missing_node(self):
+        """测试从缺少节点的 nodes_map 中提取版本"""
+        nodes_map = {"other_node": {}}
+        
+        with patch('builtins.print'):  # Suppress print output
+            version = self.installer._extract_nunchaku_version(nodes_map, "ComfyUI-nunchaku")
+        
+        self.assertEqual(version, "unknown")
+
+    def test_extract_nunchaku_version_invalid_structure(self):
+        """测试从无效结构的 nodes_map 中提取版本"""
+        test_cases = [
+            # 缺少 version 字段
+            {"ComfyUI-nunchaku": {"name": "ComfyUI-nunchaku"}},
+            # version 不是字典
+            {"ComfyUI-nunchaku": {"version": "v1.0.0"}},
+            # version 字典缺少 value
+            {"ComfyUI-nunchaku": {"version": {"type": "tag"}}},
+            # 空的 nodes_map
+            None,
+            # 空字典
+            {}
+        ]
+        
+        for nodes_map in test_cases:
+            with self.subTest(nodes_map=nodes_map):
+                with patch('builtins.print'):  # Suppress print output
+                    version = self.installer._extract_nunchaku_version(nodes_map, "ComfyUI-nunchaku")
+                
+                self.assertEqual(version, "unknown")
+
+
+class TestProxyEnvironmentHandling(TestPIPInstaller):
+    """测试代理环境变量处理功能"""
+
+    def setUp(self):
+        super().setUp()
+        with patch('services.pip.pip_installer.subprocess.check_output'):
+            self.installer = PIPInstaller()
+
+    def test_get_script_env_keeps_proxy_vars(self):
+        """测试 _get_script_env 方法保留代理环境变量（用于install.py脚本）"""
+        original_env = {
+            'PATH': '/usr/bin',
+            'HOME': '/home/user',
+            'http_proxy': 'http://proxy.example.com:8080',
+            'https_proxy': 'https://proxy.example.com:8080',
+            'HTTP_PROXY': 'http://proxy.example.com:8080',
+            'HTTPS_PROXY': 'https://proxy.example.com:8080',
+            'OTHER_VAR': 'value'
+        }
+        
+        with patch('os.environ.copy', return_value=original_env.copy()):
+            result_env = self.installer._get_script_env()
+        
+        # 验证代理变量被保留（不被移除）
+        proxy_vars = ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY']
+        for proxy_var in proxy_vars:
+            self.assertIn(proxy_var, result_env)
+            self.assertEqual(result_env[proxy_var], original_env[proxy_var])
+        
+        # 验证其他变量仍在
+        self.assertIn('PATH', result_env)
+        self.assertIn('HOME', result_env)
+        self.assertIn('OTHER_VAR', result_env)
+        
+        # 验证 ComfyUI 相关变量被添加
+        self.assertEqual(result_env['COMFYUI_PATH'], self.comfyui_dir)
+        self.assertEqual(result_env['COMFYUI_FOLDERS_BASE_PATH'], self.comfyui_dir)
+
+    def test_get_pip_install_env_removes_proxy_vars(self):
+        """测试 _get_pip_install_env 方法移除代理环境变量（用于pip install -r）"""
+        original_env = {
+            'PATH': '/usr/bin',
+            'HOME': '/home/user',
+            'http_proxy': 'http://proxy.example.com:8080',
+            'https_proxy': 'https://proxy.example.com:8080',
+            'HTTP_PROXY': 'http://proxy.example.com:8080',
+            'HTTPS_PROXY': 'https://proxy.example.com:8080',
+            'OTHER_VAR': 'value'
+        }
+        
+        with patch('os.environ.copy', return_value=original_env.copy()):
+            result_env = self.installer._get_pip_install_env()
+        
+        # 验证代理变量被移除
+        proxy_vars = ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY']
+        for proxy_var in proxy_vars:
+            self.assertNotIn(proxy_var, result_env)
+        
+        # 验证其他变量仍在
+        self.assertIn('PATH', result_env)
+        self.assertIn('HOME', result_env)
+        self.assertIn('OTHER_VAR', result_env)
+        
+        # 验证 ComfyUI 相关变量被添加
+        self.assertEqual(result_env['COMFYUI_PATH'], self.comfyui_dir)
+        self.assertEqual(result_env['COMFYUI_FOLDERS_BASE_PATH'], self.comfyui_dir)
+
+    def test_get_script_env_no_proxy_vars_initially(self):
+        """测试初始环境中无代理变量的情况"""
+        original_env = {
+            'PATH': '/usr/bin',
+            'HOME': '/home/user'
+        }
+        
+        with patch('os.environ.copy', return_value=original_env.copy()):
+            result_env = self.installer._get_script_env()
+        
+        # 验证不会报错
+        self.assertIn('PATH', result_env)
+        self.assertIn('HOME', result_env)
+        self.assertEqual(result_env['COMFYUI_PATH'], self.comfyui_dir)
+
+    def test_get_pip_install_env_no_proxy_vars_initially(self):
+        """测试初始环境中无代理变量的情况（pip install env）"""
+        original_env = {
+            'PATH': '/usr/bin',
+            'HOME': '/home/user'
+        }
+        
+        with patch('os.environ.copy', return_value=original_env.copy()):
+            result_env = self.installer._get_pip_install_env()
+        
+        # 验证不会报错
+        self.assertIn('PATH', result_env)
+        self.assertIn('HOME', result_env)
+        self.assertEqual(result_env['COMFYUI_PATH'], self.comfyui_dir)
+
+    def test_get_pip_install_env_partial_proxy_vars(self):
+        """测试部分代理变量存在的情况（pip install env）"""
+        original_env = {
+            'PATH': '/usr/bin',
+            'http_proxy': 'http://proxy.example.com:8080',
+            'HTTPS_PROXY': 'https://proxy.example.com:8080'
+            # 只有部分代理变量
+        }
+        
+        with patch('os.environ.copy', return_value=original_env.copy()):
+            result_env = self.installer._get_pip_install_env()
+        
+        # 验证存在的代理变量被移除
+        self.assertNotIn('http_proxy', result_env)
+        self.assertNotIn('HTTPS_PROXY', result_env)
+        
+        # 验证不存在的代理变量不会引起错误
+        self.assertNotIn('https_proxy', result_env)
+        self.assertNotIn('HTTP_PROXY', result_env)
+
+
+class TestMergeRequirementsFromNodesParameterUpdate(TestPIPInstaller):
+    """测试 _merge_requirements_from_nodes 方法参数更新"""
+
+    def setUp(self):
+        super().setUp()
+        # 创建测试节点
+        self.node_dir = self.create_test_node_dir("test_node")
+        self.create_requirements_file(self.node_dir, "requests>=2.25.0\n")
+        
+        with patch('services.pip.pip_installer.subprocess.check_output'):
+            self.installer = PIPInstaller()
+
+    def test_merge_requirements_from_nodes_new_signature(self):
+        """测试新的方法签名支持 nodes_map 参数"""
+        nodes_to_install = ["test_node"]
+        nodes_map = {"test_node": {}}
+        timeout = 300
+        start_time = 0
+        
+        with patch('time.time', return_value=0), \
+             patch.object(self.installer, '_apply_custom_dependency_strategies') as mock_custom:
+            
+            # Mock 定制策略返回原始依赖
+            mock_custom.return_value = {
+                "requests": DependencyInfo(
+                    package_name="requests",
+                    version_spec=">=2.25.0",
+                    original_line="requests>=2.25.0",
+                    source_nodes=["test_node"]
+                )
+            }
+            
+            with patch('builtins.print'):  # Suppress print output
+                result = self.installer._merge_requirements_from_nodes(
+                    nodes_to_install, nodes_map, timeout, start_time
+                )
+            
+            # 验证定制策略被调用
+            mock_custom.assert_called_once()
+            args = mock_custom.call_args[0]
+            self.assertEqual(args[1], nodes_to_install)  # nodes_to_install
+            self.assertEqual(args[2], nodes_map)  # nodes_map
+            
+            # 验证返回的 requirements.txt 内容
+            self.assertIn("requests>=2.25.0", result)
+
+    def test_merge_requirements_calls_custom_strategies(self):
+        """测试 _merge_requirements_from_nodes 调用定制策略"""
+        nodes_to_install = ["test_node"]
+        nodes_map = {"test_node": {}}
+        
+        with patch('time.time', return_value=0), \
+             patch.object(self.installer, '_apply_custom_dependency_strategies') as mock_custom:
+            
+            # 设置 mock 返回值
+            mock_custom.return_value = {}
+            
+            with patch('builtins.print'):
+                self.installer._merge_requirements_from_nodes(
+                    nodes_to_install, nodes_map, 300, 0
+                )
+            
+            # 验证定制策略被调用
+            mock_custom.assert_called_once()
+            
+            # 验证调用参数
+            call_args = mock_custom.call_args[0]
+            self.assertEqual(len(call_args), 3)  # filtered_deps, nodes_to_install, nodes_map
+            self.assertEqual(call_args[1], nodes_to_install)
+            self.assertEqual(call_args[2], nodes_map)
+
+
+class TestInstallAllIntegrationWithCustomStrategies(TestPIPInstaller):
+    """测试 install_all 与定制策略的集成"""
+
+    def setUp(self):
+        super().setUp()
+        # 创建 ComfyUI-nunchaku 测试节点
+        self.nunchaku_dir = self.create_test_node_dir("ComfyUI-nunchaku")
+        self.create_requirements_file(self.nunchaku_dir, "requests>=2.25.0\n")
+
+    @patch('services.pip.pip_installer.subprocess.check_output')
+    @patch('builtins.print')
+    def test_install_all_with_nunchaku_v1_0_0_integration(self, mock_print, mock_subprocess):
+        """测试 install_all 与 nunchaku v1.0.0 的集成"""
+        mock_subprocess.return_value = "Package Version\n"
+        
+        installer = PIPInstaller()
+        
+        nodes_map = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "version": {
+                    "type": "tag",
+                    "value": "v1.0.0"
+                }
+            }
+        }
+        
+        with patch.object(installer, '_install_merged_dependencies') as mock_dep_install, \
+             patch.object(installer, '_execute_install_scripts') as mock_scripts:
+            
+            # 设置 mock 返回值
+            dep_record = DependencyInstallRecord(
+                requirements_txt="",  # 将在 mock 中检查实际内容
+                duration=1.0,
+                success=True,
+                error_msg=""
+            )
+            mock_dep_install.return_value = dep_record
+            mock_scripts.return_value = []
+            
+            result_map = installer.install_all(timeout=10, nodes_map=nodes_map)
+        
+        # 验证返回结构
+        self.assertIn("dependencies", result_map)
+        self.assertIn("scripts", result_map)
+        self.assertIn("baseline", result_map)
+        
+        # 验证 _install_merged_dependencies 被调用
+        mock_dep_install.assert_called_once()
+        
+        # 检查传递给 _install_merged_dependencies 的 requirements_txt 内容
+        called_requirements = mock_dep_install.call_args[0][0]  # 第一个参数
+        
+        # 应该包含 nunchaku wheel URL
+        expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+        self.assertIn(expected_wheel_url, called_requirements)
+        
+        # 也应该包含原有的 requirements
+        self.assertIn("requests>=2.25.0", called_requirements)
+
+    @patch('services.pip.pip_installer.subprocess.check_output')
+    @patch('builtins.print')
+    def test_install_all_with_nunchaku_other_version_integration(self, mock_print, mock_subprocess):
+        """测试 install_all 与 nunchaku 非 v1.0.0 版本的集成"""
+        mock_subprocess.return_value = "Package Version\n"
+        
+        installer = PIPInstaller()
+        
+        nodes_map = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "version": {
+                    "type": "tag",
+                    "value": "v0.2.0"
+                }
+            }
+        }
+        
+        with patch.object(installer, '_install_merged_dependencies') as mock_dep_install, \
+             patch.object(installer, '_execute_install_scripts') as mock_scripts:
+            
+            dep_record = DependencyInstallRecord(
+                requirements_txt="",
+                duration=1.0,
+                success=True,
+                error_msg=""
+            )
+            mock_dep_install.return_value = dep_record
+            mock_scripts.return_value = []
+            
+            result_map = installer.install_all(timeout=10, nodes_map=nodes_map)
+        
+        # 检查传递给 _install_merged_dependencies 的 requirements_txt 内容
+        called_requirements = mock_dep_install.call_args[0][0]
+        
+        # 不应该包含 nunchaku wheel URL
+        self.assertNotIn("https://modelscope.cn", called_requirements)
+        
+        # 但应该包含原有的 requirements
+        self.assertIn("requests>=2.25.0", called_requirements)
+
+
 if __name__ == "__main__":
     unittest.main()

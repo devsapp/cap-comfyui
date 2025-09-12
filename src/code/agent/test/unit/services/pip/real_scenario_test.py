@@ -508,6 +508,210 @@ json5>=0.9.0
             test_duration = time.time() - start_test_time
             print(f"\n轻量级超时测试异常 (耗时: {test_duration:.1f}s): {e}")
             return None
+    
+    def test_nunchaku_custom_strategy(self):
+        """测试 ComfyUI-nunchaku 定制化依赖策略"""
+        print("\n==== ComfyUI-nunchaku 定制化策略测试 ====\n")
+        
+        # 创建 ComfyUI-nunchaku 测试节点
+        nunchaku_node_dir = self.create_test_node_dir("ComfyUI-nunchaku")
+        
+        # 为 nunchaku 节点创建一个基本的 requirements.txt
+        nunchaku_requirements = """
+# ComfyUI-nunchaku 基础依赖
+requests>=2.25.0
+click>=8.0
+        """.strip()
+        
+        self.create_requirements_file(nunchaku_node_dir, nunchaku_requirements)
+        print(f"创建了 ComfyUI-nunchaku 测试节点")
+        
+        installer = PIPInstaller()
+        
+        # 测试情景1: nunchaku 版本为 v1.0.0，应该添加定制 wheel
+        print("\n--- 测试情景1: nunchaku v1.0.0 ---")
+        
+        nodes_map_v1 = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "source": {
+                    "webUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku",
+                    "type": "github",
+                    "cloneUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku.git"
+                },
+                "version": {
+                    "type": "tag",
+                    "value": "v1.0.0"
+                }
+            }
+        }
+        
+        try:
+            result_map_v1 = installer.install_all(timeout=10, nodes_map=nodes_map_v1)
+            
+            # 分析结果 - 检查是否添加了 nunchaku wheel
+            dep_result_v1 = result_map_v1.get('dependencies')
+            if dep_result_v1 and dep_result_v1.get('requirements_txt'):
+                requirements_lines = dep_result_v1['requirements_txt'].strip().split('\n')
+                print(f"\n实际安装的依赖 ({len(requirements_lines)} 个):")
+                
+                nunchaku_wheel_found = False
+                expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+                
+                for line in requirements_lines:
+                    print(f"  - {line}")
+                    if expected_wheel_url in line:
+                        nunchaku_wheel_found = True
+                
+                if nunchaku_wheel_found:
+                    print(f"\n✓ 成功: 检测到 nunchaku v1.0.0，已添加定制 wheel URL")
+                    print(f"  Wheel URL: {expected_wheel_url}")
+                else:
+                    print(f"\n⚠ 失败: 未找到预期的 nunchaku wheel URL")
+                    print(f"  预期: {expected_wheel_url}")
+            else:
+                print("\n⚠ 无依赖包需要安装")
+            
+        except Exception as e:
+            print(f"nunchaku v1.0.0 测试出错: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # 测试情景2: nunchaku 版本为 v0.2.0，不应该添加定制 wheel
+        print("\n--- 测试情景2: nunchaku v0.2.0 ---")
+        
+        nodes_map_v0 = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "source": {
+                    "webUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku",
+                    "type": "github",
+                    "cloneUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku.git"
+                },
+                "version": {
+                    "type": "tag",
+                    "value": "v0.2.0"
+                }
+            }
+        }
+        
+        try:
+            # 创建新的安装器实例以避免状态干扰
+            installer_v0 = PIPInstaller()
+            result_map_v0 = installer_v0.install_all(timeout=10, nodes_map=nodes_map_v0)
+            
+            # 分析结果 - 检查是否没有添加 nunchaku wheel
+            dep_result_v0 = result_map_v0.get('dependencies')
+            if dep_result_v0 and dep_result_v0.get('requirements_txt'):
+                requirements_lines = dep_result_v0['requirements_txt'].strip().split('\n')
+                print(f"\n实际安装的依赖 ({len(requirements_lines)} 个):")
+                
+                nunchaku_wheel_found = False
+                expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+                
+                for line in requirements_lines:
+                    print(f"  - {line}")
+                    if expected_wheel_url in line:
+                        nunchaku_wheel_found = True
+                
+                if not nunchaku_wheel_found:
+                    print(f"\n✓ 成功: nunchaku v0.2.0 未添加定制 wheel，符合预期")
+                else:
+                    print(f"\n⚠ 失败: nunchaku v0.2.0 不应该添加定制 wheel")
+            else:
+                print(f"\n✓ 正常: nunchaku v0.2.0 无需安装额外依赖")
+            
+        except Exception as e:
+            print(f"nunchaku v0.2.0 测试出错: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # 测试情景3: 没有 ComfyUI-nunchaku 节点
+        print("\n--- 测试情景3: 无 nunchaku 节点 ---")
+        
+        nodes_map_no_nunchaku = {
+            "basic-tools": {},
+            "data-processor": {}
+        }
+        
+        try:
+            installer_no_nunchaku = PIPInstaller()
+            result_map_no_nunchaku = installer_no_nunchaku.install_all(timeout=10, nodes_map=nodes_map_no_nunchaku)
+            
+            # 分析结果 - 确认没有 nunchaku 相关处理
+            dep_result_no_nunchaku = result_map_no_nunchaku.get('dependencies')
+            if dep_result_no_nunchaku and dep_result_no_nunchaku.get('requirements_txt'):
+                requirements_lines = dep_result_no_nunchaku['requirements_txt'].strip().split('\n')
+                
+                nunchaku_wheel_found = any(
+                    "nunchaku" in line.lower() and "modelscope.cn" in line
+                    for line in requirements_lines
+                )
+                
+                if not nunchaku_wheel_found:
+                    print(f"\n✓ 成功: 无 nunchaku 节点时未触发定制策略")
+                else:
+                    print(f"\n⚠ 异常: 无 nunchaku 节点但检测到 nunchaku wheel")
+            else:
+                print(f"\n✓ 正常: 无 nunchaku 节点时无需安装任何依赖")
+            
+        except Exception as e:
+            print(f"无 nunchaku 节点测试出错: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # 测试情景4: 无效的 nodes_map 结构
+        print("\n--- 测试情景4: 无效的 nodes_map 结构 ---")
+        
+        # 测试缺少 version 字段的情况
+        nodes_map_invalid = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "source": {
+                    "webUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku",
+                    "type": "github"
+                }
+                # 没有 version 字段
+            }
+        }
+        
+        try:
+            installer_invalid = PIPInstaller()
+            result_map_invalid = installer_invalid.install_all(timeout=10, nodes_map=nodes_map_invalid)
+            
+            # 分析结果 - 应该能够处理无效结构而不崩溃
+            dep_result_invalid = result_map_invalid.get('dependencies')
+            if dep_result_invalid:
+                print(f"\n✓ 成功: 处理无效 nodes_map 结构而不崩溃")
+                
+                # 检查是否没有添加 nunchaku wheel
+                if dep_result_invalid.get('requirements_txt'):
+                    requirements_lines = dep_result_invalid['requirements_txt'].strip().split('\n')
+                    nunchaku_wheel_found = any(
+                        "nunchaku" in line.lower() and "modelscope.cn" in line
+                        for line in requirements_lines
+                    )
+                    
+                    if not nunchaku_wheel_found:
+                        print(f"  ✓ 正确: 无效版本信息时未添加 nunchaku wheel")
+                    else:
+                        print(f"  ⚠ 异常: 无效版本信息但仍添加了 nunchaku wheel")
+                else:
+                    print(f"  ✓ 无依赖需要安装")
+            
+        except Exception as e:
+            print(f"无效 nodes_map 测试出错: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        print("\n==== nunchaku 定制化策略测试完成 ====\n")
+        
+        return {
+            "v1.0.0": result_map_v1 if 'result_map_v1' in locals() else None,
+            "v0.2.0": result_map_v0 if 'result_map_v0' in locals() else None,
+            "no_nunchaku": result_map_no_nunchaku if 'result_map_no_nunchaku' in locals() else None,
+            "invalid": result_map_invalid if 'result_map_invalid' in locals() else None
+        }
 
 
 if __name__ == "__main__":
@@ -527,6 +731,7 @@ if __name__ == "__main__":
         '3': 'test_empty_nodes_map',
         '4': 'test_timeout_scenario',
         '5': 'test_lightweight_timeout',
+        '6': 'test_nunchaku_custom_strategy',
         'all': 'RealScenarioTest'  # 运行所有测试
     }
     
@@ -536,6 +741,7 @@ if __name__ == "__main__":
     print("  3. 空节点映射测试 (test_empty_nodes_map)")
     print("  4. 超时停止测试 (test_timeout_scenario) - 使用大型包")
     print("  5. 轻量级超时测试 (test_lightweight_timeout) - 使用极短超时")
+    print("  6. ComfyUI-nunchaku 定制策略测试 (test_nunchaku_custom_strategy)")
     print("  all. 运行所有测试")
     print()
     
@@ -543,7 +749,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         test_choice = sys.argv[1]
     else:
-        test_choice = input("请选择要运行的测试 (1/2/3/4/5/all, 默认为 1): ").strip() or '1'
+        test_choice = input("请选择要运行的测试 (1/2/3/4/5/6/all, 默认为 1): ").strip() or '1'
     
     if test_choice in available_tests:
         test_name = available_tests[test_choice]
@@ -558,4 +764,4 @@ if __name__ == "__main__":
             unittest.main(argv=['first-arg-is-ignored', test_name], exit=False, verbosity=2)
     else:
         print(f"无效的选择: {test_choice}")
-        print("请选择 1, 2, 3, 4, 5 或 all")
+        print("请选择 1, 2, 3, 4, 5, 6 或 all")

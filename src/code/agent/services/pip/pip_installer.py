@@ -104,7 +104,7 @@ class PIPInstaller:
 
         try:
             # 步骤1: 合并所有 requirements.txt 并应用过滤
-            requirements_content = self._merge_requirements_from_nodes(nodes_to_install, timeout, start_time)
+            requirements_content = self._merge_requirements_from_nodes(nodes_to_install, nodes_map, timeout, start_time)
             
             # 步骤2: 使用 pip install -r 批量安装依赖包（强制超旲）
             dependency_record = self._install_merged_dependencies(requirements_content, timeout)
@@ -159,12 +159,11 @@ class PIPInstaller:
 
         return nodes_to_install
 
-    def _merge_requirements_from_nodes(self, nodes_to_install: List[str], timeout: float, start_time: float) -> str:
+    def _merge_requirements_from_nodes(self, nodes_to_install: List[str], nodes_map, timeout: float, start_time: float) -> str:
         """步骤1: 遍历并合并所有节点的 requirements.txt，应用过滤逻辑（如黑名单），输出最终的 requirements.txt 内容"""
         print(f"\n[Installer] ## Step 1: Merging requirements.txt from {len(nodes_to_install)} nodes...")
         
         self._merged_dependencies = {}
-        # TODO: 支持定制化插件依赖安装逻辑，例如Nunchaku，需要解析请求中的Nunchaku版本并安装对应轮子
         for node_name in nodes_to_install:
             if time.time() - start_time >= timeout:
                 raise TimeoutError(f"Timeout ({timeout}s) reached during requirements merging")
@@ -179,7 +178,10 @@ class PIPInstaller:
         
         # 应用过滤逻辑
         filtered_deps = self._filter_merged_dependencies()
-        
+
+        # 应用定制化依赖策略钩子
+        filtered_deps = self._apply_custom_dependency_strategies(filtered_deps, nodes_to_install, nodes_map)
+
         # 生成最终的 requirements.txt 内容
         requirements_content = self._generate_requirements_content(filtered_deps)
         
@@ -257,6 +259,106 @@ class PIPInstaller:
         
         return filtered
 
+    def _apply_custom_dependency_strategies(self, filtered_deps: Dict[str, DependencyInfo], nodes_to_install: List[str], nodes_map) -> Dict[str, DependencyInfo]:
+        """
+        应用定制化依赖策略钩子，处理特殊插件的依赖需求
+        
+        Args:
+            filtered_deps: 过滤后的依赖字典
+            nodes_to_install: 要安装的节点列表
+            nodes_map: 节点映射信息，包含版本等配置
+            
+        Returns:
+            更新后的依赖字典
+        """
+        print(f"\n[Installer] ## Applying custom dependency strategies...")
+        
+        # 策略1: ComfyUI-nunchaku 特殊处理
+        filtered_deps = self._handle_nunchaku_strategy(filtered_deps, nodes_to_install, nodes_map)
+        
+        # TODO: 在此处添加更多定制化策略
+        # 例如: filtered_deps = self._handle_other_custom_node_strategy(filtered_deps, nodes_to_install, nodes_map)
+        
+        return filtered_deps
+    
+    def _handle_nunchaku_strategy(self, filtered_deps: Dict[str, DependencyInfo], nodes_to_install: List[str], nodes_map) -> Dict[str, DependencyInfo]:
+        """
+        处理 ComfyUI-nunchaku 节点的特殊依赖策略
+        
+        Args:
+            filtered_deps: 过滤后的依赖字典
+            nodes_to_install: 要安装的节点列表
+            nodes_map: 节点映射信息
+            
+        Returns:
+            更新后的依赖字典
+        """
+        nunchaku_node_name = "ComfyUI-nunchaku"
+        
+        # 检查是否包含 ComfyUI-nunchaku 节点
+        if nunchaku_node_name not in nodes_to_install:
+            return filtered_deps
+        
+        print(f"[Installer] ## Found {nunchaku_node_name} node, applying special handling...")
+        
+        # 从 nodes_map 中获取版本信息
+        nunchaku_version = self._extract_nunchaku_version(nodes_map, nunchaku_node_name)
+        
+        if nunchaku_version == "v1.0.0":
+            print(f"[Installer] ## Detected nunchaku version {nunchaku_version}, adding custom wheel dependency...")
+            
+            # 添加定制的 wheel URL
+            wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+            
+            # 创建依赖信息对象
+            nunchaku_dep = DependencyInfo(
+                package_name=wheel_url,  # 使用完整的 URL 作为包名
+                version_spec="",          # wheel URL 无需版本规范
+                original_line=wheel_url,
+                source_nodes=[nunchaku_node_name]
+            )
+            
+            # 添加到依赖字典中
+            filtered_deps[wheel_url] = nunchaku_dep
+            
+            print(f"[Installer] ## Added nunchaku wheel: {wheel_url}")
+        else:
+            print(f"[Installer] ## Nunchaku version {nunchaku_version} does not require special handling")
+        
+        return filtered_deps
+    
+    def _extract_nunchaku_version(self, nodes_map, nunchaku_node_name: str) -> str:
+        """
+        从 nodes_map 中提取 nunchaku 节点的版本信息
+        
+        Args:
+            nodes_map: 节点映射信息
+            nunchaku_node_name: nunchaku 节点名称
+            
+        Returns:
+            版本字符串，如 "v1.0.0"
+        """
+        if not nodes_map or nunchaku_node_name not in nodes_map:
+            print(f"[Installer] ## Warning: No version info found for {nunchaku_node_name} in nodes_map")
+            return "unknown"
+        
+        node_config = nodes_map[nunchaku_node_name]
+        
+        try:
+            # 根据提供的结构：node_config.version.value
+            version_info = node_config.get('version', {})
+            if isinstance(version_info, dict):
+                version_value = version_info.get('value', 'unknown')
+                print(f"[Installer] ## Extracted nunchaku version: {version_value}")
+                return version_value
+            else:
+                print(f"[Installer] ## Warning: Invalid version structure in {nunchaku_node_name} config")
+                return "unknown"
+        except (KeyError, AttributeError, TypeError) as e:
+            print(f"[Installer] ## Error extracting version from {nunchaku_node_name}: {e}")
+            print(f"[Installer] ## Node config structure: {node_config}")
+            return "unknown"
+
     def _generate_requirements_content(self, filtered_deps: Dict[str, DependencyInfo]) -> str:
         """生成最终的 requirements.txt 内容"""
         if not filtered_deps:
@@ -326,7 +428,7 @@ class PIPInstaller:
                     result = subprocess.run(
                         install_cmd, 
                         timeout=timeout,  # 子进程超时
-                        env=self._get_script_env()
+                        env=self._get_pip_install_env()
                     )
                     
                     if result.returncode == 0:
@@ -517,6 +619,19 @@ class PIPInstaller:
         if 'COMFYUI_FOLDERS_BASE_PATH' not in new_env:
             new_env['COMFYUI_FOLDERS_BASE_PATH'] = constants.COMFYUI_DIR
 
+        return new_env
+    
+    def _get_pip_install_env(self):
+        """
+        执行pip install -r时需要的环境变量，特别是清除代理设置
+        """
+        new_env = self._get_script_env()  # 先获取基本环境
+        
+        # 清除代理环境变量，避免pip安装时受代理影响
+        proxy_vars = ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY']
+        for proxy_var in proxy_vars:
+            new_env.pop(proxy_var, None)
+        
         return new_env
 
     def _get_possible_nodes(self, custom_node_path):

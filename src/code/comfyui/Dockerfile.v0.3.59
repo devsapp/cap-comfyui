@@ -16,25 +16,19 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
 
 # 核心功能插件
 RUN cd ${COMFYUI_DIR}/custom_nodes && \
-
     # ControlNet 支持 - 精确控制图像生成
     git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git && \
-
     # 图像处理工具套件
     git clone https://github.com/WASasquatch/was-node-suite-comfyui.git && \
-
     # 自定义脚本和UI增强
     git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git && \
-
-
+    # 图层样式插件
     git clone https://github.com/chflame163/ComfyUI_LayerStyle.git && \
-
     git clone https://github.com/chflame163/ComfyUI_LayerStyle_Advance.git && \
-
+    # 易用性增强
     git clone https://github.com/yolain/ComfyUI-Easy-Use.git && \
-
     git clone https://github.com/rgthree/rgthree-comfy.git && \
-
+    # 工具插件
     git clone https://github.com/crystian/comfyui-crystools.git
 
 
@@ -68,8 +62,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV COMFYUI_DIR="/root/comfyui"
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
-   find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
-
+    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
 
 # 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"

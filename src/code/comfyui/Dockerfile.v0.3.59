@@ -62,13 +62,25 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV COMFYUI_DIR="/root/comfyui"
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
+    echo "=== Installing ComfyUI core requirements ===" && \
+    echo "Current working directory: $(pwd)" && \
+    echo "Target directory: ${COMFYUI_DIR}" && \
+    echo "Found requirements files:" && \
+    find ${COMFYUI_DIR} -type f -name requirements.txt | tee /tmp/comfyui_requirements.txt && \
+    echo "Installing requirements..." && \
+    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} sh -c 'echo "Installing: {}" && venv/bin/pip install -r {} --no-cache-dir'
 
 # 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
 COPY --from=codes ${COMFYUI_NODE_DIR} ${COMFYUI_NODE_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
+    echo "=== Installing ComfyUI plugins requirements ===" && \
+    echo "Current working directory: $(pwd)" && \
+    echo "Target directory: ${COMFYUI_NODE_DIR}" && \
+    echo "Found plugin requirements files:" && \
+    find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | tee /tmp/plugins_requirements.txt && \
+    echo "Installing plugin requirements..." && \
+    find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | xargs -I {} sh -c 'echo "Installing: {}" && venv/bin/pip install -r {} --no-cache-dir'
 
 FROM agent AS agent
 

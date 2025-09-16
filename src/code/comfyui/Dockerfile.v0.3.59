@@ -14,28 +14,28 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     cd ComfyUI-Manager && \
     git checkout "3.35"
 
-# 核心功能插件
-RUN cd ${COMFYUI_DIR}/custom_nodes && \
+# # 核心功能插件
+# RUN cd ${COMFYUI_DIR}/custom_nodes && \
 
-    # ControlNet 支持 - 精确控制图像生成
-    git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git && \
+#     # ControlNet 支持 - 精确控制图像生成
+#     git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git && \
 
-    # 图像处理工具套件
-    git clone https://github.com/WASasquatch/was-node-suite-comfyui.git && \
+#     # 图像处理工具套件
+#     git clone https://github.com/WASasquatch/was-node-suite-comfyui.git && \
 
-    # 自定义脚本和UI增强
-    git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git && \
+#     # 自定义脚本和UI增强
+#     git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git && \
 
 
-    git clone https://github.com/chflame163/ComfyUI_LayerStyle.git && \
+#     git clone https://github.com/chflame163/ComfyUI_LayerStyle.git && \
 
-    git clone https://github.com/chflame163/ComfyUI_LayerStyle_Advance.git && \
+#     git clone https://github.com/chflame163/ComfyUI_LayerStyle_Advance.git && \
 
-    git clone https://github.com/yolain/ComfyUI-Easy-Use.git && \
+#     git clone https://github.com/yolain/ComfyUI-Easy-Use.git && \
 
-    git clone https://github.com/rgthree/rgthree-comfy.git && \
+#     git clone https://github.com/rgthree/rgthree-comfy.git && \
 
-    git clone https://github.com/crystian/comfyui-crystools.git
+#     git clone https://github.com/crystian/comfyui-crystools.git
 
 
 FROM python:3.10.16-slim AS models

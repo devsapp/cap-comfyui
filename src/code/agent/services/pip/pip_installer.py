@@ -304,11 +304,11 @@ class PIPInstaller:
         # 从 nodes_map 中获取版本信息
         nunchaku_version = self._extract_nunchaku_version(nodes_map, nunchaku_node_name)
         
-        if nunchaku_version == "v1.0.0":
+        if nunchaku_version in ["v1.0.0", "v1.0.1"]:
             print(f"[Installer] ## Detected nunchaku version {nunchaku_version}, adding custom wheel dependency...")
             
-            # 添加定制的 wheel URL
-            wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+            # v1.0.0 和 v1.0.1 统一使用同一个 wheel URL
+            wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.8-cp310-cp310-linux_x86_64.whl"
             
             # 创建依赖信息对象
             nunchaku_dep = DependencyInfo(

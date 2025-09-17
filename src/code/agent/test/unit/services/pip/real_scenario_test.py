@@ -556,7 +556,7 @@ click>=8.0
                 print(f"\n实际安装的依赖 ({len(requirements_lines)} 个):")
                 
                 nunchaku_wheel_found = False
-                expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+                expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.8-cp310-cp310-linux_x86_64.whl"
                 
                 for line in requirements_lines:
                     print(f"  - {line}")
@@ -607,7 +607,7 @@ click>=8.0
                 print(f"\n实际安装的依赖 ({len(requirements_lines)} 个):")
                 
                 nunchaku_wheel_found = False
-                expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+                expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.8-cp310-cp310-linux_x86_64.whl"
                 
                 for line in requirements_lines:
                     print(f"  - {line}")

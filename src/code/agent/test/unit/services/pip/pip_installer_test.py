@@ -916,7 +916,51 @@ class TestCustomDependencyStrategies(TestPIPInstaller):
             )
         
         # 应该添加 nunchaku wheel URL
-        expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+        expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.8-cp310-cp310-linux_x86_64.whl"
+        
+        self.assertIn(expected_wheel_url, result)
+        self.assertIn("requests", result)  # 原有依赖仍在
+        
+        # 验证 wheel 依赖的结构
+        wheel_dep = result[expected_wheel_url]
+        self.assertEqual(wheel_dep.package_name, expected_wheel_url)
+        self.assertEqual(wheel_dep.version_spec, "")
+        self.assertEqual(wheel_dep.source_nodes, ["ComfyUI-nunchaku"])
+
+    def test_handle_nunchaku_strategy_v1_0_1(self):
+        """测试 ComfyUI-nunchaku v1.0.1 的特殊处理"""
+        filtered_deps = {
+            "requests": DependencyInfo(
+                package_name="requests",
+                version_spec=">=2.25.0",
+                original_line="requests>=2.25.0",
+                source_nodes=["ComfyUI-nunchaku"]
+            )
+        }
+        
+        nodes_to_install = ["ComfyUI-nunchaku"]
+        nodes_map = {
+            "ComfyUI-nunchaku": {
+                "name": "ComfyUI-nunchaku",
+                "source": {
+                    "webUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku",
+                    "type": "github",
+                    "cloneUrl": "https://github.com/nunchaku-tech/ComfyUI-nunchaku.git"
+                },
+                "version": {
+                    "type": "tag",
+                    "value": "v1.0.1"
+                }
+            }
+        }
+        
+        with patch('builtins.print'):  # Suppress print output
+            result = self.installer._handle_nunchaku_strategy(
+                filtered_deps, nodes_to_install, nodes_map
+            )
+        
+        # 应该添加 nunchaku v1.0.1 的 wheel URL（与 v1.0.0 相同）
+        expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.8-cp310-cp310-linux_x86_64.whl"
         
         self.assertIn(expected_wheel_url, result)
         self.assertIn("requests", result)  # 原有依赖仍在
@@ -1251,7 +1295,7 @@ class TestInstallAllIntegrationWithCustomStrategies(TestPIPInstaller):
         called_requirements = mock_dep_install.call_args[0][0]  # 第一个参数
         
         # 应该包含 nunchaku wheel URL
-        expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.6-cp310-cp310-linux_x86_64.whl"
+        expected_wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.8-cp310-cp310-linux_x86_64.whl"
         self.assertIn(expected_wheel_url, called_requirements)
         
         # 也应该包含原有的 requirements

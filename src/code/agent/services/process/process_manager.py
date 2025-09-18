@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 import constants
+from constants import BACKEND_TYPE
 
 
 class ProcessManager(ABC):
@@ -31,7 +32,7 @@ class ProcessManager(ABC):
                 universal_newlines=True,
                 bufsize=1  # 行缓冲
             )
-            print(f"Started process with PID: {self.process.pid}")
+            print(f"Started {BACKEND_TYPE.capitalize()} process with PID: {self.process.pid}")
 
             # 启动标准输出和标准错误的读取线程
             def read_output(pipe):
@@ -52,7 +53,7 @@ class ProcessManager(ABC):
             self.stdout_thread.start()
             self.stderr_thread.start()
         except Exception as e:
-            print(f"Failed to start process: {e}")
+            print(f"Failed to start {BACKEND_TYPE.capitalize()} process: {e}")
             raise
 
     def wait_until_ready(self,
@@ -73,12 +74,12 @@ class ProcessManager(ABC):
         while True:
             # 检查是否超时
             if time.time() - start_time > timeout:
-                print(f"Process startup timed out after {timeout} seconds")
-                raise RuntimeError(f"Process startup timed out")
+                print(f"{BACKEND_TYPE.capitalize()} process startup timed out after {timeout} seconds")
+                raise RuntimeError(f"{BACKEND_TYPE.capitalize()} process startup timed out")
 
             # 检查是否就绪
             if self.is_ready():
-                print("Process is ready")
+                print(f"{BACKEND_TYPE.capitalize()} process is ready")
                 # 进程就绪后启动liveness探针
                 self.start_health_check()
                 return
@@ -91,7 +92,7 @@ class ProcessManager(ABC):
         while self.should_monitor:
             try:
                 if not self.is_alive():
-                    print("Process is not living, restarting health check...")
+                    print(f"{BACKEND_TYPE.capitalize()} process is not running, waiting for restart...")
                     self._on_process_died()
                 time.sleep(poll_interval)
             except Exception as e:
@@ -102,7 +103,7 @@ class ProcessManager(ABC):
         """进程死亡时的回调处理"""
         with self._lock:
             if self.process is not None:
-                print(f"Process (PID: {self.process.pid}) died unexpectedly")
+                print(f"{BACKEND_TYPE.capitalize()} process (PID: {self.process.pid}) exited")
                 # TODO: 增加处理逻辑
 
     def start_health_check(self, poll_interval: float = constants.DEFAULT_LIVENESS_POLL_INTERVAL):
@@ -116,7 +117,7 @@ class ProcessManager(ABC):
                     daemon=True
                 )
                 self.health_check_thread.start()
-                print("Health check thread started")
+                print(f"{BACKEND_TYPE.capitalize()} health check thread started")
 
     def stop(self) -> None:
         """停止子进程"""
@@ -152,9 +153,9 @@ class ProcessManager(ABC):
                 self.stderr_thread = None
                 self.health_check_thread = None
 
-                print("Process killed")
+                print(f"{BACKEND_TYPE.capitalize()} process killed")
             except Exception as e:
-                print(f"Error stopping process: {e}")
+                print(f"Error stopping {BACKEND_TYPE.capitalize()} process: {e}")
                 raise
 
     @abstractmethod

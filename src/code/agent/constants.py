@@ -13,6 +13,7 @@ AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
 WORK_DIR = os.getenv('WORK_DIR', '/root')
 MNT_DIR = os.getenv('MODEL_ASSET_DIR', '/mnt/auto')
 VENV_DIR = os.getenv('VENV_DIR', WORK_DIR + '/venv')
+VENV_EXECUTABLE = VENV_DIR + '/bin/python'
 MODEL_DIR = os.getenv('MODEL_DIR', MNT_DIR + '/models')
 SKIP_SNAPSHOT_LOADING = os.getenv('SKIP_SNAPSHOT_LOADING')
 # API函数启动时是否跳过加载NAS中的custom_nodes.zip到实例磁盘，若跳过则可能遇到部分插件在多个实例并发读写NAS中插件目录时的冲突情况
@@ -61,8 +62,11 @@ else:
 APP_HOST = f"127.0.0.1:{BACKEND_PROCESS_PORT}"
 
 DEFAULT_READINESS_POLL_INTERVAL = 3
-DEFAULT_READINESS_TIMEOUT = 300
+DEFAULT_READINESS_TIMEOUT = 900  # 15min waiting for comfyui subprocess start
 DEFAULT_LIVENESS_POLL_INTERVAL = 5
+
+# 插件安装相关超时配置
+DEFAULT_INSTALL_TIMEOUT = 600  # 10min default timeout for custom nodes installation
 
 INSTANCE_ID = os.getenv("FC_INSTANCE_ID", socket.gethostname())
 # OSS

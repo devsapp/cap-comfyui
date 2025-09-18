@@ -4,3 +4,4 @@ flask-sock
 websocket-client
 oss2
 flask-cors
+chardet

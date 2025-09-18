@@ -26,7 +26,7 @@ class SnapshotLoader(ABC):
 
         service.sub_status = StartingSubStatus.EXTRACTING.value
         with self.timer("Extracting snapshot") as t_extract:
-            self._extract()
+            self._extract(snapshot_path)
         stage_cost["time_extract"] = round(t_extract.elapsed, 2)
 
         self._create_symlinks(snapshot_path)
@@ -47,7 +47,7 @@ class SnapshotLoader(ABC):
         pass
 
     @abstractmethod
-    def _extract(self):
+    def _extract(self, snapshot_path: str):
         """解压依赖"""
         pass
 
@@ -69,7 +69,7 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
         if os.path.exists(cache_path):
             file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache.zip")
 
-    def _extract(self):
+    def _extract(self, snapshot_path: str):
         file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
         file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
         file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
@@ -98,6 +98,9 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         file_ops.remove(constants.VENV_DIR)
 
     def _download(self, snapshot_path: str):
+        if constants.SKIP_SNAPSHOT_DOWNLOADING: 
+            return
+        
         file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
         file_ops.copy(f"{snapshot_path}/comfyui.zip", f"{constants.WORK_DIR}/comfyui.zip")
         cache_path = f"{snapshot_path}/.cache.zip"
@@ -106,19 +109,31 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         if not constants.SKIP_NODES_LOADING:
             file_ops.copy(f"{snapshot_path}/custom_nodes.zip", f"{constants.WORK_DIR}/custom_nodes.zip")
 
-    def _extract(self):
-        file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
-        file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
-        file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
-        file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
-        cache_path = f"{constants.WORK_DIR}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.extract(cache_path)
-            file_ops.remove(cache_path)
-        if not constants.SKIP_NODES_LOADING:
-            file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
-            file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
-            file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
+    def _extract(self, snapshot_path: str):
+        if constants.SKIP_SNAPSHOT_DOWNLOADING: 
+            file_ops.extract(f"{snapshot_path}/venv.tar", output_dir=f"{constants.WORK_DIR}")
+            file_ops.extract(f"{snapshot_path}/comfyui.zip", output_dir=f"{constants.WORK_DIR}")
+
+            cache_path = f"{snapshot_path}/.cache.zip"
+            if os.path.exists(cache_path):
+                file_ops.extract(cache_path, output_dir=f"{constants.WORK_DIR}/.cache")
+
+            if not constants.SKIP_NODES_LOADING:
+                file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")
+                file_ops.extract(f"{snapshot_path}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
+        else:
+            file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
+            file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
+            file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
+            file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
+            cache_path = f"{constants.WORK_DIR}/.cache.zip"
+            if os.path.exists(cache_path):
+                file_ops.extract(cache_path)
+                file_ops.remove(cache_path)
+            if not constants.SKIP_NODES_LOADING:
+                file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
+                file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
+                file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
 
     def _create_symlinks(self, snapshot_path: str):
         file_ops.create_symlink(
@@ -147,7 +162,7 @@ class SDSnapshotLoader(SnapshotLoader):
         if os.path.exists(cache_path):
             file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache.zip")
 
-    def _extract(self):
+    def _extract(self, snapshot_path: str):
         file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
         file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
         file_ops.extract(f"{constants.WORK_DIR}/stable-diffusion-webui.zip")

@@ -15,6 +15,7 @@ MNT_DIR = os.getenv('MODEL_ASSET_DIR', '/mnt/auto')
 VENV_DIR = os.getenv('VENV_DIR', WORK_DIR + '/venv')
 MODEL_DIR = os.getenv('MODEL_DIR', MNT_DIR + '/models')
 SKIP_SNAPSHOT_LOADING = os.getenv('SKIP_SNAPSHOT_LOADING')
+SKIP_SNAPSHOT_DOWNLOADING = os.getenv('SKIP_SNAPSHOT_DOWNLOADING').lower() == 'true'
 # API函数启动时是否跳过加载NAS中的custom_nodes.zip到实例磁盘，若跳过则可能遇到部分插件在多个实例并发读写NAS中插件目录时的冲突情况
 SKIP_NODES_LOADING = os.getenv('SKIP_NODES_LOADING', '').lower() == 'true'
 SNAPSHOT_DIR = MNT_DIR + '/snapshots'
@@ -36,6 +37,7 @@ COMFYUI_BOOT_CMD = [
     f"{MNT_DIR}/output",
     "--disable-metadata"
 ]
+COMFY_USE_CPU = os.getenv('COMFY_USE_CPU').lower() == 'true'
 SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
 SD_PROCESS_PORT = 7860
 SD_BOOT_CMD = [
@@ -53,6 +55,9 @@ if USE_API_MODE:
     SD_PROCESS_PORT = 7861
 
 if BACKEND_TYPE == TYPE_COMFYUI:
+    if COMFY_USE_CPU:
+        COMFYUI_BOOT_CMD.append("--cpu")
+
     BACKEND_PROCESS_PORT = COMFYUI_PROCESS_PORT
     BOOT_CMD = COMFYUI_BOOT_CMD
 else:

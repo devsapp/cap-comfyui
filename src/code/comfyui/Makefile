@@ -1,9 +1,9 @@
 # 定义变量
 REGION ?= cn-hangzhou
 # COMFYUI_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-comfyui
-COMFYUI_IMAGE = comfyui:v0.3.59
+COMFYUI_IMAGE = comfyui:deepgpu0903
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.59-alpha
+OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.59-deepgpu-alpha
 
 .PHONY: upgrade
 upgrade: build upload-base

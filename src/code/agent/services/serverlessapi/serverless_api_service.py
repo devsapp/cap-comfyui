@@ -62,6 +62,10 @@ class ServerlessApiService:
         log("INFO", f"ServerlessApiService initialized with endpoint: {self.endpoint}")
         log("INFO", f"Current log level: {constants.LOG_LEVEL}")
 
+        # 用于检测状态变化的缓存
+        self._last_status_cache = {}  # task_id -> last_status_summary
+        self._cache_lock = threading.Lock()
+
     def get_credentials(self):
         """
         获取阿里云访问凭证
@@ -509,6 +513,17 @@ class ServerlessApiService:
             finally:
                 pass
 
+    def refresh_storage_cache(self):
+        """刷新存储缓存，确保能获取到最新文件
+
+        用于解决实例冻结导致的 NFS 缓存问题
+        """
+        if self.store and hasattr(self.store, 'refresh_cache'):
+            try:
+                self.store.refresh_cache()
+            except Exception as e:
+                log("WARNING", f"Failed to refresh storage cache: {e}")
+
     def get_status_from_store(self, task_id: str):
         """
         从持久化存储中读取任务状态历史
@@ -521,21 +536,21 @@ class ServerlessApiService:
         """
         if not self.store:
             return []
-        
+
         value = self.store.get(task_id)
         results = []
-        
+
         for line in value.split("\n"):
             if not line:
                 continue
-            
+
             # 尝试解析为 JSON
             try:
                 results.append(json.loads(line))
             except (json.JSONDecodeError, ValueError):
                 # 如果不是 JSON，原封不动返回原始字符串
                 results.append(line)
-        
+
         return results
 
     def run(
@@ -587,11 +602,11 @@ class ServerlessApiService:
                     # 忽略空消息
                     if not message or not message.strip():
                         return
-                    
+
                     # 先持久化原始消息（不管是否为 JSON）
                     if task_id:
                         self.put_status_to_store(task_id, message)
-                    
+
                     # 尝试解析 JSON
                     try:
                         msg = json.loads(message)
@@ -607,7 +622,7 @@ class ServerlessApiService:
                     current_prompt_id = msg.get("data", {}).get("prompt_id", "")
 
                     # 记录收到的消息类型（DEBUG 级别）
-                    log("DEBUG", f"websocket message: type={msg_type}, node={node_id}, prompt_id={current_prompt_id}, message={message}")         
+                    log("DEBUG", f"websocket message: type={msg_type}, node={node_id}, prompt_id={current_prompt_id}, message={message}")
 
                     if msg_type == "status":
                         nonlocal client_id
@@ -652,10 +667,6 @@ class ServerlessApiService:
                             constants.ERROR_CODE.EXECUTION_FAILED.value,
                             msg.get("data"),
                         )
-                    elif msg_type == "execution_success":
-                        # 执行成功
-                        log("INFO", f"execution success for prompt_id={current_prompt_id}, closing websocket")
-                        ws.close()
                     elif msg_type == "execution_start":
                         log("INFO", f"execution started for prompt_id={current_prompt_id}")
                     elif msg_type == "progress":
@@ -699,6 +710,9 @@ class ServerlessApiService:
             if not prompt_id:
                 raise Exception("can not get prompt_id from ComfyUI")
 
+            # 记录执行开始时间
+            execution_start_time = time.time()
+
             # 已经有结果，则不必等待
             if len(self.api_get_history(prompt_id)) > 0:
                 ws.close()
@@ -724,9 +738,10 @@ class ServerlessApiService:
                             break
                     except Exception as e:
                         log("DEBUG", f"history check failed: {e}")
-                
-                elapsed = time.time() - start_time
-                log("INFO", f"workflow completed in {elapsed:.1f}s")
+
+            # 计算执行时间
+            execution_time = time.time() - execution_start_time
+            log("INFO", f"workflow completed (prompt_id={prompt_id}, execution_time={execution_time:.2f}s, task_id={task_id})")
 
             if ws_err:
                 log("ERROR", f"websocket error occurred: {ws_err}")
@@ -736,6 +751,11 @@ class ServerlessApiService:
             result = self.get_history_result(
                 prompt_id, output_base64=output_base64, output_oss=output_oss
             )
+
+            # 添加执行时间到结果数据中
+            if result and "data" in result:
+                result["data"]["execution_time"] = execution_time
+
             log("DEBUG", f"saving result to store for task_id: {task_id}")
             self.put_status_to_store(task_id, json.dumps(result))
             log("INFO", f"finished running prompt: {prompt_id}")

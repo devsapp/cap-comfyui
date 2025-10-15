@@ -34,7 +34,8 @@ class BackendProcessManager(ProcessManager):
         Returns:
             bool: 如果在2秒内收到正常响应则返回True，否则返回False
         """
-        if constants.USE_API_MODE:  # TODO: 针对ComfyUI和SD各类子进程崩溃情况作梳理，此前API模式忽略监控检查
+        # GPU模式下跳过健康检查
+        if constants.USE_API_MODE or constants.COMFYUI_MODE == 'gpu':
             return True
 
         try:

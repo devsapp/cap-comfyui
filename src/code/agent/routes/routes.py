@@ -48,7 +48,9 @@ class Routes:
             # API模式需要自动启动comfyui进程
             # TODO 防止抛出5xx导致函数计算一直重试产生大量费用
             service = ManagementService()
-            service.start(constants.AUTO_LAUNCH_SNAPSHOT_NAME)
+            
+            print(f"Initializing function with ComfyUI mode: {constants.COMFYUI_MODE}")
+            service.start('latest-dev', nodes_map={})  # 使用latest-dev快照，与_tryStartIGService保持一致
 
             if (
                 constants.PREWARM_PROMPT

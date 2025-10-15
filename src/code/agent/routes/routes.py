@@ -1,6 +1,8 @@
 import json
 import logging
+import os
 import threading
+import time
 import traceback
 
 import requests
@@ -14,6 +16,7 @@ from services.management_service import BackendStatus, ManagementService, Action
 from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
 from services.serverlessapi.serverless_api_service import ServerlessApiService
+from services.gateway import CpuGatewayService, HistoryGatewayService
 
 
 class Routes:
@@ -24,6 +27,7 @@ class Routes:
         import logging
         log = logging.getLogger('werkzeug')
         log.setLevel(logging.ERROR)
+    
 
     def setup_routes(self):
 
@@ -48,7 +52,11 @@ class Routes:
             # API模式需要自动启动comfyui进程
             # TODO 防止抛出5xx导致函数计算一直重试产生大量费用
             service = ManagementService()
-            service.start(constants.AUTO_LAUNCH_SNAPSHOT_NAME)
+            
+            # 使用环境变量指定的snapshot，默认为latest-dev
+            snapshot_name = os.environ.get('AUTO_LAUNCH_SNAPSHOT_NAME', 'latest-dev')
+            print(f"Initializing function with ComfyUI mode: {constants.COMFYUI_MODE}, snapshot: {snapshot_name}")
+            service.start(snapshot_name, nodes_map={})
 
             if (
                 constants.PREWARM_PROMPT
@@ -87,52 +95,108 @@ class Routes:
             print("FC PreStop End RequestId: " + request_id)
             return "OK"
 
-        @self._sock.route('/<path:path>')
-        def proxy_ws(ws, path):
-            backend_status = management.service.status
-            if backend_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
-                return jsonify({
-                    "status": "failed",
-                    "message": "Please start your comfyui/sd service first"
-                }), 500
-
-            # print(f"Forwarding websocket request for path: {path}")
-            target_url = f"ws://{constants.APP_HOST}/{path}"
-
-            def on_message(_, message):
+        # CPU模式：接收ComfyUI原生的WebSocket连接，但推送基于任务队列的真实状态
+        if constants.COMFYUI_MODE == "cpu":
+            @self._sock.route('/ws')
+            def comfyui_compatible_ws(ws):
+                """
+                CPU函数接收ComfyUI原生的WebSocket连接
+                保持与ComfyUI前端完全兼容，但推送的是基于任务队列和状态轮询的真实状态
+                """
+                from services.gateway import task_queue_manager
+                from services.process.websocket.websocket_manager import ws_manager
+                
                 try:
-                    ws.send(message)
-                except Exception as ex:
-                    logging.error(f"Error sending message to client: {ex}")
+                    ws_manager.add_connection(ws)
+                    print(f"[ComfyUI-WS] New ComfyUI WebSocket connection established")
+                    
+                    # 发送初始状态消息（模拟ComfyUI原生行为）
+                    client_id = f"cpu_client_{int(time.time() * 1000)}"
+                    ws.send(json.dumps({
+                        "type": "status",
+                        "data": {
+                            "sid": client_id,
+                            "status": {
+                                "exec_info": {
+                                    "queue_remaining": task_queue_manager._get_pending_task_count()
+                                }
+                            }
+                        }
+                    }))
+                    
+                    # 设置客户端ID，用于后续关联任务
+                    setattr(ws, '_comfyui_client_id', client_id)
+                    
+                    # 将客户端ID与连接关联在WebSocketManager中
+                    ws_manager.associate_client_id_with_connection(ws, client_id)
+                    
+                    while True:
+                        try:
+                            message = ws.receive()
+                            # ComfyUI前端可能会发送一些控制消息，我们可以在这里处理
+                            # 但主要的状态推送是由StatusPoller触发的
+                            print(f"[ComfyUI-WS] Received message from ComfyUI frontend: {message[:100]}...")
+                            
+                        except Exception as e:
+                            if "Connection closed" in str(e):
+                                break
+                            print(f"[ComfyUI-WS] Error receiving message: {e}")
+                            break
+                        
+                except Exception as e:
+                    print(f"[ComfyUI-WS] Connection error: {e}")
+                finally:
+                    ws_manager.remove_connection(ws)
+                    print(f"[ComfyUI-WS] ComfyUI WebSocket connection closed")
+        
+        # GPU模式：保留原有的ComfyUI WebSocket代理功能
+        elif constants.COMFYUI_MODE == "gpu":
+            @self._sock.route('/<path:path>')
+            def proxy_ws(ws, path):
+                backend_status = management.service.status
+                if backend_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
+                    return jsonify({
+                        "status": "failed",
+                        "message": "Please start your comfyui/sd service first"
+                    }), 500
 
-            def on_error(_, error):
-                logging.error(f"WebSocket client error: {error}")
+                # print(f"Forwarding websocket request for path: {path}")
+                target_url = f"ws://{constants.APP_HOST}/{path}"
 
-            def on_close(_, close_status_code, close_msg):
-                logging.info(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+                def on_message(_, message):
+                    try:
+                        ws.send(message)
+                    except Exception as ex:
+                        logging.error(f"Error sending message to client: {ex}")
 
-            ws_client = websocket.WebSocketApp(
-                target_url,
-                on_message=on_message,
-                on_error=on_error,
-                on_close=on_close
-            )
+                def on_error(_, error):
+                    logging.error(f"WebSocket client error: {error}")
 
-            ws_thread = threading.Thread(target=ws_client.run_forever)
-            ws_thread.daemon = True
-            ws_thread.start()
+                def on_close(_, close_status_code, close_msg):
+                    logging.info(f"WebSocket connection closed: {close_status_code} - {close_msg}")
 
-            from services.process.websocket.websocket_manager import ws_manager
-            try:
-                ws_manager.add_connection(ws)
-                while True:
-                    message = ws.receive()
-                    ws_client.send(message)
-            except Exception as e:
-                print(f"ws event occurs: {e}")
-            finally:
-                ws_manager.remove_connection(ws)
-                ws_client.close()
+                ws_client = websocket.WebSocketApp(
+                    target_url,
+                    on_message=on_message,
+                    on_error=on_error,
+                    on_close=on_close
+                )
+
+                ws_thread = threading.Thread(target=ws_client.run_forever)
+                ws_thread.daemon = True
+                ws_thread.start()
+
+                from services.process.websocket.websocket_manager import ws_manager
+                try:
+                    ws_manager.add_connection(ws)
+                    while True:
+                        message = ws.receive()
+                        ws_client.send(message)
+                except Exception as e:
+                    print(f"ws event occurs: {e}")
+                finally:
+                    ws_manager.remove_connection(ws)
+                    ws_client.close()
 
         @self.app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         @self.app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
@@ -142,7 +206,56 @@ class Routes:
                 return jsonify({
                     "status": "failed",
                     "message": "Please start your comfyui/sd service first"
-                }), 500
+                    }), 500
+            
+            # CPU 模式：拦截ComfyUI原生的queue接口
+            if (constants.COMFYUI_MODE == "cpu" and 
+                path == "api/queue"):
+                
+                try:
+                    # 使用函数内导入，避免模块导入时的初始化阻塞
+                    from services.gateway import get_task_queue_manager
+                    task_queue_manager = get_task_queue_manager()
+                    
+                    # 使用网关服务处理队列请求
+                    gateway_service = CpuGatewayService()
+                    
+                    if request.method == "GET":
+                        return gateway_service.handle_queue_get_request(task_queue_manager)
+                    elif request.method == "POST":
+                        return gateway_service.handle_queue_post_request(task_queue_manager)
+                        
+                except Exception as e:
+                    import traceback
+                    error_msg = f"Failed to handle queue request: {str(e)}"
+                    print(f"[CPU Router] {error_msg}\nStacktrace:\n{traceback.format_exc()}")
+                    
+                    return jsonify({
+                        "error": {
+                            "type": "queue_operation_error",
+                            "message": error_msg
+                        }
+                    }), 500
+
+            # CPU 模式：异步转发 api/prompt 到 GPU 函数
+            if (constants.COMFYUI_MODE == "cpu" and 
+                path == "api/prompt" and request.method == "POST"):
+                
+                # 使用网关服务处理 prompt 请求
+                from services.gateway import task_queue_manager
+                gateway_service = CpuGatewayService()
+                return gateway_service.handle_prompt_request_async(task_queue_manager)
+            
+            # 注意：GPU模式下不再处理/api/prompt，因为CPU实例直接转发到/api/serverless/run
+
+            # 拦截 ComfyUI history API，提供基于持久化存储的历史记录管理
+            if (constants.BACKEND_TYPE == constants.TYPE_COMFYUI and 
+                path.startswith("api/history")):
+                
+                # 使用 History 网关服务处理历史记录请求
+                api_service = ServerlessApiService()
+                history_gateway = HistoryGatewayService()
+                return history_gateway.handle_history_request(api_service, path)
 
             # issue: https://teambition.alibaba-inc.com/task/67c96194e6efb1c42a7ee904
             original_uri = request.environ['RAW_URI']

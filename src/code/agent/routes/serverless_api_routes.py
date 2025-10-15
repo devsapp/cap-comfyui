@@ -9,6 +9,7 @@ from services.serverlessapi.serverless_api_service import (
     ComfyUIException,
     ServerlessApiService,
 )
+from services.gateway import task_queue_manager
 
 from flask_sock import Sock
 from simple_websocket import Server
@@ -46,6 +47,103 @@ class ServerlessApiRoutes:
                 }, 400
 
             return self.service.get_status_from_store(task_id)
+        
+        @self.bp.get("/queue/status")
+        @cross_origin()
+        def get_queue_status():
+            """
+            获取任务队列状态
+            
+            HTTP GET `/api/serverless/queue/status`
+            
+            返回队列的整体状态信息、所有任务列表
+            """
+            return task_queue_manager.get_queue_status()
+        
+        @self.bp.get("/queue/task/<task_id>")
+        @cross_origin()
+        def get_queue_task(task_id: str):
+            """
+            获取队列中特定任务的信息
+            
+            HTTP GET `/api/serverless/queue/task/{task_id}`
+            
+            返回任务的详细信息（仅基本信息，不包含具体执行状态）
+            """
+            task_info = task_queue_manager.get_task_info(task_id)
+            if not task_info:
+                return {
+                    "type": "error",
+                    "error_code": constants.ERROR_CODE.INVALID_PARAMS.value,
+                    "error_message": f"Task {task_id} not found in queue",
+                }, 404
+            
+            return task_info
+        
+        @self.bp.post("/queue/broadcast")
+        @cross_origin()
+        def broadcast_queue_status():
+            """
+            手动触发队列状态广播
+            
+            HTTP POST `/api/serverless/queue/broadcast`
+            
+            立即向所有WebSocket连接广播当前队列状态
+            """
+            try:
+                task_queue_manager.broadcast_queue_status_immediately()
+                return {
+                    "status": "success",
+                    "message": "Queue status broadcasted successfully"
+                }
+            except Exception as e:
+                return {
+                    "type": "error",
+                    "error_code": constants.ERROR_CODE.UNCLASSIFY.value,
+                    "error_message": f"Failed to broadcast queue status: {str(e)}",
+                }, 500
+        
+        @self.bp.post("/queue/broadcast/config")
+        @cross_origin()
+        def configure_queue_broadcast():
+            """
+            配置队列状态广播
+            
+            HTTP POST `/api/serverless/queue/broadcast/config`
+            
+            Body:
+            {
+                "enabled": true/false,  # 启用/禁用广播
+                "interval": 5.0        # 广播间隔（秒）
+            }
+            """
+            try:
+                request_data = request.get_json() or {}
+                
+                # 配置广播状态
+                if "enabled" in request_data:
+                    enabled = request_data["enabled"]
+                    task_queue_manager.enable_queue_status_broadcast(enabled)
+                
+                # 配置广播间隔
+                if "interval" in request_data:
+                    interval = float(request_data["interval"])
+                    task_queue_manager.set_queue_status_broadcast_interval(interval)
+                
+                return {
+                    "status": "success",
+                    "message": "Queue broadcast configuration updated",
+                    "config": {
+                        "enabled": task_queue_manager._queue_status_broadcast_enabled,
+                        "interval": task_queue_manager._queue_status_broadcast_interval
+                    }
+                }
+            except Exception as e:
+                return {
+                    "type": "error",
+                    "error_code": constants.ERROR_CODE.UNCLASSIFY.value,
+                    "error_message": f"Failed to configure queue broadcast: {str(e)}",
+                }, 500
 
         @self.bp.post("/run")
         @cross_origin()
@@ -76,12 +174,21 @@ class ServerlessApiRoutes:
             stream = is_true(request.args.get("stream"))
             output_base64 = is_true(request.args.get("output_base64"))
             output_oss = is_true(request.args.get("output_oss"))
-            task_id = request.headers.get(
-                ServerlessApiRoutes.HEADER_KEY_TASK_ID_PRIMARY,
-                request.headers.get(
-                    ServerlessApiRoutes.HEADER_KEY_TASK_ID_SECONDARY, ""
-                ),
-            )
+            # 获取 task_id，CPU路由器已经覆盖了x-fc-request-id保证一致性
+            async_task_id = request.headers.get(ServerlessApiRoutes.HEADER_KEY_TASK_ID_PRIMARY)
+            fc_request_id = request.headers.get(ServerlessApiRoutes.HEADER_KEY_TASK_ID_SECONDARY)
+            
+            if async_task_id:
+                task_id = async_task_id
+                task_id_source = "x-fc-async-task-id"
+            elif fc_request_id:
+                task_id = fc_request_id
+                task_id_source = "x-fc-request-id"
+            else:
+                task_id = None  # 明确设置为None而非空字符串
+                task_id_source = "none"
+            
+            print(f"[GPU ServerlessApi] Task ID extracted: '{task_id}' from {task_id_source} (async_id='{async_task_id}', request_id='{fc_request_id}')")
 
             if not stream:
                 try:
@@ -181,12 +288,22 @@ class ServerlessApiRoutes:
             try:
                 output_base64 = is_true(request.args.get("output_base64"))
                 output_oss = is_true(request.args.get("output_oss"))
-                task_id = request.headers.get(
-                    ServerlessApiRoutes.HEADER_KEY_TASK_ID_PRIMARY,
-                    request.headers.get(
-                        ServerlessApiRoutes.HEADER_KEY_TASK_ID_SECONDARY, ""
-                    ),
-                )
+                
+                # 获取 task_id，CPU路由器已经覆盖了x-fc-request-id保证一致性
+                async_task_id = request.headers.get(ServerlessApiRoutes.HEADER_KEY_TASK_ID_PRIMARY)
+                fc_request_id = request.headers.get(ServerlessApiRoutes.HEADER_KEY_TASK_ID_SECONDARY)
+                
+                if async_task_id:
+                    task_id = async_task_id
+                    task_id_source = "x-fc-async-task-id"
+                elif fc_request_id:
+                    task_id = fc_request_id
+                    task_id_source = "x-fc-request-id"
+                else:
+                    task_id = None  # 明确设置为None而非空字符串
+                    task_id_source = "none"
+                
+                print(f"[GPU ServerlessApi WS] Task ID extracted: '{task_id}' from {task_id_source} (async_id='{async_task_id}', request_id='{fc_request_id}')")
 
                 # 获取第一个 message 作为输入的 prompt
                 data = ws.receive()

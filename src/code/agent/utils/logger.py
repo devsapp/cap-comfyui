@@ -69,3 +69,13 @@ def get_log_level():
             return level_name
     return "INFO"
 
+
+def init_logging():
+    """
+    初始化日志系统
+    
+    在应用启动时调用，用于初始化日志配置。
+    当前实现中，日志级别已经通过环境变量在模块加载时设置。
+    """
+    log("INFO", f"Logging system initialized with level: {get_log_level()}")
+

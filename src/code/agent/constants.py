@@ -109,6 +109,9 @@ OSS_EXPIRES_IN_SECOND = os.getenv("OSS_EXPIRES_IN_SECOND", "")
 
 PREWARM_PROMPT = os.getenv("PREWARM_PROMPT", "")
 
+# GPU 函数的 URL，当 COMFYUI_MODE="cpu" 时使用
+GPU_FUNCTION_URL = os.getenv("GPU_FUNCTION_URL", "")
+
 # 日志配置
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 

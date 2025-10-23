@@ -4,6 +4,7 @@ import json
 import time
 import base64
 import random
+import hashlib
 import threading
 from traceback import print_exception
 import requests
@@ -13,7 +14,7 @@ from typing import Any
 import constants
 from store import Store, FileSystem, OSS
 
-from uuid import uuid4
+from uuid import uuid4, UUID
 from flask import request
 
 
@@ -130,7 +131,9 @@ class ServerlessApiService:
         return ws
 
     def api_upload_image(self, content: bytes, overwrite: bool):
-        uuid = str(uuid4())
+        # 基于内容生成确定性的 UUID，相同内容产生相同 UUID
+        content_hash = hashlib.md5(content).hexdigest()
+        uuid = str(UUID(content_hash))
         files = {
             "image": (uuid, content),
         }

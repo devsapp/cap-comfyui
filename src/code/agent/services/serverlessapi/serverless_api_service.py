@@ -173,7 +173,7 @@ class ServerlessApiService:
         ak, sk, sts = self.get_credentials()
 
         for key, value in prompt.items():
-            if type(value) == dict and (value.get("class_type") == "LoadImage" or value.get("class_type") == "LoadImageMask"):
+            if type(value) == dict and (value.get("class_type") == "LoadImage" or value.get("class_type") == "LoadImageMask" or value.get("class_type") == "LoadAudio"):
                 try:
                     image = value.get("inputs", {}).get("image", "")
                     content = ""

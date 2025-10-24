@@ -173,45 +173,59 @@ class ServerlessApiService:
         ak, sk, sts = self.get_credentials()
 
         for key, value in prompt.items():
-            if type(value) == dict and (value.get("class_type") == "LoadImage" or value.get("class_type") == "LoadImageMask" or value.get("class_type") == "LoadAudio"):
+            class_type = value.get("class_type") if type(value) == dict else None
+            
+            # 处理图片/音频加载节点
+            if class_type in ("LoadImage", "LoadImageMask", "LoadAudio"):
                 try:
-                    image = value.get("inputs", {}).get("image", "")
+                    # 根据节点类型确定输入字段名
+                    if class_type == "LoadAudio":
+                        input_key = "audio"
+                        file_type = "audio"
+                    else:
+                        input_key = "image"
+                        file_type = "image"
+                    
+                    file_url = value.get("inputs", {}).get(input_key, "")
                     content = ""
 
-                    if image.startswith("http://") or image.startswith("https://"):
-                        # 图片来源于 url
-
-                        response = requests.get(image)
+                    if file_url.startswith("http://") or file_url.startswith("https://"):
+                        # 文件来源于 HTTP URL
+                        response = requests.get(file_url)
                         if response.status_code >= 400:
                             raise Exception(
-                                f"can not get image {image} from http url, got status code {response.status_code}"
+                                f"can not get {file_type} {file_url} from http url, got status code {response.status_code}"
                             )
 
                         content = response.content
                         if content == "":
-                            raise Exception(f"can not get image {image} from http url")
+                            raise Exception(f"can not get {file_type} {file_url} from http url")
 
-                    elif image.startswith("oss://"):
-                        # 图片来源于 oss
-                        arr = image.split("/")
+                    elif file_url.startswith("oss://"):
+                        # 文件来源于 OSS
+                        arr = file_url.split("/")
                         host = arr[2]
                         path = "/".join(arr[3:])
                         oss = OSS(host, ak, sk, sts, "", 0)
                         content = oss.get(path)
 
                         if content == "":
-                            raise Exception(f"can not get image {image} from oss")
-                    elif len(image) > 64:
-                        # 图像可能是 base64，尝试使用 base64 解析
+                            raise Exception(f"can not get {file_type} {file_url} from oss")
+                            
+                    elif len(file_url) > 64:
+                        # 文件可能是 base64，尝试解析
                         try:
-                            content = base64.b64decode(image.strip())
+                            content = base64.b64decode(file_url.strip())
                         except:
                             pass
+                            
                     if content:
+                        # 上传文件并更新对应的输入字段
                         res = self.api_upload_image(content, False)
-                        prompt[key]["inputs"]["image"] = res["name"]
+                        prompt[key]["inputs"][input_key] = res["name"]
+                        
                 except Exception as e:
-                    raise Exception(f"LoadImage failed: {e}")
+                    raise Exception(f"{class_type} failed: {e}")
 
             if type(value) == dict and value.get("class_type") == "KSampler":
                 if value.get("inputs", {}).get("seed") == -1:

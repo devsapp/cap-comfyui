@@ -235,7 +235,12 @@ class ServerlessApiService:
         for node_id, output in history.get(prompt_id, {}).get("outputs", {}).items():
             for output_type, imgs in output.items():
                 for index, img in enumerate(imgs):
+                    # 调试日志：查看实际的数据类型和结构
+                    print(f"[DEBUG] node_id={node_id}, output_type={output_type}, index={index}")
+                    print(f"[DEBUG] img type: {type(img)}, img: {img}")
+                    
                     if type(img) != dict or not img.get("filename"):
+                        print(f"[DEBUG] Skipping: type check={type(img) != dict}, filename check={not img.get('filename') if isinstance(img, dict) else 'N/A'}")
                         continue
 
                     filename = img.get("filename", "")
@@ -246,25 +251,37 @@ class ServerlessApiService:
                     oss_url = None
 
                     if output_base64 or output_oss:
+                        print(f"[DEBUG] Downloading file: {filename} (type={img_type}, subfolder={sub_folder})")
                         img_bytes = self.api_view_image(filename, img_type, sub_folder)
+                        print(f"[DEBUG] Downloaded {len(img_bytes)} bytes")
 
                         if output_base64:
                             img_output = base64.b64encode(img_bytes).decode("ascii")
+                            print(f"[DEBUG] Encoded to base64: {len(img_output)} chars")
 
                         if output_oss:
+                            print(f"[DEBUG] Attempting OSS upload...")
+                            print(f"[DEBUG] OSS ready: {oss_store.ready()}")
                             try:
                                 if not oss_store.ready():
-                                    print("oss client is not init")
+                                    print("[ERROR] oss client is not init")
+                                    print(f"[DEBUG] OSS_BUCKET_DOMAIN: {constants.OSS_BUCKET_DOMAIN}")
                                 else:
                                     ext = filename.split(".")[-1]
                                     uuid = str(uuid4())
                                     oss_filename = f"{uuid}.{ext}" if ext else uuid
+                                    print(f"[DEBUG] Uploading to OSS as: {oss_filename}")
                                     oss_store.put(oss_filename, img_bytes)
                                     oss_object_key = oss_store.object_key(oss_filename)
                                     oss_url = oss_store.sign(oss_filename)
+                                    print(f"[DEBUG] OSS upload success: {oss_url}")
                             except Exception as e:
-                                print(e)
+                                print(f"[ERROR] OSS upload failed: {e}")
+                                import traceback
+                                traceback.print_exc()
                                 pass
+                    else:
+                        print(f"[DEBUG] Skipping download/upload (output_base64={output_base64}, output_oss={output_oss})")
 
                     results.append(
                         {
@@ -347,7 +364,23 @@ class ServerlessApiService:
 
             def on_message(ws: websocket.WebSocket, message: str):
                 try:
-                    msg = json.loads(message)
+                    # 忽略空消息
+                    if not message or not message.strip():
+                        return
+                    
+                    # 尝试解析 JSON
+                    try:
+                        msg = json.loads(message)
+                    except (json.JSONDecodeError, ValueError) as json_err:
+                        # 非 JSON 消息，记录日志但不中断连接
+                        # 可能是心跳、ping/pong 或其他非 JSON 消息
+                        print(f"[WebSocket] Non-JSON message received (ignored): {message[:100]}")
+                        
+                        # 仍然调用回调（让用户决定如何处理）
+                        if callback and hasattr(callback, "__call__"):
+                            callback(message)
+                        
+                        return  # 继续等待下一条消息
 
                     msg_type = msg.get("type", "")
                     node_id = msg.get("data", {}).get("node", "")
@@ -381,8 +414,12 @@ class ServerlessApiService:
                         # 其他不处理的类型，如 "execution_start", "status", "progress", "execution_cached", "executed"
                         pass
 
+                except ComfyUIException:
+                    # ComfyUI 执行错误，需要向上抛出
+                    raise
                 except Exception as e:
-                    print(e)
+                    # 其他未预期的错误，记录并关闭连接
+                    print(f"[WebSocket] Unexpected error in on_message: {e}")
                     nonlocal ws_err
                     ws_err = e
                     ws.close()

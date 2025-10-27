@@ -382,6 +382,7 @@ class ServerlessApiService:
 
         oss_store = self.get_oss_store()
         for node_id, output in history.get(prompt_id, {}).get("outputs", {}).items():
+            # TODO: 只上传指定节点结果到 OSS 中
             for output_type, imgs in output.items():
                 for index, img in enumerate(imgs):
                     # 调试日志：查看实际的数据类型和结构
@@ -400,16 +401,16 @@ class ServerlessApiService:
                     oss_url = None
 
                     if output_base64 or output_oss:
-                        log("INFO", f"get file: {filename} (type={img_type}, subfolder={sub_folder})")
+                        log("DEBUG", f"get file: {filename} (type={img_type}, subfolder={sub_folder})")
                         img_bytes = self.api_view_image(filename, img_type, sub_folder)
-                        log("INFO", f"get {len(img_bytes)} bytes")
+                        log("DEBUG", f"get {len(img_bytes)} bytes")
 
                         if output_base64:
                             img_output = base64.b64encode(img_bytes).decode("ascii")
-                            log("INFO", f"encoded to base64: {len(img_output)} chars")
+                            log("DEBUG", f"encoded to base64: {len(img_output)} chars")
 
                         if output_oss:
-                            log("INFO", "attempting OSS upload...")
+                            log("DEBUG", "attempting OSS upload...")
                             try:
                                 if not oss_store.ready():
                                     log("ERROR", "OSS client is not initialized")
@@ -422,7 +423,7 @@ class ServerlessApiService:
                                     oss_store.put(oss_filename, img_bytes)
                                     oss_object_key = oss_store.object_key(oss_filename)
                                     oss_url = oss_store.sign(oss_filename)
-                                    log("INFO", f"OSS upload succeeded: {oss_url}")
+                                    log("DEBUG", f"OSS upload succeeded with url: {oss_url}")
                             except Exception as e:
                                 log("ERROR", f"OSS upload failed: {e}")
                                 import traceback
@@ -556,7 +557,7 @@ class ServerlessApiService:
                     except (json.JSONDecodeError, ValueError) as json_err:
                         # 非 JSON 消息，记录日志但不中断连接
                         # 可能是心跳、ping/pong 或其他非 JSON 消息
-                        log("WARNING", f"websocket: non-JSON message received (ignored): {message[:100]}")
+                        log("WARNING", f"websocket: non-JSON message received (ignored): {message[:200]}")
                         
                         return  # 继续等待下一条消息
 
@@ -630,6 +631,7 @@ class ServerlessApiService:
                 prompt_id, output_base64=output_base64, output_oss=output_oss
             )
             self.put_status_to_store(task_id, json.dumps(result))
+            log("INFO", f"finished running prompt: {prompt_id}")
             return result
         except ComfyUIException as e:
             self.put_status_to_store(

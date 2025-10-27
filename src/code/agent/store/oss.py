@@ -79,7 +79,7 @@ class OSS:
                 content = f.read()
             elapsed = time.perf_counter() - start_time
             
-            log("DEBUG", f"successfully retrieved OSS object: {object_key} ({len(content)} bytes) in {elapsed:.2f}s")
+            log("INFO", f"successfully retrieved OSS object: {object_key} ({len(content)} bytes) in {elapsed:.2f}s")
             return content
         except Exception as e:
             # 忽略"文件不存在"的错误（正常情况）
@@ -158,7 +158,7 @@ class OSS:
             u = urlunparse(parsed)
 
         elapsed = time.perf_counter() - start_time
-        log("DEBUG", f"successfully signed OSS URL: {u[:100]}... in {elapsed:.2f}s")
+        log("INFO", f"successfully signed OSS URL: {u[:100]}... in {elapsed:.2f}s")
         return u
 
     def object_key(self, key: str):

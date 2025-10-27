@@ -57,6 +57,10 @@ class ServerlessApiService:
         #
         # 必要时，也可以参考对应代码实现基于 Redis、TableStore、MySQL 等方式的状态持久化
         self.store: Store = FileSystem(f"{constants.MNT_DIR}/output/serverless_api")
+        
+        # 记录启动信息和日志级别
+        log("INFO", f"ServerlessApiService initialized with endpoint: {self.endpoint}")
+        log("INFO", f"Current log level: {constants.LOG_LEVEL}")
 
     def get_credentials(self):
         """

@@ -290,7 +290,10 @@ class ServerlessApiService:
 
                     if file_url.startswith("http://") or file_url.startswith("https://"):
                         # 文件来源于 HTTP URL
+                        log("DEBUG", f"downloading {file_type} from HTTP URL: {file_url}")
+                        start_time = time.perf_counter()
                         response = requests.get(file_url)
+                        
                         if response.status_code >= 400:
                             raise Exception(
                                 f"can not get {file_type} {file_url} from http url, got status code {response.status_code}"
@@ -299,28 +302,46 @@ class ServerlessApiService:
                         content = response.content
                         if content == "":
                             raise Exception(f"can not get {file_type} {file_url} from http url")
+                        
+                        elapsed = time.perf_counter() - start_time
+                        log("INFO", f"successfully downloaded {file_type} from HTTP URL ({len(content)} bytes) in {elapsed:.2f}s")
 
                     elif file_url.startswith("oss://"):
                         # 文件来源于 OSS
+                        log("DEBUG", f"downloading {file_type} from OSS: {file_url}")
+                        start_time = time.perf_counter()
                         arr = file_url.split("/")
                         host = arr[2]
                         path = "/".join(arr[3:])
                         oss = OSS(host, ak, sk, sts, "", 0)
                         content = oss.get(path)
+                        elapsed = time.perf_counter() - start_time
 
                         if content == "":
                             raise Exception(f"can not get {file_type} {file_url} from oss")
+                        
+                        log("DEBUG", f"successfully downloaded {file_type} from OSS ({len(content)} bytes) in {elapsed:.2f}s")
                             
                     elif len(file_url) > 64:
                         # 文件可能是 base64，尝试解析
+                        log("DEBUG", f"decoding {file_type} from Base64")
+                        start_time = time.perf_counter()
                         try:
                             content = base64.b64decode(file_url.strip())
+                            elapsed = time.perf_counter() - start_time
+                            log("DEBUG", f"successfully decoded {file_type} from Base64 ({len(content)} bytes) in {elapsed:.2f}s")
                         except:
+                            elapsed = time.perf_counter() - start_time
+                            log("DEBUG", f"failed to decode {file_type} from Base64 in {elapsed:.2f}s")
                             pass
                             
                     if content:
                         # 上传文件并更新对应的输入字段
+                        log("DEBUG", f"uploading {file_type} to ComfyUI")
+                        start_time = time.perf_counter()
                         res = self.api_upload_image(content, False)
+                        elapsed = time.perf_counter() - start_time
+                        log("INFO", f"successfully uploaded {file_type} to ComfyUI as '{res['name']}' in {elapsed:.2f}s")
                         prompt[key]["inputs"][input_key] = res["name"]
                         
                 except Exception as e:

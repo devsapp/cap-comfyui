@@ -578,13 +578,16 @@ class ServerlessApiService:
                     except (json.JSONDecodeError, ValueError) as json_err:
                         # 非 JSON 消息，记录日志但不中断连接
                         # 可能是心跳、ping/pong 或其他非 JSON 消息
-                        log("WARNING", f"websocket: non-JSON message received (ignored): {message[:200]}")
+                        log("WARNING", f"websocket: non-JSON message received (ignored): {message}")
                         
                         return  # 继续等待下一条消息
 
                     msg_type = msg.get("type", "")
                     node_id = msg.get("data", {}).get("node", "")
                     current_prompt_id = msg.get("data", {}).get("prompt_id", "")
+
+                    # 记录收到的消息类型（DEBUG 级别）
+                    log("DEBUG", f"websocket message: type={msg_type}, node={node_id}, prompt_id={current_prompt_id}, message={message}")
 
                     if msg_type == "status":
                         nonlocal client_id
@@ -598,11 +601,32 @@ class ServerlessApiService:
 
                     if msg_type == "executing":
                         # 节点执行
-                        if not node_id and current_prompt_id == prompt_id:
-                            # 当前正在执行的 node 为空，说明 prompt 执行结束了
-                            ws.close()
+                        if not node_id:
+                            # node 为空，说明没有节点在执行了
+                            if current_prompt_id == prompt_id:
+                                # prompt_id 匹配，确认完成
+                                log("INFO", f"workflow completed, closing websocket for prompt_id={prompt_id}")
+                                ws.close()
+                            elif not current_prompt_id:
+                                # prompt_id 为空，仅此时查询历史记录确认
+                                log("WARNING", f"received executing with empty node_id and no prompt_id, checking history")
+                                try:
+                                    if len(self.api_get_history(prompt_id)) > 0:
+                                        log("INFO", f"confirmed completion via history check for prompt_id={prompt_id}")
+                                        ws.close()
+                                except Exception as e:
+                                    log("WARNING", f"history check failed: {e}")
+                            else:
+                                # prompt_id 不匹配
+                                log("WARNING", f"received executing with empty node_id but prompt_id mismatch: expected={prompt_id}, got={current_prompt_id}")
+                        else:
+                            # 正在执行某个节点
+                            log("DEBUG", f"executing node: {node_id} for prompt_id={current_prompt_id}")
                     elif msg_type == "execution_error":
                         # 执行出错
+                        error_msg = msg.get('data', {}).get('exception_message', 'unknown error')
+                        node_type = msg.get('data', {}).get('node_type', 'unknown')
+                        log("ERROR", f"execution error in node type '{node_type}' for prompt_id={current_prompt_id}: {error_msg}")
                         ws.close()
 
                         raise ComfyUIException(
@@ -610,6 +634,18 @@ class ServerlessApiService:
                             constants.ERROR_CODE.EXECUTION_FAILED.value,
                             msg.get("data"),
                         )
+                    elif msg_type == "execution_success":
+                        # 执行成功
+                        log("INFO", f"execution success for prompt_id={current_prompt_id}, closing websocket")
+                        ws.close()
+                    elif msg_type == "execution_start":
+                        log("INFO", f"execution started for prompt_id={current_prompt_id}")
+                    elif msg_type == "progress":
+                        # 进度更新
+                        value = msg.get('data', {}).get('value', 0)
+                        max_val = msg.get('data', {}).get('max', 0)
+                        if max_val > 0:
+                            log("DEBUG", f"progress: {value}/{max_val} ({value*100/max_val:.1f}%) for prompt_id={current_prompt_id}")
                     else:
                         # 其他不处理的类型，如 "execution_start", "status", "progress", "execution_cached", "executed"
                         pass
@@ -621,16 +657,22 @@ class ServerlessApiService:
                     ws_err = e
                     ws.close()
 
+            log("DEBUG", "creating websocket connection to ComfyUI")
             ws = self.api_websocket(client_id, on_message)
             ws_threading = threading.Thread(target=ws.run_forever)
             ws_threading.start()
+            log("DEBUG", "websocket thread started")
 
             # 提交出图任务
+            log("DEBUG", "waiting for client_id from websocket status message")
             while client_id == "":
                 time.sleep(0.1)
+            log("DEBUG", f"got client_id: {client_id}")
 
+            log("DEBUG", "submitting workflow to ComfyUI")
             prompt_result = self.api_prompt(client_id, prompt)
             prompt_id = prompt_result.get("prompt_id", "")
+            log("DEBUG", f"workflow submitted, prompt_id: {prompt_id}")
 
             # 如果 task id 未指定，则使用 prompt id
             if not task_id:
@@ -643,14 +685,40 @@ class ServerlessApiService:
             if len(self.api_get_history(prompt_id)) > 0:
                 ws.close()
             else:
-                ws_threading.join()
+                # 等待工作流完成：WebSocket（主） + 轮询历史记录（备用）
+                check_interval = int(os.getenv("SERVERLESS_API_CHECK_INTERVAL", "60"))
+                log("INFO", f"waiting for prompt {prompt_id} to complete (check_interval={check_interval}s)")
+                start_time = time.time()
+                
+                while ws_threading.is_alive():
+                    # 等待一小段时间
+                    ws_threading.join(timeout=check_interval)
+                    
+                    # 如果线程已结束，退出循环。仅当 ws.close() 被调用时，线程才会结束。
+                    if not ws_threading.is_alive():
+                        break
+                    
+                    # 定期检查历史记录（备用检测）
+                    try:
+                        if len(self.api_get_history(prompt_id)) > 0:
+                            log("WARNING", f"detected completion via history check for prompt_id={prompt_id}, closing websocket")
+                            ws.close()
+                            break
+                    except Exception as e:
+                        log("DEBUG", f"history check failed: {e}")
+                
+                elapsed = time.time() - start_time
+                log("INFO", f"workflow completed in {elapsed:.1f}s")
 
             if ws_err:
+                log("ERROR", f"websocket error occurred: {ws_err}")
                 raise ws_err
 
+            log("DEBUG", f"fetching results for prompt_id: {prompt_id}")
             result = self.get_history_result(
                 prompt_id, output_base64=output_base64, output_oss=output_oss
             )
+            log("DEBUG", f"saving result to store for task_id: {task_id}")
             self.put_status_to_store(task_id, json.dumps(result))
             log("INFO", f"finished running prompt: {prompt_id}")
             return result

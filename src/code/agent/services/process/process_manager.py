@@ -92,8 +92,8 @@ class ProcessManager(ABC):
         while self.should_monitor:
             try:
                 if not self.is_alive():
-                    print(f"{BACKEND_TYPE.capitalize()} process is not running, waiting for restart...")
-                    self._on_process_died()
+                    print(f"WARNING: {BACKEND_TYPE.capitalize()} process health check failed, retrying...")
+                    # self._on_process_died()
                 time.sleep(poll_interval)
             except Exception as e:
                 print(f"Error in health check: {e}")

@@ -274,13 +274,16 @@ class ServerlessApiService:
         for key, value in prompt.items():
             class_type = value.get("class_type") if type(value) == dict else None
             
-            # 处理图片/音频加载节点
-            if class_type in ("LoadImage", "LoadImageMask", "LoadAudio"):
+            # 处理图片/音频/视频加载节点
+            if class_type in ("LoadImage", "LoadImageMask", "LoadAudio", "VHS_LoadVideo"):
                 try:
                     # 根据节点类型确定输入字段名
                     if class_type == "LoadAudio":
                         input_key = "audio"
                         file_type = "audio"
+                    elif class_type == "VHS_LoadVideo":
+                        input_key = "video"
+                        file_type = "video"
                     else:
                         input_key = "image"
                         file_type = "image"

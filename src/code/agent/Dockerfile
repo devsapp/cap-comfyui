@@ -35,7 +35,7 @@ ENV PATH="${VENV_DIR}/bin:$PATH"
 
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
-RUN pip install --no-cache-dir mitmproxy huggingface_hub[cli] modelscope
+RUN pip install --no-cache-dir huggingface_hub[cli] modelscope
 
 COPY . ${AGENT_DIR}/
 

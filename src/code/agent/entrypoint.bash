@@ -19,57 +19,42 @@
 # --- 20250102-120159
 # ---- comfyui
 # ---- venv.tar
-init_mitmproxy(){
-  echo 'export NO_PROXY="127.0.0.1,mirrors.aliyun.com,ghfast.top,ghgo.xyz,ghp.ci,ghproxy.com,hf-mirror.com,deb.debian.org,www.modelscope.cn"'>> ~/.bashrc
-  echo 'export no_proxy="127.0.0.1,mirrors.aliyun.com,ghfast.top,ghgo.xyz,ghp.ci,ghproxy.com,hf-mirror.com,deb.debian.org,www.modelscope.cn"'>> ~/.bashrc
 
-  echo 'export HTTP_PROXY="http://127.0.0.1:8080"' >> ~/.bashrc
-  echo 'export http_proxy="http://127.0.0.1:8080"' >> ~/.bashrc
-
-  echo 'export HTTPS_PROXY="http://127.0.0.1:8080"' >> ~/.bashrc
-  echo 'export https_proxy="http://127.0.0.1:8080"' >> ~/.bashrc
-
-  echo 'export HF_ENDPOINT="https://hf-mirror.com"' >> ~/.bashrc
-
-  echo 'export REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc
-  echo 'export SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc
-  echo 'export CURL_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"'>> ~/.bashrc
-
-  source ~/.bashrc
-
-#  mitmdump -s ${AGENT_DIR}/services/proxy/mirror_proxy.py &
-  mitmdump -s ${AGENT_DIR}/services/proxy/mirror_proxy.py >> /root/agent/mitmproxy.log 2>> /root/agent/mitmproxy_error.log &
-
-  sleep 5
-#  cp ~/.mitmproxy/mitmproxy-ca-cert.cer /usr/local/share/ca-certificates/
-  cp ~/.mitmproxy/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy.crt
-  update-ca-certificates
-  git config --global http.sslCAInfo /usr/local/share/ca-certificates/mitmproxy.crt
+# 检查是否为国内区域
+is_domestic_region() {
+  local domestic_regions=("cn-hangzhou" "cn-shanghai" "cn-shenzhen" "cn-beijing")
+  local region="${REGION:-}"
+  
+  for reg in "${domestic_regions[@]}"; do
+    if [[ "${region}" == "${reg}" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
-check_and_init_mitmproxy(){
-  echo "Check and init mitmproxy..."
-
-  # 根据AUTO_LAUNCH_SNAPSHOT_NAME是否为空来判断当前函数是否use_api_mode
-  use_api_mode=false
-  if [[ -n "${AUTO_LAUNCH_SNAPSHOT_NAME}" ]]; then
-      use_api_mode=true
-  fi
-
-  # 根据当前REGION判断是否处于国内
-  domestic_regions=("cn-hangzhou" "cn-shanghai" "cn-shenzhen" "cn-beijing")
-  region="${REGION}"
-  is_domestic=false
-  for reg in "${domestic_regions[@]}"; do
-      if [[ "${region}" == "${reg}" ]]; then
-          is_domestic=true
-          break
-      fi
-  done
-
-  if [[ ${use_api_mode} == false ]] && [[ ${is_domestic} == true ]]; then
-      echo "Init mitmproxy..."
-      init_mitmproxy
+# 设置网络配置
+setup_network() {
+  echo "[INFO] Setting up network configuration..."
+  
+  # 如果是国内集群，配置加速
+  if is_domestic_region; then
+    echo "[INFO] Domestic region detected: ${REGION}"
+    
+    # 设置 HuggingFace 镜像
+    export HF_ENDPOINT="https://hf-mirror.com"
+    echo "[INFO] Set HF_ENDPOINT=${HF_ENDPOINT}"
+    
+    # 启动 GitHub 代理守护进程
+    if [ -f "/usr/local/bin/github-proxy-daemon" ]; then
+      echo "[INFO] Starting GitHub proxy daemon..."
+      nohup /usr/local/bin/github-proxy-daemon > /tmp/github_proxy_daemon.log 2>&1 &
+      echo "[INFO] GitHub proxy daemon started (logs: /tmp/github_proxy_daemon.log)"
+    else
+      echo "[WARN] GitHub proxy daemon not found, skipping..."
+    fi
+  else
+    echo "[INFO] Non-domestic region, skipping network acceleration"
   fi
 }
 
@@ -92,7 +77,10 @@ mkdir -p ${MNT_DIR}/output
 source ${AGENT_DIR}/venv/bin/activate
 echo "Using python venv, python path '$(which python)', pip path '$(which pip)'... "
 
-check_and_init_mitmproxy
+# 设置网络配置（国内区域加速）
+# 针对 git 使用 git proxy
+# 针对 huggingface 使用 hf mirror
+setup_network
 
 # git diff 忽略文件权限变化，ComfyUI 中 Windows 可执行文件在 Linux 中自动没有可执行权限，导致有 git diff，影响 ComfyUI 版本升级
 git config --global core.fileMode false

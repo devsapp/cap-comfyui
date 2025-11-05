@@ -49,5 +49,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN mkdir -p ~/.pip \
  && cp ${AGENT_DIR}/services/proxy/pip.conf ~/.pip/pip.conf
 
+# 安装 GitHub 代理守护进程
+RUN cp ${AGENT_DIR}/services/proxy/scripts/github-proxy-daemon.sh /usr/local/bin/github-proxy-daemon && \
+    chmod +x /usr/local/bin/github-proxy-daemon
+
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

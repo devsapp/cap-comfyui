@@ -44,7 +44,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV COMFYUI_DIR="/root/comfyui"
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
-   find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
+   find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir 
 
 # 方式二: pip install使用comfyui源码中requirements.txt, 缺点：每次ComfyUI版本升级都需要手动维护依赖列表
 # RUN --mount=type=cache,target=/root/.cache/pip \

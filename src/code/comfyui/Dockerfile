@@ -6,13 +6,13 @@ ENV COMFYUI_DIR="/root/comfyui"
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
-    git checkout "v0.3.10"
+    git checkout "v0.3.68"
 
 # add built-in custom-nodes
 RUN cd ${COMFYUI_DIR}/custom_nodes && \
     git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
     cd ComfyUI-Manager && \
-    git checkout "3.31.8"
+    git checkout "3.35"
 
 FROM python:3.10.16-slim AS models
 

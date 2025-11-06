@@ -40,33 +40,33 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
 # 安装 ComfyUI源码 所使用的依赖
-## 方式一: pip install动态拉取comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致镜像层重新构建
-#ENV COMFYUI_DIR="/root/comfyui"
-#COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
-#RUN --mount=type=cache,target=/root/.cache/pip \
-#    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
-
-# 方式二: pip install使用comfyui源码中requirements.txt, 缺点：每次ComfyUI版本升级都需要手动维护依赖列表
+# 方式一: pip install动态拉取comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致镜像层重新构建
+ENV COMFYUI_DIR="/root/comfyui"
+COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir \
-    torch \
-    torchsde \
-    torchvision \
-    torchaudio \
-    einops \
-    transformers>=4.28.1 \
-    tokenizers>=0.13.3 \
-    sentencepiece \
-    safetensors>=0.4.2 \
-    aiohttp \
-    pyyaml \
-    Pillow \
-    scipy \
-    tqdm \
-    psutil \
-    kornia>=0.7.1 \
-    spandrel \
-    soundfile
+   find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
+
+# # 方式二: pip install使用comfyui源码中requirements.txt, 缺点：每次ComfyUI版本升级都需要手动维护依赖列表
+# RUN --mount=type=cache,target=/root/.cache/pip \
+#     venv/bin/pip install --no-cache-dir \
+#     torch \
+#     torchsde \
+#     torchvision \
+#     torchaudio \
+#     einops \
+#     transformers>=4.28.1 \
+#     tokenizers>=0.13.3 \
+#     sentencepiece \
+#     safetensors>=0.4.2 \
+#     aiohttp \
+#     pyyaml \
+#     Pillow \
+#     scipy \
+#     tqdm \
+#     psutil \
+#     kornia>=0.7.1 \
+#     spandrel \
+#     soundfile
 
 # 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"

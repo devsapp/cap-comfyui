@@ -52,16 +52,15 @@ COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
     find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
 
-# 安装 wheel
-RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir \
-    https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.8-cp310-cp310-linux_x86_64.whl 
-
 # 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
 COPY --from=codes ${COMFYUI_NODE_DIR} ${COMFYUI_NODE_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
     find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
+
+ RUN --mount=type=cache,target=/root/.cache/pip \
+    venv/bin/pip install --no-cache-dir \
+    https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.8-cp310-cp310-linux_x86_64.whl 
 
 FROM agent AS agent
 

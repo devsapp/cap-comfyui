@@ -5,7 +5,25 @@ WORKDIR /root
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
     apt install -y \
-    git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping
+    git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping \
+    procps vim unzip
+
+# 安装 ossutil
+RUN curl -o ossutil-2.1.2-linux-amd64.zip https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip && \
+    unzip ossutil-2.1.2-linux-amd64.zip && \
+    cd ossutil-2.1.2-linux-amd64 && \
+    chmod 755 ossutil && \
+    mv ossutil /usr/local/bin/ && \
+    ln -s /usr/local/bin/ossutil /usr/bin/ossutil && \
+    cd .. && \
+    rm -rf ossutil-2.1.2-linux-amd64 ossutil-2.1.2-linux-amd64.zip
+
+# 下载 transparent-background 模型
+RUN mkdir ~/.transparent-background && \
+    cd ~/.transparent-background && \
+    wget https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_base.pth && \
+    wget https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_fast.pth && \
+    wget https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_base_nightly.pth
 
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"

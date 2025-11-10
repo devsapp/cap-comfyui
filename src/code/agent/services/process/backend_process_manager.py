@@ -32,9 +32,9 @@ class BackendProcessManager(ProcessManager):
         通过发送 HTTP GET 请求到 ComfyUI 服务来检查进程是否存活
 
         Returns:
-            bool: 如果在2秒内收到正常响应则返回True，否则返图False
+            bool: 如果在2秒内收到正常响应则返回True，否则返回False
         """
-        # GPU模式下跳过健康检查（单任务执行，无需监控）
+        # GPU模式下跳过健康检查
         if constants.USE_API_MODE or constants.COMFYUI_MODE == 'gpu':
             return True
 

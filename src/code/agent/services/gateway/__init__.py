@@ -1,19 +1,14 @@
-from .cpu_gateway import CpuGatewayService
-from .history_gateway import HistoryGatewayService
-from .status_gateway import (
+from .gateways import CpuGatewayService, HistoryGatewayService
+from .status import (
     StatusStorageService,
     StatusPoller,
-    StatusPollerManager,
-    get_status_storage_service,
-    get_poller_manager
+    get_status_storage_service
 )
-from .task_queue import (
+from .queue import (
     TaskStatus,
     TaskRequest,
     TaskQueue,
-    TaskQueueManager,
-    get_task_queue_manager,
-    task_queue_manager
+    get_task_queue
 )
 
 __all__ = [
@@ -21,13 +16,8 @@ __all__ = [
     'HistoryGatewayService',
     'StatusStorageService',
     'StatusPoller',
-    'StatusPollerManager',
     'get_status_storage_service',
-    'get_poller_manager',
     'TaskStatus',
-    'TaskRequest',
     'TaskQueue',
-    'TaskQueueManager',
-    'get_task_queue_manager',
-    'task_queue_manager'
+    'get_task_queue'
 ]

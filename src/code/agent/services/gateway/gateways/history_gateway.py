@@ -3,62 +3,62 @@ History Gateway Service
 处理 ComfyUI history API 相关的逻辑
 """
 import os
+import json
 import glob
+import traceback
 from collections import OrderedDict
-from flask import request, jsonify
+from flask import request, jsonify, Response
 
 import constants
+from utils.logger import log
 
 
 class HistoryGatewayService:
-    """History网关服务，负责处理历史记录相关请求"""
     
     def __init__(self):
-        pass
+        # 直接访问存储路径，不需要依赖 ServerlessApiService
+        self.storage_path = f"{constants.MNT_DIR}/output/serverless_api"
     
-    def handle_history_request(self, api_service, path):
+    def handle_history_request(self, path):
         """
         处理 history 相关请求
         
         Args:
-            api_service: ServerlessApiService实例
             path: 请求路径
             
         Returns:
             Flask response
         """
         try:
-            print(f"[Enhanced History] Processing history request from persistent storage")
+            log("DEBUG", f"Processing history request from persistent storage")
             
             if path == "api/history" and request.method == "GET":
-                # GET /api/history - 获取所有历史记录（支持limit参数）
-                return self._handle_get_all_history(api_service)
+                return self._handle_get_all_history()
             
             elif path.startswith("api/history/") and request.method == "GET":
                 # GET /api/history/{prompt_id} - 获取特定任务的历史记录
                 prompt_id = path.split("/")[-1]
-                return self._handle_get_history_by_id(api_service, prompt_id)
+                return self._handle_get_history_by_id(prompt_id)
             
             elif path == "api/history" and request.method == "POST":
                 # POST /api/history - 清理历史记录
-                return self._handle_clear_history(api_service)
+                return self._handle_clear_history()
             
             # 其他情况返回空结果
             return jsonify({})
             
         except Exception as e:
-            import traceback
             error_msg = f"Enhanced history processing failed: {str(e)}"
-            print(f"[Enhanced History] {error_msg}\nStacktrace:\n{traceback.format_exc()}")
+            log("ERROR", f"{error_msg}\nStacktrace:\n{traceback.format_exc()}")
             
             # 出错时返回空历史记录而不是代理到 ComfyUI
             return jsonify({})
     
-    def _handle_get_all_history(self, api_service):
+    def _handle_get_all_history(self):
         """
         处理获取所有历史记录的请求
         """
-        print(f"[Enhanced History] Retrieving history from persistent storage")
+        log("DEBUG", f"Retrieving history from persistent storage")
         
         # 获取limit参数
         limit_param = request.args.get('limit')
@@ -72,82 +72,71 @@ class HistoryGatewayService:
                 limit = None  # 无效值时不限制
         
         # 从持久化存储获取历史记录
-        all_history = self._get_all_persisted_history(api_service, limit=limit)
+        all_history = self._get_all_persisted_history(limit=limit)
         
         if limit:
-            print(f"[Enhanced History] Found {len(all_history)} history items (limited to {limit} most recent)")
+            log("DEBUG", f"Found {len(all_history)} history items (limited to {limit} most recent)")
         else:
-            print(f"[Enhanced History] Found {len(all_history)} history items (no limit)")
+            log("DEBUG", f"Found {len(all_history)} history items (no limit)")
         
         return jsonify(all_history)
     
-    def _handle_get_history_by_id(self, api_service, prompt_id):
+    def _handle_get_history_by_id(self, prompt_id):
         """
         处理获取特定任务历史记录的请求
         """
-        print(f"[Enhanced History] Retrieving history for prompt_id: {prompt_id}")
+        log("DEBUG", f"Retrieving history for prompt_id: {prompt_id}")
         
-        history_data = self._get_persisted_history_by_prompt_id(api_service, prompt_id)
+        history_data = self._get_persisted_history_by_prompt_id(prompt_id)
         
         if history_data:
-            print(f"[Enhanced History] Found persisted history for prompt_id: {prompt_id}")
-            from flask import Response
-            import json
-            return Response(
-                json.dumps(history_data, ensure_ascii=False),
-                mimetype='application/json'
-            )
+            log("DEBUG", f"Found persisted history for prompt_id: {prompt_id}")
+            return jsonify(history_data)
         else:
-            print(f"[Enhanced History] No persisted history found for prompt_id: {prompt_id}")
-            from flask import Response
-            import json
-            return Response(
-                json.dumps({}, ensure_ascii=False),
-                mimetype='application/json'
-            )
+            log("DEBUG", f"No persisted history found for prompt_id: {prompt_id}")
+            return jsonify({})
     
-    def _handle_clear_history(self, api_service):
+    def _handle_clear_history(self):
         """
         处理清理历史记录的请求
+        
+        注意：此方法目前不清理持久化存储的历史，
+        只返回成功响应。如需清理持久化数据，
+        需要单独实现。
         """
         request_data = request.get_json() or {}
         
         if request_data.get("clear"):
-            print(f"[Enhanced History] Clearing ComfyUI in-memory history")
+            log("INFO", f"Clear history requested (persistent storage not affected)")
             
-            # 只清理 ComfyUI 的内存历史记录，保留持久化数据
-            api_service.api_clear_history()
+            # 持久化存储的历史不清理
+            # 如果需要清理，可以删除 self.storage_path 下的文件
             
-            # 如果需要清理持久化数据，可以在这里添加相关逻辑
-            # 目前只清理 ComfyUI 内存，保持持久化数据不变
-            
-            return jsonify({"status": "success", "message": "ComfyUI memory history cleared"})
+            return jsonify({"status": "success", "message": "History clear acknowledged (persistent storage preserved)"})
         
         return jsonify({})
     
-    def _get_all_persisted_history(self, api_service, limit=None):
+    def _get_all_persisted_history(self, limit=None):
         """
         从持久化存储获取所有历史记录，按生成时间倒序排序（最新的在前）
         
         Args:
-            api_service: ServerlessApiService实例
             limit: 限制返回的记录数量，None表示返回所有记录
         """
         try:
             all_history = OrderedDict()  # 使用有序字典保持排序
             history_with_timestamps = []  # 用于排序的临时列表
-            storage_path = f"{constants.MNT_DIR}/output/serverless_api"
             
-            if os.path.exists(storage_path):
+            if os.path.exists(self.storage_path):
                 # 获取所有存储文件
-                task_files = glob.glob(os.path.join(storage_path, "*"))
-                print(f"[Enhanced History] Found {len(task_files)} task files in storage")
+                task_files = glob.glob(os.path.join(self.storage_path, "*"))
+                log("DEBUG", f"Found {len(task_files)} task files in storage")
                 
                 for task_file in task_files:
                     if os.path.isfile(task_file):
                         task_id = os.path.basename(task_file)
                         try:
-                            status_data = api_service.get_status_from_store(task_id)
+                            status_data = self._get_status_from_file(task_id)
                             file_mtime = os.path.getmtime(task_file)
                             history_item = self._convert_status_to_history_item(status_data, task_id, file_mtime)
                             if history_item:
@@ -163,11 +152,7 @@ class HistoryGatewayService:
                                 
                                 # 降级方案：使用文件修改时间
                                 if sort_number is None:
-                                    file_mtime = os.path.getmtime(task_file)
                                     sort_number = file_mtime
-                                    print(f"[Enhanced History] Using file mtime for {prompt_id[:12]}... (no prompt number)")
-                                else:
-                                    print(f"[Enhanced History] Using prompt number {sort_number} for {prompt_id[:12]}...")
                                 
                                 timestamp = sort_number
                                 
@@ -178,25 +163,25 @@ class HistoryGatewayService:
                                 })
                                 
                         except Exception as e:
-                            print(f"[Enhanced History] Error processing task_id {task_id}: {e}")
+                            log("WARNING", f"Error processing task_id {task_id}: {e}")
                             continue
                 
                 # 按时间戳倒序排序（最新的在前）
                 history_with_timestamps.sort(key=lambda x: x['timestamp'], reverse=True)
-                print(f"[Enhanced History] Sorted {len(history_with_timestamps)} history items by timestamp (newest first)")
+                log("DEBUG", f"Sorted {len(history_with_timestamps)} history items by timestamp (newest first)")
                 
                 # 调试信息：显示排序结果的前几条
                 if history_with_timestamps:
                     from datetime import datetime
-                    print(f"[Enhanced History] Sort order preview:")
+                    log("DEBUG", f"Sort order preview:")
                     for i, item in enumerate(history_with_timestamps[:5]):  # 显示前5条
                         timestamp_str = datetime.fromtimestamp(item['timestamp']).strftime('%Y-%m-%d %H:%M:%S')
-                        print(f"  {i+1}. {item['prompt_id'][:12]}... - {timestamp_str}")
+                        log("DEBUG", f"  {i+1}. {item['prompt_id'][:12]}... - {timestamp_str}")
                 
                 # 应用limit限制
                 if limit is not None and limit > 0:
                     history_with_timestamps = history_with_timestamps[:limit]
-                    print(f"[Enhanced History] Limited results to {limit} most recent items")
+                    log("DEBUG", f"Limited results to {limit} most recent items")
                 
                 # 构建最终的历史记录字典，按倒序赋值序号（最新的序号最大）
                 total_count = len(history_with_timestamps)
@@ -219,31 +204,46 @@ class HistoryGatewayService:
             return all_history
             
         except Exception as e:
-            print(f"[Enhanced History] Error getting all persisted history: {e}")
+            log("ERROR", f"Error getting all persisted history: {e}")
             return {}
     
-    def _get_persisted_history_by_prompt_id(self, api_service, prompt_id):
+    def _get_persisted_history_by_prompt_id(self, prompt_id):
         """
         根据 prompt_id 从持久化存储获取历史记录
+        
+        首先尝试可能的 task_id 路径，如果失败则遍历所有文件查找
         """
         try:
-            # 构造可能的 task_id 列表
+            # 首先尝试可能的 task_id 路径（性能优化）
             possible_task_ids = [
                 prompt_id,
                 f"prompt_{constants.INSTANCE_ID}_{prompt_id}",
-                # 可以添加更多可能的 task_id 模式
             ]
             
-            # 也可以通过搜索所有文件来查找包含该 prompt_id 的记录
-            storage_path = f"{constants.MNT_DIR}/output/serverless_api"
+            for task_id in possible_task_ids:
+                file_path = os.path.join(self.storage_path, task_id)
+                if os.path.exists(file_path) and os.path.isfile(file_path):
+                    try:
+                        status_data = self._get_status_from_file(task_id)
+                        # 验证是否包含该 prompt_id
+                        for status in status_data:
+                            if (status.get("type") == "serverless_api" and 
+                                status.get("data", {}).get("prompt_id") == prompt_id):
+                                return self._convert_status_to_history_item(status_data, task_id)
+                    except Exception as e:
+                        continue
             
-            if os.path.exists(storage_path):
-                task_files = glob.glob(os.path.join(storage_path, "*"))
+            # 如果直接路径查找失败，遍历所有文件查找（降级方案）
+            if os.path.exists(self.storage_path):
+                task_files = glob.glob(os.path.join(self.storage_path, "*"))
                 for task_file in task_files:
                     if os.path.isfile(task_file):
                         task_id = os.path.basename(task_file)
+                        # 跳过已经尝试过的 task_id
+                        if task_id in possible_task_ids:
+                            continue
                         try:
-                            status_data = api_service.get_status_from_store(task_id)
+                            status_data = self._get_status_from_file(task_id)
                             for status in status_data:
                                 if (status.get("type") == "serverless_api" and 
                                     status.get("data", {}).get("prompt_id") == prompt_id):
@@ -254,7 +254,7 @@ class HistoryGatewayService:
             return None
             
         except Exception as e:
-            print(f"[Enhanced History] Error getting persisted history for prompt_id {prompt_id}: {e}")
+            log("ERROR", f"Error getting persisted history for prompt_id {prompt_id}: {e}")
             return None
     
     def _convert_status_to_history_item(self, status_data, task_id, file_mtime=None):
@@ -315,7 +315,8 @@ class HistoryGatewayService:
             # 构造符合 ComfyUI 格式的 prompt 数据结构
             # ComfyUI 原生格式: [number, prompt_id, {prompt_data}, {extra_data}, [outputs_to_execute]]
             # 使用文件修改时间作为初始序号，后续会被正确的序号覆盖
-            initial_number = int(file_mtime) if file_mtime else 1
+            # 注意：保留浮点数精度，后续在排序时会使用
+            initial_number = file_mtime if file_mtime else 1.0
             prompt_structure = [
                 initial_number,  # number - 使用时间戳作为初始值
                 prompt_id,  # prompt_id
@@ -337,5 +338,28 @@ class HistoryGatewayService:
             }
             
         except Exception as e:
-            print(f"[Enhanced History] Error converting status to history: {e}")
+            log("ERROR", f"Error converting status to history: {e}")
             return None
+    
+    def _get_status_from_file(self, task_id: str):
+        """
+        从文件读取任务状态
+        
+        Args:
+            task_id: 任务ID
+            
+        Returns:
+            list: 状态历史列表
+        """
+        try:
+            file_path = os.path.join(self.storage_path, task_id)
+            if not os.path.exists(file_path):
+                return []
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                return [json.loads(line) for line in content.split("\n") if line.strip()]
+        except Exception as e:
+            log("ERROR", f"Error reading status from file {task_id}: {e}")
+            return []
+

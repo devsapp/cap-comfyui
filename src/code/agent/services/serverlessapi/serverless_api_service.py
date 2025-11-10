@@ -506,17 +506,8 @@ class ServerlessApiService:
         """
         if task_id and self.store:
             try:
-                # 使用追加模式直接写入，避免读取整个文件
-                if hasattr(self.store, 'output_folder'):
-                    file_path = os.path.join(self.store.output_folder, task_id)
-                    with open(file_path, 'a', encoding='utf-8') as f:
-                        f.write(status + '\n')
-                        f.flush()  # 刷新缓冲区
-                        os.fsync(f.fileno())  # 强制写入磁盘/NAS
-                else:
-                    # 回退到原始方法
-                    value = self.store.get(task_id)
-                    self.store.put(task_id, f"{value}\n{status}")
+                value = self.store.get(task_id)
+                self.store.put(task_id, f"{value}\n{status}")
             except Exception as e:
                 log("ERROR", f"put status to store failed, due to {e}")
             finally:
@@ -564,7 +555,21 @@ class ServerlessApiService:
             return []
 
         try:
-            # 获取文件状态
+            # 强制刷新NFS目录和文件缓存
+            try:
+                dir_path = os.path.dirname(file_path)
+                # 1. 刷新目录缓存
+                os.listdir(dir_path)
+                # 2. 强制刷新文件属性缓存
+                with open(file_path, 'rb') as f:
+                    f.read(1)
+                    os.fsync(f.fileno())  # 强制同步文件描述符
+                # 3. 再次获取文件状态确保元数据最新
+                os.stat(file_path)
+            except Exception as e:
+                print(f"[ServerlessApiService] Cache flush warning for {task_id}: {e}")
+            
+            # 获取文件状态（确保使用最新的元数据）
             file_stat = os.stat(file_path)
             current_size = file_stat.st_size
             current_modified = file_stat.st_mtime

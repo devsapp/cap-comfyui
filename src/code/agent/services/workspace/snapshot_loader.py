@@ -73,11 +73,11 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
         file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
 
     def _create_symlinks(self, snapshot_path: str):
-        file_ops.create_symlink(
-            source_path=f"{constants.MODEL_DIR}",
-            link_path=f"{constants.COMFYUI_DIR}/models",
-            force=True
-        )
+        # file_ops.create_symlink(
+        #     source_path=f"{constants.MODEL_DIR}",
+        #     link_path=f"{constants.COMFYUI_DIR}/models",
+        #     force=True
+        # )
         file_ops.create_symlink(
             source_path=f"{constants.MNT_DIR}/custom_nodes",
             link_path=f"{constants.COMFYUI_DIR}/custom_nodes",
@@ -121,11 +121,11 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
             file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
 
     def _create_symlinks(self, snapshot_path: str):
-        file_ops.create_symlink(
-            source_path=f"{constants.MODEL_DIR}",
-            link_path=f"{constants.COMFYUI_DIR}/models",
-            force=True
-        )
+        # file_ops.create_symlink(
+        #     source_path=f"{constants.MODEL_DIR}",
+        #     link_path=f"{constants.COMFYUI_DIR}/models",
+        #     force=True
+        # )
         if constants.SKIP_NODES_LOADING and snapshot_path:
             file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")
             file_ops.create_symlink(

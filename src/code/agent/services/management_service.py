@@ -1,6 +1,8 @@
 from enum import Enum
 from threading import Lock
 from typing import Dict, Set, Optional
+import subprocess
+import os
 
 import constants
 from exceptions.exceptions import StateTransitionError
@@ -96,6 +98,47 @@ class ManagementService:
     # 哨兵对象，表示启动时是否跳过依赖安装流程
     _SKIP_INSTALL_SENTINEL = object()
 
+    def _mount_shared_models(self) -> None:
+        """
+        使用 unionfs-fuse 将共享模型目录和用户模型目录合并挂载到 ComfyUI models 目录。
+        
+        挂载结构：
+        - user_models_dir (RW): 用户自己的模型目录，可读写
+        - shared_models_dir (RO): 共享的模型目录，只读
+        - comfyui_models_dir: ComfyUI 使用的模型目录（挂载点）
+        
+        使用 copy-on-write (cow) 模式：
+        - 读取时：优先从用户目录读取，如果不存在则从共享目录读取
+        - 写入时：所有写入都发生在用户目录，共享目录保持只读
+        """
+        # 定义目录路径
+        user_models_dir = f"{constants.MNT_DIR}/models"
+        shared_models_dir = "/mnt/shared/models"
+        comfyui_models_dir = f"{constants.COMFYUI_DIR}/models"
+        
+        # 检查并创建 shared_models_dir
+        if not os.path.exists(shared_models_dir):
+            print(f"Warning: Shared models directory {shared_models_dir} does not exist, creating empty directory")
+            os.makedirs(shared_models_dir, exist_ok=True)
+        elif not os.listdir(shared_models_dir):
+            print(f"Warning: Shared models directory {shared_models_dir} is empty")
+        
+        # 确保挂载点目录存在
+        os.makedirs(comfyui_models_dir, exist_ok=True)
+        os.makedirs(user_models_dir, exist_ok=True)
+
+        # 执行 unionfs-fuse 挂载：将用户模型目录（RW）和共享模型目录（RO）合并到 ComfyUI 模型目录
+        # nonempty: 允许挂载到非空目录（原目录内容会被隐藏，但不会被删除）
+        unionfs_cmd = [
+            "unionfs-fuse",
+            "-o", "cow,allow_other,nonempty",
+            f"{user_models_dir}=RW:{shared_models_dir}=RO",
+            comfyui_models_dir
+        ]
+        print(f"Mounting shared models: {' '.join(unionfs_cmd)}")
+        subprocess.run(unionfs_cmd, check=True)
+        print(f"Successfully mounted: {user_models_dir}(RW) + {shared_models_dir}(RO) -> {comfyui_models_dir}")
+
     def install_custom_nodes(self, nodes_map: Optional[Dict] = None, timeout: int = constants.DEFAULT_INSTALL_TIMEOUT) -> Dict:
         """
         安装自定义节点的依赖包。
@@ -146,6 +189,9 @@ class ManagementService:
                 self._snapshot_mgr.prepare_link()
             else:
                 result_map = self._snapshot_mgr.load(snapshot_name)
+
+            # 挂载共享模型目录到 ComfyUI models 目录
+            self._mount_shared_models()
 
             # 安装缺失插件依赖
             if nodes_map is not self._SKIP_INSTALL_SENTINEL:

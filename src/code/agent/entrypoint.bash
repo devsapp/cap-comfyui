@@ -72,6 +72,14 @@ if [ "${SKIP_SNAPSHOT_LOADING_LOWER}" != "true" ]; then
     fi
 fi
 
+# 创建 fuse 设备节点
+mknod /dev/fuse c 10 229
+
+# 配置 shared models
+unionfs-fuse -o cow,allow_other \
+  ${MNT_DIR}/models=RW:/mnt/shared/models=RO \
+  /root/comfyui/models
+
 mkdir -p ${MNT_DIR}/input
 mkdir -p ${MNT_DIR}/output
 source ${AGENT_DIR}/venv/bin/activate

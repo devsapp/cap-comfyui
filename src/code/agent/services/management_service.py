@@ -3,6 +3,7 @@ from threading import Lock
 from typing import Dict, Set, Optional
 import subprocess
 import os
+import getpass
 
 import constants
 from exceptions.exceptions import StateTransitionError
@@ -111,6 +112,21 @@ class ManagementService:
         - 读取时：优先从用户目录读取，如果不存在则从共享目录读取
         - 写入时：所有写入都发生在用户目录，共享目录保持只读
         """
+        print(f"当前进程用户 ID: {os.getuid()}")
+        print(f"当前进程用户: {getpass.getuser()}")
+        print(f"是否是 root: {os.getuid() == 0}")
+        
+        # 检查 FUSE 设备
+        fuse_device = "/dev/fuse"
+        if os.path.exists(fuse_device):
+            stat_info = os.stat(fuse_device)
+            print(f"FUSE 设备存在: {fuse_device}")
+            print(f"FUSE 设备权限: {oct(stat_info.st_mode)}")
+            print(f"FUSE 设备可读: {os.access(fuse_device, os.R_OK)}")
+            print(f"FUSE 设备可写: {os.access(fuse_device, os.W_OK)}")
+        else:
+            print(f"警告: FUSE 设备不存在: {fuse_device}")
+        
         # 定义目录路径
         user_models_dir = f"{constants.MNT_DIR}/models"
         shared_models_dir = "/mnt/shared/models"
@@ -137,7 +153,15 @@ class ManagementService:
             comfyui_models_dir
         ]
         print(f"Mounting shared models: {' '.join(unionfs_cmd)}")
-        subprocess.run(unionfs_cmd, check=True)
+        
+        # 捕获详细错误信息用于调试
+        result = subprocess.run(unionfs_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"挂载失败，返回码: {result.returncode}")
+            print(f"STDERR: {result.stderr}")
+            print(f"STDOUT: {result.stdout}")
+            raise subprocess.CalledProcessError(result.returncode, unionfs_cmd, result.stdout, result.stderr)
+        
         print(f"Successfully mounted: {user_models_dir}(RW) + {shared_models_dir}(RO) -> {comfyui_models_dir}")
 
     def install_custom_nodes(self, nodes_map: Optional[Dict] = None, timeout: int = constants.DEFAULT_INSTALL_TIMEOUT) -> Dict:

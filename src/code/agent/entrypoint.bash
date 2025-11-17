@@ -79,6 +79,7 @@ mknod /dev/fuse c 10 229
 unionfs-fuse -o cow,allow_other \
   ${MNT_DIR}/models=RW:/mnt/shared/models=RO \
   /root/comfyui/models
+echo "Using shared models ..."
 
 mkdir -p ${MNT_DIR}/input
 mkdir -p ${MNT_DIR}/output

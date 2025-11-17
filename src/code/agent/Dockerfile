@@ -6,7 +6,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
     apt install -y \
     git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping \
-    procps vim unzip
+    procps vim unzip unionfs-fuse
 
 # 安装 ossutil
 RUN curl -o ossutil-2.1.2-linux-amd64.zip https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip && \

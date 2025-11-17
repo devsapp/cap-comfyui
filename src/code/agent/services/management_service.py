@@ -129,9 +129,10 @@ class ManagementService:
 
         # 执行 unionfs-fuse 挂载：将用户模型目录（RW）和共享模型目录（RO）合并到 ComfyUI 模型目录
         # nonempty: 允许挂载到非空目录（原目录内容会被隐藏，但不会被删除）
+        # cow: copy-on-write 模式
         unionfs_cmd = [
             "unionfs-fuse",
-            "-o", "cow,allow_other,nonempty",
+            "-o", "cow,nonempty",
             f"{user_models_dir}=RW:{shared_models_dir}=RO",
             comfyui_models_dir
         ]

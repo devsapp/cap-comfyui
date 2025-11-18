@@ -99,9 +99,9 @@ setup_shared_models() {
     local shared_models_dir="/mnt/shared/models"
     local user_models_dir="${MNT_DIR}/models"
     
-    echo "[INFO] Setting up shared models with symlinks..."
+    echo "[INFO] Setting up shared models ..."
     
-    # 确保用户模型目录存在
+    # 确保用户模型目录存在，如果已存在，则跳过；如果不存在，创建目录
     mkdir -p "${user_models_dir}"
     
     # 如果共享模型目录不存在，跳过

@@ -81,7 +81,9 @@ OSS_KEY_PREFIX = os.getenv("OSS_KEY_PREFIX", "comfyui_serverless_api")
 OSS_OUTPUT_DOMAIN = os.getenv("OSS_OUTPUT_DOMAIN", "")
 OSS_EXPIRES_IN_SECOND = os.getenv("OSS_EXPIRES_IN_SECOND", "")
 
+
 PREWARM_PROMPT = os.getenv("PREWARM_PROMPT", "")
+PREWARM_TIMEOUT = int(os.getenv("PREWARM_TIMEOUT", "600"))  # 单位：秒，默认10分钟
 
 # 日志配置
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

@@ -6,6 +6,7 @@ import traceback
 from flask import Blueprint, Flask, jsonify, request
 from flask_sock import Sock
 
+import constants
 from services.management_service import ManagementService, BackendStatus
 from utils.logger import log
 from services.gateway import (
@@ -77,36 +78,33 @@ class CpuRoutes:
             """
             try:
                 # 从查询参数获取 clientId（ComfyUI 前端重连时会传递）
-                from flask import request as flask_request
-                client_id = flask_request.args.get('clientId', '')
+                client_id = request.args.get('clientId', '')
                 
                 if client_id:
                     # 复用已有的 client_id（重连场景）
                     log("INFO", f"WebSocket reconnecting with existing client_id: {client_id}")
                 else:
                     # 生成新的 client_id（首次连接）
-                    client_id = f"cpu_client_{int(time.time() * 1000)}"
+                    client_id = f"funart_client_{int(time.time() * 1000)}"
                     log("INFO", f"New ComfyUI WebSocket connection with client_id: {client_id}")
                 
                 # 添加连接到管理器
                 ws_manager.add_connection(ws)
                 
-                # 发送初始状态消息（模拟ComfyUI原生行为）
-                try:
-                    ws.send(json.dumps({
-                        "type": "status",
-                        "data": {
-                            "sid": client_id,
-                            "status": {
-                                "exec_info": {
-                                    "queue_remaining": get_task_queue()._get_pending_task_count()
-                                }
+                # 通过消息队列发送初始状态消息，保证线程安全
+                initial_status = {
+                    "type": "status",
+                    "data": {
+                        "sid": client_id,
+                        "status": {
+                            "exec_info": {
+                                "queue_remaining": get_task_queue().get_running_task_count()
                             }
                         }
-                    }))
-                except Exception as e:
-                    log("ERROR", f"Failed to send initial status: {e}")
-                    return
+                    }
+                }
+                # 使用 _send_sync 发送初始状态
+                ws_manager._send_sync(ws, initial_status)
                 
                 # 设置客户端ID，用于后续关联任务
                 setattr(ws, '_comfyui_client_id', client_id)
@@ -116,13 +114,12 @@ class CpuRoutes:
                 
                 # 如果是重连，重新订阅该客户端的所有进行中的任务
                 ws_manager.resubscribe_client_tasks(ws, client_id)
-                
-                # TODO 可能是多余的
+
                 while True:
                     try:
                         message = ws.receive()
                         log("DEBUG", f"Received message from ComfyUI frontend: {message[:100]}...")
-                        
+
                     except Exception as e:
                         error_str = str(e)
                         if "Connection closed" in error_str or "closed" in error_str.lower():
@@ -130,7 +127,6 @@ class CpuRoutes:
                             break
                         log("ERROR", f"Error receiving message: {e}\n{traceback.format_exc()}")
                         break
-                    
             except Exception as e:
                 log("ERROR", f"Connection error: {e}\n{traceback.format_exc()}")
             finally:
@@ -202,7 +198,7 @@ class CpuRoutes:
             
             调用方式:
             - 默认: 异步调用（与 /api/prompt 处理一致）
-            - Header X-Art-Invocation-Type: Sync 时: 同步调用，等待GPU返回结果
+            - Header X-FC-Invocation-Type: Sync 时: 同步调用，等待GPU返回结果
             
             异步模式:
             - 将请求转发到GPU函数（异步调用）
@@ -221,12 +217,12 @@ class CpuRoutes:
             try:
                 gateway_service = CpuGatewayService()
                 
-                # 检查调用类型：Header X-Art-Invocation-Type: Sync 表示同步调用
-                invocation_type = request.headers.get("X-Art-Invocation-Type", "").strip()
+                # TODO:  支持X-FC-Invocation-Type透传到Runtime,当前默认使用异步
+                invocation_type = request.headers.get(constants.HEADER_FC_INVOCATION_TYPE, "Async").strip()
                 is_sync = invocation_type.lower() == "sync"
                 
                 if is_sync:
-                    log("DEBUG", f"Processing /serverless/run in SYNC mode (X-Art-Invocation-Type: Sync)")
+                    log("DEBUG", f"Processing /serverless/run in SYNC mode (X-FC-Invocation-Type: Sync)")
                     return gateway_service.handle_serverless_run_sync()
                 else:
                     log("DEBUG", f"Processing /serverless/run in ASYNC mode (default)")
@@ -267,10 +263,9 @@ class CpuRoutes:
                 }), 500
     
     def _register_userdata_handler(self):
-        """在 prod 模式下，阻止保存 userdata 文件"""
         @self.bp.route("/userdata/<path:file>", methods=["POST"])
         def block_userdata_save(file):
-            log("WARN", f"Attempt to save userdata blocked in prod mode: {file}")
+            log("INFO", f"Disable Saving Userdata in prod mode: {file}")
             return jsonify({
                 "error": {
                     "type": "forbidden",

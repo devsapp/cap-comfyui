@@ -11,6 +11,7 @@ from simple_websocket import Server
 
 import constants
 from utils.bool import is_true
+from utils.logger import log
 from services.serverlessapi.serverless_api_service import (
     ComfyUIException,
     ServerlessApiService,
@@ -41,11 +42,17 @@ class ServerlessApiRoutes:
         async_task_id = request.headers.get(ServerlessApiRoutes.HEADER_KEY_TASK_ID_PRIMARY)
         fc_request_id = request.headers.get(ServerlessApiRoutes.HEADER_KEY_TASK_ID_SECONDARY)
         
+        # 调试：记录所有相关的 headers
+        log("DEBUG", f"[ServerlessApiRoutes] Extracting task_id: x-fc-async-task-id={async_task_id}, x-fc-request-id={fc_request_id}")
+        
         if async_task_id:
+            log("DEBUG", f"[ServerlessApiRoutes] Using x-fc-async-task-id as task_id: {async_task_id}")
             return async_task_id, "x-fc-async-task-id"
         elif fc_request_id:
+            log("DEBUG", f"[ServerlessApiRoutes] Using x-fc-request-id as task_id: {fc_request_id}")
             return fc_request_id, "x-fc-request-id"
         else:
+            log("ERROR", f"[ServerlessApiRoutes] No task_id found in headers")
             return None, "none"
 
     def setup_routes(self):
@@ -60,6 +67,9 @@ class ServerlessApiRoutes:
                     "error_code": constants.ERROR_CODE.INVALID_PARAMS.value,
                     "error_message": "task_id is required",
                 }, 400
+
+            # 刷新磁盘缓存，确保能获取到最新状态（解决实例冻结导致的缓存问题）
+            self.service.refresh_storage_cache()
 
             return self.service.get_status_from_store(task_id)
 
@@ -95,7 +105,7 @@ class ServerlessApiRoutes:
                 output_oss = is_true(request.args.get("output_oss"))
                 
                 task_id, task_id_source = self._extract_task_id()
-                print(f"[GPU ServerlessApi] Task ID extracted: '{task_id}' from {task_id_source}")
+                log("INFO", f"[HTTP] extracted task_id: {task_id}, source: {task_id_source}")
 
                 if not stream:
                     try:
@@ -202,7 +212,7 @@ class ServerlessApiRoutes:
                 output_oss = is_true(request.args.get("output_oss"))
                 
                 task_id, task_id_source = self._extract_task_id()
-                print(f"[GPU ServerlessApi WS] Task ID extracted: '{task_id}' from {task_id_source}")
+                log("INFO", f"[WebSocket] extracted task_id: {task_id}, source: {task_id_source}")
 
                 # 获取第一个 message 作为输入的 prompt
                 data = ws.receive()

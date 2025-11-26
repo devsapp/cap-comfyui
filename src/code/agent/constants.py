@@ -112,8 +112,18 @@ PREWARM_PROMPT = os.getenv("PREWARM_PROMPT", "")
 # GPU 函数的 URL，当 COMFYUI_MODE="cpu" 时使用
 GPU_FUNCTION_URL = os.getenv("GPU_FUNCTION_URL", "")
 
+# HTTP Header 常量
+HEADER_SNAPSHOT_NAME = "X-FunArt-Snapshot-Name"
+HEADER_FORWARDED_BY = "X-FunArt-Forwarded-By"
+HEADER_FC_INVOCATION_TYPE = "X-FC-Invocation-Type"
+
 # 日志配置
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# 队列存储配置
+QUEUE_STORAGE_TYPE = os.getenv('QUEUE_STORAGE_TYPE', 'memory')  # memory | nas
+QUEUE_NAS_DIR = f'{MNT_DIR}/task/queue'  # 队列 NAS 存储目录
+QUEUE_LOCK_TIMEOUT = int(os.getenv('QUEUE_LOCK_TIMEOUT', '5'))  # 队列锁超时（秒）
 
 class ERROR_CODE(Enum):
     UNCLASSIFY = "UNCLASSIFY"

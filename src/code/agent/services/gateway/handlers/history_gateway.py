@@ -5,9 +5,11 @@ History Gateway Service
 import os
 import json
 import glob
+import time
 import traceback
 from collections import OrderedDict
-from flask import request, jsonify, Response
+from datetime import datetime
+from flask import request, jsonify
 
 import constants
 from utils.logger import log
@@ -118,94 +120,52 @@ class HistoryGatewayService:
     
     def _get_all_persisted_history(self, limit=None):
         """
-        从持久化存储获取所有历史记录，按生成时间倒序排序（最新的在前）
+        从持久化存储获取所有历史记录，按文件修改时间倒序排序（最新的在前）
         
         Args:
             limit: 限制返回的记录数量，None表示返回所有记录
         """
         try:
-            all_history = OrderedDict()  # 使用有序字典保持排序
-            history_with_timestamps = []  # 用于排序的临时列表
+            if not os.path.exists(self.storage_path):
+                return OrderedDict()
             
-            if os.path.exists(self.storage_path):
-                # 获取所有存储文件
-                task_files = glob.glob(os.path.join(self.storage_path, "*"))
-                log("DEBUG", f"Found {len(task_files)} task files in storage")
-                
-                for task_file in task_files:
-                    if os.path.isfile(task_file):
-                        task_id = os.path.basename(task_file)
-                        try:
-                            status_data = self._get_status_from_file(task_id)
-                            file_mtime = os.path.getmtime(task_file)
-                            history_item = self._convert_status_to_history_item(status_data, task_id, file_mtime)
-                            if history_item:
-                                prompt_id = list(history_item.keys())[0]
-                                
-                                # 使用prompt中的序号作为排序依据（ComfyUI原生的排序方式）
-                                # prompt格式：[number, prompt_id, {...}, {...}, [...]]
-                                sort_number = None
-                                if history_item[prompt_id].get('prompt'):
-                                    prompt_array = history_item[prompt_id]['prompt']
-                                    if isinstance(prompt_array, list) and len(prompt_array) > 0:
-                                        sort_number = prompt_array[0]  # 第一个元素是序号
-                                
-                                # 降级方案：使用文件修改时间
-                                if sort_number is None:
-                                    sort_number = file_mtime
-                                
-                                timestamp = sort_number
-                                
-                                history_with_timestamps.append({
-                                    'prompt_id': prompt_id,
-                                    'history_item': history_item,  # 保持完整结构（包含prompt_id key）
-                                    'timestamp': timestamp
-                                })
-                                
-                        except Exception as e:
-                            log("WARNING", f"Error processing task_id {task_id}: {e}")
-                            continue
-                
-                # 按时间戳倒序排序（最新的在前）
-                history_with_timestamps.sort(key=lambda x: x['timestamp'], reverse=True)
-                log("DEBUG", f"Sorted {len(history_with_timestamps)} history items by timestamp (newest first)")
-                
-                # 调试信息：显示排序结果的前几条
-                if history_with_timestamps:
-                    from datetime import datetime
-                    log("DEBUG", f"Sort order preview:")
-                    for i, item in enumerate(history_with_timestamps[:5]):  # 显示前5条
-                        timestamp_str = datetime.fromtimestamp(item['timestamp']).strftime('%Y-%m-%d %H:%M:%S')
-                        log("DEBUG", f"  {i+1}. {item['prompt_id'][:12]}... - {timestamp_str}")
-                
-                # 应用limit限制
-                if limit is not None and limit > 0:
-                    history_with_timestamps = history_with_timestamps[:limit]
-                    log("DEBUG", f"Limited results to {limit} most recent items")
-                
-                # 构建最终的历史记录字典，按倒序赋值序号（最新的序号最大）
-                total_count = len(history_with_timestamps)
-                
-                for idx, item in enumerate(history_with_timestamps):
-                    prompt_id = item['prompt_id']
-                    history_item = item['history_item']  # 完整结构: {prompt_id: {prompt, outputs, status}}
-                    
-                    # 修改prompt数组的第一个元素为正确的序号（最新的最大）
-                    # 前端按 queueIndex 降序排序: sort((a, b) => b.queueIndex - a.queueIndex)
-                    sequence_number = total_count - idx
-                    if prompt_id in history_item and 'prompt' in history_item[prompt_id]:
-                        prompt_array = history_item[prompt_id]['prompt']
-                        if isinstance(prompt_array, list) and len(prompt_array) > 0:
-                            prompt_array[0] = sequence_number  # 更新序号
-                    
-                    # 提取内层字典存入all_history
-                    all_history[prompt_id] = history_item[prompt_id]
+            # 获取所有存储文件，按修改时间排序
+            task_files = glob.glob(os.path.join(self.storage_path, "*"))
+            task_files = [f for f in task_files if os.path.isfile(f)]
+            task_files.sort(key=os.path.getmtime, reverse=True)  # 最新的在前
+            
+            log("DEBUG", f"Found {len(task_files)} task files in storage")
+            
+            # 应用limit限制
+            if limit is not None and limit > 0:
+                task_files = task_files[:limit]
+            
+            all_history = OrderedDict()
+            total_count = len(task_files)
+            
+            for idx, task_file in enumerate(task_files):
+                task_id = os.path.basename(task_file)
+                try:
+                    status_data = self._get_status_from_file(task_id)
+                    file_mtime = os.path.getmtime(task_file)
+                    history_item = self._convert_status_to_history_item(status_data, task_id, file_mtime)
+                    if history_item:
+                        prompt_id = list(history_item.keys())[0]
+                        # 更新序号（最新的序号最大，倒序）
+                        if prompt_id in history_item and 'prompt' in history_item[prompt_id]:
+                            prompt_array = history_item[prompt_id]['prompt']
+                            if isinstance(prompt_array, list) and len(prompt_array) > 0:
+                                prompt_array[0] = total_count - idx
+                        all_history[prompt_id] = history_item[prompt_id]
+                except Exception as e:
+                    log("WARNING", f"Error processing task_id {task_id}: {e}")
+                    continue
             
             return all_history
             
         except Exception as e:
             log("ERROR", f"Error getting all persisted history: {e}")
-            return {}
+            return OrderedDict()
     
     def _get_persisted_history_by_prompt_id(self, prompt_id):
         """
@@ -229,8 +189,10 @@ class HistoryGatewayService:
                         for status in status_data:
                             if (status.get("type") == "serverless_api" and 
                                 status.get("data", {}).get("prompt_id") == prompt_id):
-                                return self._convert_status_to_history_item(status_data, task_id)
+                                file_mtime = os.path.getmtime(file_path)
+                                return self._convert_status_to_history_item(status_data, task_id, file_mtime)
                     except Exception as e:
+                        log("DEBUG", f"Error checking task_id {task_id} for prompt_id {prompt_id}: {e}")
                         continue
             
             # 如果直接路径查找失败，遍历所有文件查找（降级方案）
@@ -247,8 +209,10 @@ class HistoryGatewayService:
                             for status in status_data:
                                 if (status.get("type") == "serverless_api" and 
                                     status.get("data", {}).get("prompt_id") == prompt_id):
-                                    return self._convert_status_to_history_item(status_data, task_id)
+                                    file_mtime = os.path.getmtime(task_file)
+                                    return self._convert_status_to_history_item(status_data, task_id, file_mtime)
                         except Exception as e:
+                            log("DEBUG", f"Error checking task_id {task_id} for prompt_id {prompt_id}: {e}")
                             continue
             
             return None
@@ -286,6 +250,7 @@ class HistoryGatewayService:
             data = final_result.get("data", {})
             prompt_id = data.get("prompt_id", task_id)
             results = data.get("results", [])
+            execution_time = data.get("execution_time")  # 获取执行时间
             
             # 构造 ComfyUI 兼容的输出格式
             outputs = {}
@@ -325,15 +290,55 @@ class HistoryGatewayService:
                 []   # outputs_to_execute - 要执行的输出节点
             ]
             
+            # 构造 status 对象，与 ComfyUI 完全一致
+            # ComfyUI 的 ExecutionStatus 格式: {status_str, completed, messages}
+            # messages 格式: List[Tuple[str, dict]]，每个消息包含 timestamp
+            
+            # 计算时间戳
+            # 如果有 execution_time，使用它来计算准确的开始和结束时间
+            # 否则使用文件修改时间作为参考
+            if execution_time is not None and file_mtime is not None:
+                # 使用文件修改时间作为结束时间，向前推 execution_time 作为开始时间
+                end_timestamp = int(file_mtime * 1000)
+                start_timestamp = end_timestamp - int(execution_time * 1000)
+            elif file_mtime is not None:
+                # 没有 execution_time，使用文件修改时间作为结束时间，向前推1秒作为开始时间（默认）
+                end_timestamp = int(file_mtime * 1000)
+                start_timestamp = end_timestamp - 1000  # 默认1秒
+            else:
+                # 降级方案：使用当前时间
+                current_timestamp = int(time.time() * 1000)
+                end_timestamp = current_timestamp
+                start_timestamp = current_timestamp - 1000
+            
+            # 构造 messages，与 ComfyUI 格式完全一致
+            # ComfyUI 会发送 execution_start 和 execution_success 消息
+            status_obj = {
+                "status_str": "success",
+                "completed": True,
+                "messages": [
+                    [
+                        "execution_start",
+                        {
+                            "prompt_id": prompt_id,
+                            "timestamp": start_timestamp
+                        }
+                    ],
+                    [
+                        "execution_success",
+                        {
+                            "prompt_id": prompt_id,
+                            "timestamp": end_timestamp
+                        }
+                    ]
+                ]
+            }
+            
             return {
                 prompt_id: {
                     "prompt": prompt_structure,
                     "outputs": outputs,
-                    "status": {
-                        "status_str": "success",
-                        "completed": True,
-                        "messages": []
-                    }
+                    "status": status_obj
                 }
             }
             
@@ -358,7 +363,16 @@ class HistoryGatewayService:
             
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-                return [json.loads(line) for line in content.split("\n") if line.strip()]
+                status_list = []
+                for line in content.split("\n"):
+                    line = line.strip()
+                    if line:
+                        try:
+                            status_list.append(json.loads(line))
+                        except json.JSONDecodeError as e:
+                            log("WARNING", f"Error parsing JSON line in file {task_id}: {e}")
+                            continue
+                return status_list
         except Exception as e:
             log("ERROR", f"Error reading status from file {task_id}: {e}")
             return []

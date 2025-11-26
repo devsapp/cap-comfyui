@@ -6,6 +6,9 @@ TYPE_COMFYUI = 'comfyui'
 TYPE_SD = 'sd'
 BACKEND_TYPE = os.getenv('BACKEND_TYPE', TYPE_COMFYUI)
 
+# ComfyUI 模式配置：'cpu' 或 'gpu'
+COMFYUI_MODE = os.getenv('COMFYUI_MODE', 'gpu').lower()
+
 # API Mode
 USE_API_MODE = bool(os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME"))
 AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
@@ -22,7 +25,27 @@ SNAPSHOT_DIR = MNT_DIR + '/snapshots'
 SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
 COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
 COMFYUI_PROCESS_PORT = 8188
-COMFYUI_BOOT_CMD = [
+
+# CPU模式启动命令
+COMFYUI_CPU_BOOT_CMD = [
+    f"{VENV_DIR}/bin/python",
+    f"{COMFYUI_DIR}/main.py",
+    "--cpu",
+    "--listen",
+    "0.0.0.0",
+    "--input-directory",
+    f"{MNT_DIR}/input",
+    "--output-directory",
+    f"{MNT_DIR}/output",
+    "--temp-directory",
+    f"{MNT_DIR}/output",
+    "--user-directory",
+    f"{MNT_DIR}/output",
+    "--disable-metadata"
+]
+
+# GPU模式启动命令（不包含--cpu参数）
+COMFYUI_GPU_BOOT_CMD = [
     f"{VENV_DIR}/bin/python",
     f"{COMFYUI_DIR}/main.py",
     "--listen",
@@ -37,6 +60,9 @@ COMFYUI_BOOT_CMD = [
     f"{MNT_DIR}/output",
     "--disable-metadata"
 ]
+
+# 根据模式选择启动命令
+COMFYUI_BOOT_CMD = COMFYUI_CPU_BOOT_CMD if COMFYUI_MODE == 'cpu' else COMFYUI_GPU_BOOT_CMD
 SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
 SD_PROCESS_PORT = 7860
 SD_BOOT_CMD = [

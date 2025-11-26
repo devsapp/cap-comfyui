@@ -2,6 +2,7 @@ import tarfile
 import zipfile
 import shutil
 import os
+from utils.logger import log
 
 
 def copy(source_path, target_path):
@@ -22,7 +23,7 @@ def copy(source_path, target_path):
             shutil.copytree(source_path, target_path, symlinks=True, dirs_exist_ok=True)
 
     except Exception as e:
-        print(f"Failed to copy {source_path} to {target_path}, reason: {e}")
+        log("ERROR", f"Failed to copy {source_path} to {target_path}, reason: {e}")
         raise
 
 
@@ -47,7 +48,7 @@ def move(source_path, target_path):
             shutil.move(source_path, target_path)
 
     except Exception as e:
-        print(f"Failed to move {source_path} to {target_path}, reason: {e}")
+        log("ERROR", f"Failed to move {source_path} to {target_path}, reason: {e}")
         raise
 
 
@@ -69,10 +70,10 @@ def remove(path):
             # 删除目录及其所有内容
             shutil.rmtree(path)
         else:
-            print(f"Path does not exist: {path}")
+            log("WARNING", f"Path does not exist: {path}")
 
     except Exception as e:
-        print(f"Failed to remove {path}, reason: {e}")
+        log("ERROR", f"Failed to remove {path}, reason: {e}")
         raise
 
 
@@ -124,7 +125,7 @@ def compress(target_file_path, source_dir, selected_files=None):
             # 恢复原始工作目录
             os.chdir(original_dir)
     except Exception as e:
-        print(f"Failed to compress {ext}, reason: {e}")
+        log("ERROR", f"Failed to compress {ext}, reason: {e}")
         raise
 
 
@@ -159,7 +160,7 @@ def extract(file_path, output_dir=None):
         else:
             raise ValueError(f"Unsupported archive format: {ext}")
     except Exception as e:
-        print(f"Failed to extract {ext}, reason: {e}")
+        log("ERROR", f"Failed to extract {ext}, reason: {e}")
         raise
 
 
@@ -192,7 +193,7 @@ def create_symlink(source_path, link_path, force=False):
         os.symlink(source_path, link_path)
 
     except Exception as e:
-        print(f"Failed to create symlink from {source_path} to {link_path}, reason: {e}")
+        log("ERROR", f"Failed to create symlink from {source_path} to {link_path}, reason: {e}")
         raise
 
 def compress_with_zstd(target_file_path, source_dir, selected_files=None, level=10):
@@ -207,9 +208,14 @@ def compress_with_zstd(target_file_path, source_dir, selected_files=None, level=
     """
     import subprocess
     
-    # 记录开始压缩
+    # 记录开始压缩的日志
     files_desc = ', '.join(selected_files) if selected_files else 'all files'
-    print(f"Using zstd compression (level {level}) for {files_desc} -> {target_file_path}")
+    log("INFO", f"Using zstd compression (level {level}) for {files_desc} -> {target_file_path}")
+    
+    # 如果目标文件已存在，先删除以避免数据损坏
+    if os.path.exists(target_file_path):
+        log("INFO", f"Removing existing file: {target_file_path}")
+        os.remove(target_file_path)
     
     try:
         # 保存当前工作目录
@@ -238,16 +244,26 @@ def compress_with_zstd(target_file_path, source_dir, selected_files=None, level=
             )
             
             if result.returncode != 0:
+                # 如果压缩失败，确保清理可能损坏的文件
+                if os.path.exists(target_file_path):
+                    try:
+                        os.remove(target_file_path)
+                    except:
+                        pass
                 raise Exception(f"Compression failed: {result.stderr}")
             
-            print(f"Successfully compressed with zstd: {target_file_path}")
+            # 验证文件是否存在且大小大于 0
+            if not os.path.exists(target_file_path) or os.path.getsize(target_file_path) == 0:
+                raise Exception("Compressed file is missing or empty")
+            
+            log("INFO", f"Successfully compressed with zstd: {target_file_path}")
                 
         finally:
             # 恢复原始工作目录
             os.chdir(original_dir)
             
     except Exception as e:
-        print(f"Failed to compress with zstd to {target_file_path}, reason: {e}")
+        log("ERROR", f"Failed to compress with zstd to {target_file_path}, reason: {e}")
         raise
 
 
@@ -261,6 +277,13 @@ def extract_zstd(file_path, output_dir=None):
     """
     import subprocess
     
+    # 验证源文件是否存在且大小大于 0
+    if not os.path.exists(file_path):
+        raise Exception(f"Compressed file does not exist: {file_path}")
+    
+    if os.path.getsize(file_path) == 0:
+        raise Exception(f"Compressed file is empty: {file_path}")
+    
     # 如果未指定输出目录，使用压缩文件所在目录
     if output_dir is None:
         output_dir = os.path.dirname(file_path)
@@ -268,8 +291,8 @@ def extract_zstd(file_path, output_dir=None):
     # 确保输出目录存在
     os.makedirs(output_dir, exist_ok=True)
     
-    # 记录开始解压
-    print(f"Using zstd decompression for {file_path} -> {output_dir}")
+    # 记录开始解压的日志
+    log("INFO", f"Using zstd decompression for {file_path} -> {output_dir}")
     
     try:
         # 使用 shell 命令直接执行（简洁且高效）
@@ -290,12 +313,13 @@ def extract_zstd(file_path, output_dir=None):
         )
         
         if result.returncode != 0:
-            raise Exception(f"Extraction failed: {result.stderr}")
+            error_msg = result.stderr if result.stderr else result.stdout
+            raise Exception(f"Extraction failed: {error_msg}")
         
-        print(f"Successfully decompressed with zstd: {file_path}")
+        log("INFO", f"Successfully decompressed with zstd: {file_path}")
             
     except Exception as e:
-        print(f"Failed to extract zstd archive {file_path}, reason: {e}")
+        log("ERROR", f"Failed to extract zstd archive {file_path}, reason: {e}")
         raise
 
 
@@ -324,5 +348,5 @@ def robust_readlines(fullpath):
             with open(fullpath, "r", encoding=encoding) as f:
                 return f.readlines()
 
-        print(f"Failed to recognize encoding for: {fullpath}")
+        log("WARNING", f"Failed to recognize encoding for: {fullpath}")
         return []

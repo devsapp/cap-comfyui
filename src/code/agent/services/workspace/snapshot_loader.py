@@ -4,6 +4,7 @@ from typing import Dict
 
 import constants
 from utils import file_ops
+from utils.logger import log
 
 
 class SnapshotLoader(ABC):
@@ -63,14 +64,35 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
         file_ops.remove(constants.VENV_DIR)
 
     def _download(self, snapshot_path: str):
-        file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
-        file_ops.copy(f"{snapshot_path}/comfyui.zip", f"{constants.WORK_DIR}/comfyui.zip")
+        # 优先使用 zstd 格式，降级到旧格式（向后兼容）
+        if os.path.exists(f"{snapshot_path}/venv.tar.zst"):
+            file_ops.copy(f"{snapshot_path}/venv.tar.zst", f"{constants.WORK_DIR}/venv.tar.zst")
+        else:
+            log("WARNING", "venv.tar.zst not found, falling back to venv.tar")
+            file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
+        
+        if os.path.exists(f"{snapshot_path}/comfyui.tar.zst"):
+            file_ops.copy(f"{snapshot_path}/comfyui.tar.zst", f"{constants.WORK_DIR}/comfyui.tar.zst")
+        else:
+            log("WARNING", "comfyui.tar.zst not found, falling back to comfyui.zip")
+            file_ops.copy(f"{snapshot_path}/comfyui.zip", f"{constants.WORK_DIR}/comfyui.zip")
 
     def _extract(self):
-        file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
-        file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
-        file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
-        file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
+        # 解压 venv（优先 zstd，降级到 tar）
+        if os.path.exists(f"{constants.WORK_DIR}/venv.tar.zst"):
+            file_ops.extract_zstd(f"{constants.WORK_DIR}/venv.tar.zst")
+            file_ops.remove(f"{constants.WORK_DIR}/venv.tar.zst")
+        else:
+            file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
+            file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
+        
+        # 解压 comfyui（优先 zstd，降级到 zip）
+        if os.path.exists(f"{constants.WORK_DIR}/comfyui.tar.zst"):
+            file_ops.extract_zstd(f"{constants.WORK_DIR}/comfyui.tar.zst")
+            file_ops.remove(f"{constants.WORK_DIR}/comfyui.tar.zst")
+        else:
+            file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
+            file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
 
     def _create_symlinks(self, snapshot_path: str):
         file_ops.create_symlink(
@@ -102,23 +124,57 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
         file_ops.remove(constants.VENV_DIR)
 
     def _download(self, snapshot_path: str):
-        file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
-        file_ops.copy(f"{snapshot_path}/comfyui.zip", f"{constants.WORK_DIR}/comfyui.zip")
+        # 优先使用 zstd 格式，降级到旧格式（向后兼容）
+        if os.path.exists(f"{snapshot_path}/venv.tar.zst"):
+            file_ops.copy(f"{snapshot_path}/venv.tar.zst", f"{constants.WORK_DIR}/venv.tar.zst")
+        else:
+            log("WARNING", "venv.tar.zst not found, falling back to venv.tar")
+            file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
+        
+        if os.path.exists(f"{snapshot_path}/comfyui.tar.zst"):
+            file_ops.copy(f"{snapshot_path}/comfyui.tar.zst", f"{constants.WORK_DIR}/comfyui.tar.zst")
+        else:
+            log("WARNING", "comfyui.tar.zst not found, falling back to comfyui.zip")
+            file_ops.copy(f"{snapshot_path}/comfyui.zip", f"{constants.WORK_DIR}/comfyui.zip")
+        
         if os.path.exists(f"{snapshot_path}/.cache"):
             file_ops.remove(f"{constants.WORK_DIR}/.cache")
             file_ops.copy(f"{snapshot_path}/.cache", f"{constants.WORK_DIR}/.cache")
+        
         if not constants.SKIP_NODES_LOADING:
-            file_ops.copy(f"{snapshot_path}/custom_nodes.zip", f"{constants.WORK_DIR}/custom_nodes.zip")
+            if os.path.exists(f"{snapshot_path}/custom_nodes.tar.zst"):
+                file_ops.copy(f"{snapshot_path}/custom_nodes.tar.zst", f"{constants.WORK_DIR}/custom_nodes.tar.zst")
+            else:
+                log("WARNING", "custom_nodes.tar.zst not found, falling back to custom_nodes.zip")
+                file_ops.copy(f"{snapshot_path}/custom_nodes.zip", f"{constants.WORK_DIR}/custom_nodes.zip")
 
     def _extract(self):
-        file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
-        file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
-        file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
-        file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
+        # 解压 venv（优先 zstd，降级到 tar）
+        if os.path.exists(f"{constants.WORK_DIR}/venv.tar.zst"):
+            file_ops.extract_zstd(f"{constants.WORK_DIR}/venv.tar.zst")
+            file_ops.remove(f"{constants.WORK_DIR}/venv.tar.zst")
+        else:
+            file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
+            file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
+        
+        # 解压 comfyui（优先 zstd，降级到 zip）
+        if os.path.exists(f"{constants.WORK_DIR}/comfyui.tar.zst"):
+            file_ops.extract_zstd(f"{constants.WORK_DIR}/comfyui.tar.zst")
+            file_ops.remove(f"{constants.WORK_DIR}/comfyui.tar.zst")
+        else:
+            file_ops.extract(f"{constants.WORK_DIR}/comfyui.zip")
+            file_ops.remove(f"{constants.WORK_DIR}/comfyui.zip")
+        
         if not constants.SKIP_NODES_LOADING:
             file_ops.remove(f"{constants.COMFYUI_DIR}/custom_nodes")  # 解压时不会强制覆盖，需手动删除解压时会产生冲突的文件
-            file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
-            file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
+            
+            # 解压 custom_nodes（优先 zstd，降级到 zip）
+            if os.path.exists(f"{constants.WORK_DIR}/custom_nodes.tar.zst"):
+                file_ops.extract_zstd(f"{constants.WORK_DIR}/custom_nodes.tar.zst", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
+                file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.tar.zst")
+            else:
+                file_ops.extract(f"{constants.WORK_DIR}/custom_nodes.zip", output_dir=f"{constants.COMFYUI_DIR}/custom_nodes")
+                file_ops.remove(f"{constants.WORK_DIR}/custom_nodes.zip")
 
     def _create_symlinks(self, snapshot_path: str):
         file_ops.create_symlink(
@@ -141,21 +197,54 @@ class SDSnapshotLoader(SnapshotLoader):
         file_ops.remove(constants.VENV_DIR)
 
     def _download(self, snapshot_path: str):
-        file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
-        file_ops.copy(f"{snapshot_path}/stable-diffusion-webui.zip", f"{constants.WORK_DIR}/stable-diffusion-webui.zip")
-        cache_path = f"{snapshot_path}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.copy(cache_path, f"{constants.WORK_DIR}/.cache.zip")
+        # 优先使用 zstd 格式，降级到旧格式（向后兼容）
+        if os.path.exists(f"{snapshot_path}/venv.tar.zst"):
+            file_ops.copy(f"{snapshot_path}/venv.tar.zst", f"{constants.WORK_DIR}/venv.tar.zst")
+        else:
+            log("WARNING", "venv.tar.zst not found, falling back to venv.tar")
+            file_ops.copy(f"{snapshot_path}/venv.tar", f"{constants.WORK_DIR}/venv.tar")
+        
+        if os.path.exists(f"{snapshot_path}/stable-diffusion-webui.tar.zst"):
+            file_ops.copy(f"{snapshot_path}/stable-diffusion-webui.tar.zst", f"{constants.WORK_DIR}/stable-diffusion-webui.tar.zst")
+        else:
+            log("WARNING", "stable-diffusion-webui.tar.zst not found, falling back to stable-diffusion-webui.zip")
+            file_ops.copy(f"{snapshot_path}/stable-diffusion-webui.zip", f"{constants.WORK_DIR}/stable-diffusion-webui.zip")
+        
+        # 处理 cache（优先 zstd，降级到 zip）
+        cache_zst_path = f"{snapshot_path}/.cache.tar.zst"
+        cache_zip_path = f"{snapshot_path}/.cache.zip"
+        if os.path.exists(cache_zst_path):
+            file_ops.copy(cache_zst_path, f"{constants.WORK_DIR}/.cache.tar.zst")
+        elif os.path.exists(cache_zip_path):
+            log("WARNING", ".cache.tar.zst not found, falling back to .cache.zip")
+            file_ops.copy(cache_zip_path, f"{constants.WORK_DIR}/.cache.zip")
 
     def _extract(self):
-        file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
-        file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
-        file_ops.extract(f"{constants.WORK_DIR}/stable-diffusion-webui.zip")
-        file_ops.remove(f"{constants.WORK_DIR}/stable-diffusion-webui.zip")
-        cache_path = f"{constants.WORK_DIR}/.cache.zip"
-        if os.path.exists(cache_path):
-            file_ops.extract(cache_path)
-            file_ops.remove(cache_path)
+        # 解压 venv（优先 zstd，降级到 tar）
+        if os.path.exists(f"{constants.WORK_DIR}/venv.tar.zst"):
+            file_ops.extract_zstd(f"{constants.WORK_DIR}/venv.tar.zst")
+            file_ops.remove(f"{constants.WORK_DIR}/venv.tar.zst")
+        else:
+            file_ops.extract(f"{constants.WORK_DIR}/venv.tar")
+            file_ops.remove(f"{constants.WORK_DIR}/venv.tar")
+        
+        # 解压 stable-diffusion-webui（优先 zstd，降级到 zip）
+        if os.path.exists(f"{constants.WORK_DIR}/stable-diffusion-webui.tar.zst"):
+            file_ops.extract_zstd(f"{constants.WORK_DIR}/stable-diffusion-webui.tar.zst")
+            file_ops.remove(f"{constants.WORK_DIR}/stable-diffusion-webui.tar.zst")
+        else:
+            file_ops.extract(f"{constants.WORK_DIR}/stable-diffusion-webui.zip")
+            file_ops.remove(f"{constants.WORK_DIR}/stable-diffusion-webui.zip")
+        
+        # 解压 cache（优先 zstd，降级到 zip）
+        cache_zst_path = f"{constants.WORK_DIR}/.cache.tar.zst"
+        cache_zip_path = f"{constants.WORK_DIR}/.cache.zip"
+        if os.path.exists(cache_zst_path):
+            file_ops.extract_zstd(cache_zst_path)
+            file_ops.remove(cache_zst_path)
+        elif os.path.exists(cache_zip_path):
+            file_ops.extract(cache_zip_path)
+            file_ops.remove(cache_zip_path)
 
     def _create_symlinks(self, snapshot_path: str):
         file_ops.create_symlink(
@@ -167,7 +256,7 @@ class SDSnapshotLoader(SnapshotLoader):
         config_path = f"{constants.MNT_DIR}/config.json"
         origin_config_path = f"{constants.SD_DIR}/config.json"
         if not os.path.exists(config_path):
-            print(f'Init config.json in MNT_DIR: {constants.MNT_DIR}')
+            log("INFO", f'Init config.json in MNT_DIR: {constants.MNT_DIR}')
             # 基于工作空间快照中的config.json作修改后写入挂载目录
             import json
             with open(origin_config_path, "r") as f:

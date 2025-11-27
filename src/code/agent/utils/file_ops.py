@@ -195,6 +195,110 @@ def create_symlink(source_path, link_path, force=False):
         print(f"Failed to create symlink from {source_path} to {link_path}, reason: {e}")
         raise
 
+def compress_with_zstd(target_file_path, source_dir, selected_files=None, level=10):
+    """
+    使用 zstd 打包文件/文件夹为 tar.zst 格式
+    
+    Args:
+        target_file_path: 输出的 .tar.zst 文件路径
+        source_dir: 待打包文件所在父目录
+        selected_files: 父目录下，待打包文件/文件夹名列表，None表示全部打包
+        level: zstd 压缩级别（1-22，默认 10，平衡压缩比和速度）
+    """
+    import subprocess
+    
+    # 记录开始压缩
+    files_desc = ', '.join(selected_files) if selected_files else 'all files'
+    print(f"Using zstd compression (level {level}) for {files_desc} -> {target_file_path}")
+    
+    try:
+        # 保存当前工作目录
+        original_dir = os.getcwd()
+        try:
+            os.chdir(source_dir)
+            
+            # 构建文件列表
+            files_str = ' '.join(selected_files) if selected_files else '.'
+            
+            # 使用 shell 命令直接执行（简洁且高效）
+            # tar 参数说明:
+            #   -c: 创建新归档文件
+            #   -f -: 输出到标准输出（stdout），通过管道传给 zstd
+            # zstd 参数说明:
+            #   -{level}: 压缩级别（1-22，默认 10）
+            #   -T0: 使用多线程（0 表示使用所有 CPU 核心）
+            #   -o: 指定输出文件路径
+            cmd = f"tar -cf - {files_str} | zstd -{level} -T0 -o {target_file_path}"
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            
+            if result.returncode != 0:
+                raise Exception(f"Compression failed: {result.stderr}")
+            
+            print(f"Successfully compressed with zstd: {target_file_path}")
+                
+        finally:
+            # 恢复原始工作目录
+            os.chdir(original_dir)
+            
+    except Exception as e:
+        print(f"Failed to compress with zstd to {target_file_path}, reason: {e}")
+        raise
+
+
+def extract_zstd(file_path, output_dir=None):
+    """
+    解压 tar.zst 包
+    
+    Args:
+        file_path: .tar.zst 压缩文件路径
+        output_dir: 解压输出目录，默认为None，表示解压到压缩文件所在目录
+    """
+    import subprocess
+    
+    # 如果未指定输出目录，使用压缩文件所在目录
+    if output_dir is None:
+        output_dir = os.path.dirname(file_path)
+    
+    # 确保输出目录存在
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 记录开始解压
+    print(f"Using zstd decompression for {file_path} -> {output_dir}")
+    
+    try:
+        # 使用 shell 命令直接执行（简洁且高效）
+        # zstd 参数说明:
+        #   -d: 解压模式
+        #   -c: 输出到标准输出（stdout），通过管道传给 tar
+        # tar 参数说明:
+        #   -x: 解压归档文件
+        #   -f -: 从标准输入（stdin）读取数据
+        #   -C: 指定解压目标目录
+        cmd = f"zstd -d -c {file_path} | tar -xf - -C {output_dir}"
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        if result.returncode != 0:
+            raise Exception(f"Extraction failed: {result.stderr}")
+        
+        print(f"Successfully decompressed with zstd: {file_path}")
+            
+    except Exception as e:
+        print(f"Failed to extract zstd archive {file_path}, reason: {e}")
+        raise
+
+
 def robust_readlines(fullpath):
     """
     健壮的文件读取方法，可处理不同编码的文本文件，当前业务场景下主要用于读取requirements.txt

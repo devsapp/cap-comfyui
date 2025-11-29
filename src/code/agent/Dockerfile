@@ -35,7 +35,7 @@ ENV PATH="${VENV_DIR}/bin:$PATH"
 
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
-RUN pip install --no-cache-dir mitmproxy huggingface_hub[cli] modelscope
+RUN pip install --no-cache-dir huggingface_hub[cli] modelscope
 
 COPY . ${AGENT_DIR}/
 
@@ -47,7 +47,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     ${AGENT_DIR}/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 
 RUN mkdir -p ~/.pip \
- && cp ${AGENT_DIR}/services/proxy/pip.conf ~/.pip/pip.conf
+ && cp ${AGENT_DIR}/services/proxy/pip.conf ~/.pip/pip.conf \
+ && cp ${AGENT_DIR}/services/proxy/gitconfig.conf ~/.gitconfig
+
+# 设置 GitHub 代理监控脚本执行权限
+RUN chmod +x ${AGENT_DIR}/services/proxy/github-proxy-monitor.sh
 
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

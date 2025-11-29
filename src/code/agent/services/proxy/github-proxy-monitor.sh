@@ -11,7 +11,6 @@
 
 # 代理列表（按优先级排序）
 PROXIES=(
-    # 测试 github
     "https://cap-accor-proxy-qkqnjxeail.ap-southeast-1.fcapp.run/https://github.com/"
     "https://cap-accor-proxy-qkqnjxeail.cn-hongkong.fcapp.run/https://github.com/"
     "https://gh.llkk.cc/https://github.com/"
@@ -34,7 +33,6 @@ CURRENT_PROXY=""
 # ==================== 工具函数 ====================
 
 log() {
-    # 只写入日志文件，不输出到 stdout（避免被命令替换捕获）
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 }
 

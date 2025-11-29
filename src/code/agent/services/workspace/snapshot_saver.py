@@ -54,12 +54,13 @@ class SnapshotSaver(ABC):
 
 class ComfyUISnapshotSaver(SnapshotSaver):
     def _compress(self):
-        file_ops.compress(f"{constants.WORK_DIR}/venv.tar", constants.WORK_DIR, ["venv"])
-        file_ops.compress(f"{constants.WORK_DIR}/comfyui.zip", constants.WORK_DIR, ["comfyui"])
+        # 使用 zstd 压缩（级别 10，平衡压缩比和速度）
+        file_ops.compress_with_zstd(f"{constants.WORK_DIR}/venv.tar.zst", constants.WORK_DIR, ["venv"], level=10)
+        file_ops.compress_with_zstd(f"{constants.WORK_DIR}/comfyui.tar.zst", constants.WORK_DIR, ["comfyui"], level=10)
 
     def _upload(self, snapshot_path: str):
-        file_ops.copy(f"{constants.WORK_DIR}/venv.tar", f"{snapshot_path}/venv.tar")
-        file_ops.copy(f"{constants.WORK_DIR}/comfyui.zip", f"{snapshot_path}/comfyui.zip")
+        file_ops.copy(f"{constants.WORK_DIR}/venv.tar.zst", f"{snapshot_path}/venv.tar.zst")
+        file_ops.copy(f"{constants.WORK_DIR}/comfyui.tar.zst", f"{snapshot_path}/comfyui.tar.zst")
 
     def _clear(self, snapshot_path: str):
         file_ops.remove(snapshot_path)
@@ -67,17 +68,18 @@ class ComfyUISnapshotSaver(SnapshotSaver):
 
 class SDSnapshotSaver(SnapshotSaver):
     def _compress(self):
-        file_ops.compress(f"{constants.WORK_DIR}/venv.tar", constants.WORK_DIR, ["venv"])
-        file_ops.compress(f"{constants.WORK_DIR}/stable-diffusion-webui.zip", constants.WORK_DIR, ["stable-diffusion-webui"])
+        # 使用 zstd 压缩（级别 10，平衡压缩比和速度）
+        file_ops.compress_with_zstd(f"{constants.WORK_DIR}/venv.tar.zst", constants.WORK_DIR, ["venv"], level=10)
+        file_ops.compress_with_zstd(f"{constants.WORK_DIR}/stable-diffusion-webui.tar.zst", constants.WORK_DIR, ["stable-diffusion-webui"], level=10)
         if os.path.exists(f"{constants.WORK_DIR}/.cache"):
-            file_ops.compress(f"{constants.WORK_DIR}/.cache.zip", constants.WORK_DIR, [".cache"])
+            file_ops.compress_with_zstd(f"{constants.WORK_DIR}/.cache.tar.zst", constants.WORK_DIR, [".cache"], level=10)
 
     def _upload(self, snapshot_path: str):
-        file_ops.copy(f"{constants.WORK_DIR}/venv.tar", f"{snapshot_path}/venv.tar")
-        file_ops.copy(f"{constants.WORK_DIR}/stable-diffusion-webui.zip", f"{snapshot_path}/stable-diffusion-webui.zip")
-        cache_path = f"{constants.WORK_DIR}/.cache.zip"
+        file_ops.copy(f"{constants.WORK_DIR}/venv.tar.zst", f"{snapshot_path}/venv.tar.zst")
+        file_ops.copy(f"{constants.WORK_DIR}/stable-diffusion-webui.tar.zst", f"{snapshot_path}/stable-diffusion-webui.tar.zst")
+        cache_path = f"{constants.WORK_DIR}/.cache.tar.zst"
         if os.path.exists(cache_path):
-            file_ops.copy(cache_path, f"{snapshot_path}/.cache.zip")
+            file_ops.copy(cache_path, f"{snapshot_path}/.cache.tar.zst")
 
     def _clear(self, snapshot_path: str):
         file_ops.remove(snapshot_path)

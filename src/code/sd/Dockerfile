@@ -65,7 +65,7 @@ WORKDIR /root
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
     apt install -y \
-    git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0
+    git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 zstd
 
 ENV WORK_DIR='/root'
 ENV SD_DIR="${WORK_DIR}/stable-diffusion-webui"

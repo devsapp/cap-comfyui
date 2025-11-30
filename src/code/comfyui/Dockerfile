@@ -49,10 +49,20 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     echo "已安装插件列表:" && \
     ls -1 ${COMFYUI_DIR}/custom_nodes/ | head -20 && \
     echo ""; \
-    echo "=== 验证 custom_nodes 目录 ===" && \
+    echo "=== 验证 custom_nodes 目录（codes stage）===" && \
     echo "custom_nodes 目录路径: ${COMFYUI_DIR}/custom_nodes" && \
-    echo "目录是否存在: $(test -d ${COMFYUI_DIR}/custom_nodes && echo '是' || echo '否')" && \
-    echo "插件数量: $(ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | wc -l)"
+    if [ ! -d "${COMFYUI_DIR}/custom_nodes" ]; then \
+        echo "错误: custom_nodes 目录不存在！" && \
+        exit 1; \
+    fi && \
+    PLUGIN_COUNT=$(ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | wc -l) && \
+    echo "目录存在: 是" && \
+    echo "插件数量: ${PLUGIN_COUNT}" && \
+    if [ "${PLUGIN_COUNT}" -eq 0 ]; then \
+        echo "警告: custom_nodes 目录为空！" && \
+        exit 1; \
+    fi && \
+    echo "验证通过: codes stage 中的 custom_nodes 包含 ${PLUGIN_COUNT} 个插件"
 
 FROM python:3.10.16-slim AS models
 
@@ -128,17 +138,41 @@ ENV AGENT_DIR="${WORK_DIR}/agent"
 ENV BUILT_IN_DIR="/built-in"
 COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
-COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 # TODO add pip path of venv
 
-# 验证 custom_nodes 是否正确复制到最终镜像
-RUN echo "=== 验证最终镜像中的 custom_nodes ===" && \
-    echo "custom_nodes 目录路径: ${COMFYUI_DIR}/custom_nodes" && \
-    echo "目录是否存在: $(test -d ${COMFYUI_DIR}/custom_nodes && echo '是' || echo '否')" && \
-    echo "插件数量: $(ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | wc -l)" && \
+# 复制 ComfyUI 主目录（包含 custom_nodes）
+COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
+
+# 显式复制 custom_nodes 目录（确保被正确复制）
+# 如果上面的 COPY 没有正确复制 custom_nodes，这里作为备选方案
+COPY --from=codes ${COMFYUI_DIR}/custom_nodes ${COMFYUI_DIR}/custom_nodes
+
+# 显式验证并确保 custom_nodes 被正确复制
+# 如果 custom_nodes 不存在，构建应该失败
+RUN set -x && \
+    echo "========================================" && \
+    echo "验证 custom_nodes 是否正确复制" && \
+    echo "========================================" && \
+    echo "检查 ${COMFYUI_DIR}/custom_nodes 目录..." && \
+    if [ ! -d "${COMFYUI_DIR}/custom_nodes" ]; then \
+        echo "错误: custom_nodes 目录不存在！" && \
+        echo "检查 comfyui 目录内容:" && \
+        ls -la ${COMFYUI_DIR}/ | head -20 && \
+        exit 1; \
+    fi && \
+    PLUGIN_COUNT=$(ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | wc -l) && \
+    echo "插件数量: ${PLUGIN_COUNT}" && \
+    if [ "${PLUGIN_COUNT}" -eq 0 ]; then \
+        echo "警告: custom_nodes 目录存在但为空！" && \
+        echo "检查目录权限和内容:" && \
+        ls -la ${COMFYUI_DIR}/custom_nodes/ && \
+        exit 1; \
+    fi && \
     echo "前10个插件:" && \
-    ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | head -10 || echo "custom_nodes 目录为空或不存在"
+    ls -1 ${COMFYUI_DIR}/custom_nodes/ | head -10 && \
+    echo "========================================" && \
+    echo "验证通过: custom_nodes 目录存在且包含 ${PLUGIN_COUNT} 个插件"
 
 ENV BACKEND_TYPE="comfyui"
 ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]

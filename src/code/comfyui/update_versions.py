@@ -1,29 +1,21 @@
 #!/usr/bin/env python3
-
-"""
-更新 custom_nodes.json 中每个节点的 version 字段
-
-规则:
-- 如果仓库有 tag 且最新 tag 在近 3 个月内，使用 tag 作为 version
-- 否则使用最新的 commit SHA 作为 version
-
-使用方法:
-# 直接运行（会更新 custom_nodes.json）
-python3 update_versions.py
-
-# 测试模式（不保存更改）
-python3 update_versions.py --dry-run
-
-# 指定文件路径
-python3 update_versions.py --file /path/to/custom_nodes.json
-"""
+"""更新 custom_nodes.json 中每个节点的 version 字段"""
 
 import json
 import re
 import subprocess
+import signal
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
+
+
+class TimeoutError(Exception):
+    pass
+
+
+def timeout_handler(signum, frame):
+    raise TimeoutError("操作超时")
 
 
 def extract_repo_info(repo_url: str) -> Optional[Tuple[str, str]]:
@@ -35,155 +27,99 @@ def extract_repo_info(repo_url: str) -> Optional[Tuple[str, str]]:
     return None
 
 
-def get_latest_tag_and_date(repo_url: str) -> Optional[Tuple[str, datetime]]:
-    """获取最新的 tag 及其创建日期"""
+def run_command_with_timeout(cmd, timeout: int = 15) -> Optional[str]:
+    """运行命令并设置超时"""
     try:
-        # 使用 git ls-remote 获取所有 tags
-        cmd = [
-            'git', 'ls-remote', '--tags', '--sort=-v:refname', repo_url
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        
-        if result.returncode != 0 or not result.stdout.strip():
-            return None
-        
-        # 解析输出，过滤掉 ^{} 的引用，获取最新的 tag
-        lines = result.stdout.strip().split('\n')
-        for line in lines:
-            if '^{}' not in line:
-                parts = line.split('\t')
-                if len(parts) == 2:
-                    commit_sha = parts[0]
-                    tag_ref = parts[1]  # refs/tags/v1.0.0
-                    tag_name = tag_ref.split('/')[-1]  # v1.0.0
-                    
-                    # 获取这个 commit 的日期
-                    tag_date = get_commit_date(repo_url, commit_sha)
-                    if tag_date:
-                        return tag_name, tag_date
-        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
         return None
-        
-    except Exception as e:
-        print(f"  ⚠️  获取 tag 失败: {e}")
+    except (subprocess.TimeoutExpired, Exception) as e:
         return None
 
 
-def get_commit_date(repo_url: str, commit_sha: str) -> Optional[datetime]:
-    """获取指定 commit 的日期"""
-    try:
-        cmd = [
-            'git', 'ls-remote', repo_url, commit_sha
-        ]
-        # 先验证 commit 存在
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        if result.returncode != 0:
-            return None
-        
-        # 使用临时目录进行浅克隆来获取 commit 日期
-        # 注意：这里我们使用 GitHub API 会更高效
-        repo_info = extract_repo_info(repo_url)
-        if repo_info:
-            owner, repo = repo_info
-            cmd = [
-                'gh', 'api',
-                f'/repos/{owner}/{repo}/commits/{commit_sha}',
-                '--jq', '.commit.committer.date'
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            
-            if result.returncode == 0 and result.stdout.strip():
-                date_str = result.stdout.strip()
-                return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        
+def get_latest_tag(repo_url: str) -> Optional[str]:
+    """获取最新的 tag"""
+    cmd = ['git', 'ls-remote', '--tags', '--sort=-v:refname', repo_url]
+    output = run_command_with_timeout(cmd, timeout=10)
+    
+    if not output:
         return None
-        
-    except Exception as e:
-        return None
+    
+    for line in output.split('\n'):
+        if '^{}' not in line:
+            parts = line.split('\t')
+            if len(parts) == 2:
+                tag_ref = parts[1]
+                return tag_ref.split('/')[-1]
+    
+    return None
 
 
 def get_latest_commit(repo_url: str) -> Optional[str]:
     """获取最新的 commit SHA"""
-    try:
-        # 使用 git ls-remote 获取 HEAD
-        cmd = [
-            'git', 'ls-remote', repo_url, 'HEAD'
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        
-        if result.returncode == 0 and result.stdout.strip():
-            # 解析输出: commit_sha\tHEAD
-            commit_sha = result.stdout.strip().split()[0]
-            # 返回短 SHA (前 7 位)
-            return commit_sha[:7]
-        
-        return None
-        
-    except Exception as e:
-        print(f"  ⚠️  获取 commit 失败: {e}")
-        return None
+    cmd = ['git', 'ls-remote', repo_url, 'HEAD']
+    output = run_command_with_timeout(cmd, timeout=10)
+    
+    if output:
+        commit_sha = output.split()[0]
+        return commit_sha[:7]
+    
+    return None
 
 
-def get_version_for_repo(repo_url: str, three_months_ago: datetime) -> str:
+def get_version_for_repo(repo_url: str) -> str:
     """为指定的仓库获取 version"""
     repo_info = extract_repo_info(repo_url)
     if not repo_info:
-        print(f"  ⚠️  无法解析仓库 URL: {repo_url}")
         return "unknown"
     
     owner, repo = repo_info
-    print(f"  处理: {owner}/{repo}")
+    print(f"  {owner}/{repo}", end=" ... ", flush=True)
     
-    # 尝试获取最新 tag
-    tag_info = get_latest_tag_and_date(repo_url)
+    # 优先使用 tag
+    tag = get_latest_tag(repo_url)
+    if tag:
+        print(f"✓ tag: {tag}")
+        return tag
     
-    if tag_info:
-        tag_name, tag_date = tag_info
-        # 检查 tag 是否在近 3 个月内
-        if tag_date >= three_months_ago:
-            print(f"    ✓ 使用 tag: {tag_name} (日期: {tag_date.strftime('%Y-%m-%d')})")
-            return tag_name
-        else:
-            print(f"    ✗ tag 过旧: {tag_name} (日期: {tag_date.strftime('%Y-%m-%d')})")
-    else:
-        print(f"    ℹ  未找到 tag")
+    # 使用 commit
+    commit = get_latest_commit(repo_url)
+    if commit:
+        print(f"✓ commit: {commit}")
+        return commit
     
-    # 使用最新 commit
-    commit_sha = get_latest_commit(repo_url)
-    if commit_sha:
-        print(f"    ✓ 使用 commit: {commit_sha}")
-        return commit_sha
-    
-    print(f"    ✗ 无法获取版本信息")
+    print("✗ 失败")
     return "unknown"
 
 
 def update_custom_nodes_version(json_path: Path, dry_run: bool = False):
     """更新 custom_nodes.json 中的 version 字段"""
     
-    # 检查 git 和 gh CLI 是否可用
+    # 检查 git 是否可用
     try:
-        subprocess.run(['git', '--version'], capture_output=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        subprocess.run(['git', '--version'], capture_output=True, check=True, timeout=5)
+    except Exception:
         print("❌ 错误: 需要安装 git")
         return
     
+    # 读取 JSON 文件
     try:
-        subprocess.run(['gh', '--version'], capture_output=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("❌ 错误: 需要安装 GitHub CLI (gh)")
-        print("   安装方法: https://cli.github.com/")
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"❌ 错误: 无法读取文件 {e}")
         return
     
-    # 读取 JSON 文件
-    with open(json_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
     custom_nodes = data.get('custom_nodes', [])
-    three_months_ago = datetime.now(datetime.now().astimezone().tzinfo) - timedelta(days=90)
     
-    print(f"开始更新 {len(custom_nodes)} 个节点的版本信息...")
-    print(f"参考日期: {three_months_ago.strftime('%Y-%m-%d')} (3个月前)\n")
+    print(f"正在更新 {len(custom_nodes)} 个节点的版本...")
+    print()
     
     updated_count = 0
     failed_count = 0
@@ -193,46 +129,47 @@ def update_custom_nodes_version(json_path: Path, dry_run: bool = False):
         repo_url = node.get('repository', '')
         current_version = node.get('version', 'unknown')
         
-        print(f"[{i}/{len(custom_nodes)}] {node_id}")
-        print(f"  当前版本: {current_version}")
+        print(f"[{i}/{len(custom_nodes)}] {node_id:<30}", end=" | ")
         
         if not repo_url:
-            print(f"  ⚠️  跳过: 没有仓库 URL")
+            print("⚠️ 无仓库 URL")
             failed_count += 1
             continue
         
         try:
-            new_version = get_version_for_repo(repo_url, three_months_ago)
+            new_version = get_version_for_repo(repo_url)
             
             if new_version != "unknown":
                 if new_version != current_version:
                     node['version'] = new_version
-                    print(f"  ✓ 更新: {current_version} -> {new_version}")
+                    print(f"  {current_version} → {new_version}")
                     updated_count += 1
                 else:
-                    print(f"  - 无变化")
+                    print(f"  (无变化)")
             else:
                 failed_count += 1
                 
         except Exception as e:
-            print(f"  ❌ 错误: {e}")
+            print(f"  ❌ {e}")
             failed_count += 1
-        
-        print()
     
     # 保存更新后的 JSON
     if not dry_run:
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        print(f"\n✓ 已保存到: {json_path}")
+        try:
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            print(f"\n✓ 已保存到: {json_path}")
+        except Exception as e:
+            print(f"\n❌ 错误: 无法保存文件 {e}")
+            return
     else:
         print(f"\n🔍 Dry run 模式，不保存更改")
     
     print(f"\n统计:")
-    print(f"  - 总数: {len(custom_nodes)}")
-    print(f"  - 更新: {updated_count}")
-    print(f"  - 失败: {failed_count}")
-    print(f"  - 未变化: {len(custom_nodes) - updated_count - failed_count}")
+    print(f"  总数: {len(custom_nodes)}")
+    print(f"  更新: {updated_count}")
+    print(f"  失败: {failed_count}")
+    print(f"  无变化: {len(custom_nodes) - updated_count - failed_count}")
 
 
 def main():

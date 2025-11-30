@@ -2,6 +2,9 @@ FROM alpine/git:2.36.2 AS codes
 
 WORKDIR /root
 
+# 安装 jq（用于解析 JSON）
+RUN apk add --no-cache jq
+
 ENV COMFYUI_DIR="/root/comfyui"
 
 # 1130 版本
@@ -16,7 +19,24 @@ COPY src/code/comfyui/custom_nodes.json /tmp/custom_nodes.json
 # 从 custom_nodes.json 读取插件列表，循环安装启用的插件
 RUN cd ${COMFYUI_DIR}/custom_nodes && \
     echo "=== 开始批量安装 ComfyUI 插件 ===" && \
-    for plugin in $(jq -r '.custom_nodes[] | select(.enabled == true) | "\(.repository)|\(.version)|\(.id)"' /tmp/custom_nodes.json); do \
+    echo "检查 custom_nodes.json 文件..." && \
+    if [ ! -f /tmp/custom_nodes.json ]; then \
+        echo "错误: custom_nodes.json 文件不存在！" && \
+        exit 1; \
+    fi && \
+    echo "解析启用的插件..." && \
+    ENABLED_PLUGINS=$(jq -r '.custom_nodes[] | select(.enabled == true) | "\(.repository)|\(.version)|\(.id)"' /tmp/custom_nodes.json) && \
+    PLUGIN_COUNT=$(echo "$ENABLED_PLUGINS" | grep -v '^$' | wc -l) && \
+    echo "找到 ${PLUGIN_COUNT} 个启用的插件" && \
+    if [ "${PLUGIN_COUNT}" -eq 0 ]; then \
+        echo "警告: 没有找到启用的插件！" && \
+        echo "custom_nodes.json 内容预览:" && \
+        head -20 /tmp/custom_nodes.json && \
+        exit 1; \
+    fi && \
+    FAILED_COUNT=0 && \
+    for plugin in $ENABLED_PLUGINS; do \
+        [ -z "$plugin" ] && continue; \
         repo=$(echo $plugin | cut -d'|' -f1); \
         version=$(echo $plugin | cut -d'|' -f2); \
         plugin_id=$(echo $plugin | cut -d'|' -f3); \
@@ -41,9 +61,15 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
                 echo "✅ 使用默认分支"; \
             fi; \
         else \
-            echo "❌ 克隆失败: $repo"; \
+            echo "❌ 克隆失败: $repo" && \
+            FAILED_COUNT=$((FAILED_COUNT + 1)); \
         fi; \
     done && \
+    if [ "${FAILED_COUNT}" -gt 0 ]; then \
+        echo ""; \
+        echo "错误: ${FAILED_COUNT} 个插件安装失败！" && \
+        exit 1; \
+    fi && \
     echo ""; \
     echo "=== 插件安装完成 ===" && \
     echo "已安装插件列表:" && \

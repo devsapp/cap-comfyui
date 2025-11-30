@@ -8,9 +8,10 @@ OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
 upgrade: build upload-base
 
 # 构建镜像, 需要先构建Agent镜像
+# 注意：从项目根目录构建，以便访问 src/code/agent 目录
 .PHONY: build
 build:
-	docker build -t $(COMFYUI_IMAGE) .
+	cd ../../ && docker build -f src/code/comfyui/Dockerfile -t $(COMFYUI_IMAGE) .
 
 # 本地测试运行
 # curl -X POST http://localhost:9000/management/start

@@ -10,7 +10,7 @@ RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     git checkout "v0.3.75"
 
 # 复制插件列表配置文件
-COPY custom_nodes.json /tmp/custom_nodes.json
+COPY src/code/comfyui/custom_nodes.json /tmp/custom_nodes.json
 
 # 批量安装自定义节点插件
 # 从 custom_nodes.json 读取插件列表，循环安装启用的插件
@@ -81,15 +81,15 @@ COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
     find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
 
-# 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
+# 安装 ComfyUI插件 所使用的依赖
 # 使用健壮的 PIPInstaller 逻辑来处理依赖冲突
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
 ENV AGENT_DIR="/root/agent"
 COPY --from=codes ${COMFYUI_NODE_DIR} ${COMFYUI_NODE_DIR}
 
 # 复制 agent 代码（用于调用 PIPInstaller）
-# 注意：这里从构建上下文复制 agent 代码，而不是从 agent 镜像
-# 因为 dependencies 阶段在 agent 镜像构建之前
+# 注意：需要从项目根目录构建，构建上下文应该是项目根目录
+# 如果从 src/code/comfyui/ 构建，需要先复制 agent 代码到构建上下文
 COPY src/code/agent ${AGENT_DIR}
 
 # 复制安装脚本

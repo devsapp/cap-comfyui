@@ -137,21 +137,27 @@ COPY src/code/agent ${AGENT_DIR}
 # 复制安装脚本
 COPY src/code/comfyui/install_custom_nodes.py /root/install_custom_nodes.py
 
-# 使用 PIPInstaller 安装自定义节点依赖
+
+# 安装 agent 的依赖（必须在运行 install_custom_nodes.py 前安装）
+RUN --mount=type=cache,target=/root/.cache/pip \
+    venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
+# 先使用 PIPInstaller 安装自定义节点依赖
 # 这会合并所有 requirements.txt，处理依赖冲突，并执行 install.py 脚本
 # 使用 -u 参数确保 Python 输出无缓冲，实时显示日志
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/python -u /root/install_custom_nodes.py
 
+# 再安装 ComfyUI 源码的依赖
 RUN --mount=type=cache,target=/root/.cache/pip \
     cd ${COMFYUI_DIR} && \
     if [ -f requirements.txt ]; then \
-        venv/bin/pip install -r requirements.txt --no-cache-dir; \
+        /root/venv/bin/pip install -r requirements.txt --no-cache-dir; \
     else \
         echo "警告: ${COMFYUI_DIR}/requirements.txt 不存在"; \
     fi
 
 FROM agent AS agent
+
 
 FROM python:3.10.16-slim AS base
 

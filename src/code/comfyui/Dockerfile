@@ -47,7 +47,12 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     echo ""; \
     echo "=== 插件安装完成 ===" && \
     echo "已安装插件列表:" && \
-    ls -1 ${COMFYUI_DIR}/custom_nodes/ | head -20
+    ls -1 ${COMFYUI_DIR}/custom_nodes/ | head -20 && \
+    echo ""; \
+    echo "=== 验证 custom_nodes 目录 ===" && \
+    echo "custom_nodes 目录路径: ${COMFYUI_DIR}/custom_nodes" && \
+    echo "目录是否存在: $(test -d ${COMFYUI_DIR}/custom_nodes && echo '是' || echo '否')" && \
+    echo "插件数量: $(ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | wc -l)"
 
 FROM python:3.10.16-slim AS models
 
@@ -67,7 +72,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
     python3 -m venv venv
 
-# 安装cu124最新PyTorch及相关包
+# 安装cu128最新PyTorch及相关包
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir torch torchvision torchaudio \
     --extra-index-url https://download.pytorch.org/whl/cu128
@@ -86,9 +91,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # 安装 ComfyUI插件 所使用的依赖
 # 使用健壮的 PIPInstaller 逻辑来处理依赖冲突
+# 注意：custom_nodes 已经包含在上面的 COPY 中，这里只需要设置环境变量
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
 ENV AGENT_DIR="/root/agent"
-COPY --from=codes ${COMFYUI_NODE_DIR} ${COMFYUI_NODE_DIR}
 
 # 复制 agent 代码（用于调用 PIPInstaller）
 # 注意：需要从项目根目录构建，构建上下文应该是项目根目录
@@ -126,6 +131,14 @@ COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 # TODO add pip path of venv
+
+# 验证 custom_nodes 是否正确复制到最终镜像
+RUN echo "=== 验证最终镜像中的 custom_nodes ===" && \
+    echo "custom_nodes 目录路径: ${COMFYUI_DIR}/custom_nodes" && \
+    echo "目录是否存在: $(test -d ${COMFYUI_DIR}/custom_nodes && echo '是' || echo '否')" && \
+    echo "插件数量: $(ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | wc -l)" && \
+    echo "前10个插件:" && \
+    ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | head -10 || echo "custom_nodes 目录为空或不存在"
 
 ENV BACKEND_TYPE="comfyui"
 ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]

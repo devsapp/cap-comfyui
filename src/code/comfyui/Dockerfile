@@ -53,6 +53,9 @@ FROM python:3.10.16-slim AS models
 
 RUN apt update && apt install -y aria2
 
+# 创建 /models 目录（即使没有模型文件，也要创建空目录以避免 COPY 失败）
+RUN mkdir -p /models
+
 # COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
 
 FROM python:3.10.16-slim AS dependencies

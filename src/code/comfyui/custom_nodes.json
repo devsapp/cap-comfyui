@@ -1,0 +1,41 @@
+{
+  "custom_nodes": [
+    {
+      "id": "comfyui-manager",
+      "name": "ComfyUI-Manager",
+      "repository": "https://github.com/ltdrdata/ComfyUI-Manager",
+      "version": "3.37.1",
+      "stars": 12368,
+      "enabled": true,
+      "description": "ComfyUI-Manager provides features to install and manage custom nodes for ComfyUI"
+    },
+    {
+      "id": "comfyui_controlnet_aux",
+      "name": "comfyui_controlnet_aux",
+      "repository": "https://github.com/Fannovel16/comfyui_controlnet_aux",
+      "version": "latest",
+      "stars": "12f3564",
+      "enabled": true,
+      "description": "Plug-and-play ComfyUI node sets for making ControlNet hint images"
+    },
+    {
+      "id": "comfyui-impact-pack",
+      "name": "ComfyUI Impact Pack",
+      "repository": "https://github.com/ltdrdata/ComfyUI-Impact-Pack",
+      "version": "8.28",
+      "stars": 2828,
+      "enabled": true,
+      "description": "This node pack offers various detector nodes and detailer nodes"
+    },
+    {
+      "id": "comfyui-custom-scripts",
+      "name": "ComfyUI-Custom-Scripts",
+      "repository": "https://github.com/pythongosssss/ComfyUI-Custom-Scripts",
+      "version": "f2838ed",
+      "stars": 2812,
+      "enabled": true,
+      "description": "Enhancements & experiments for ComfyUI, mostly focusing on UI features"
+    }
+  ]
+}
+

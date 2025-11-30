@@ -139,8 +139,9 @@ COPY src/code/comfyui/install_custom_nodes.py /root/install_custom_nodes.py
 
 # 使用 PIPInstaller 安装自定义节点依赖
 # 这会合并所有 requirements.txt，处理依赖冲突，并执行 install.py 脚本
+# 使用 -u 参数确保 Python 输出无缓冲，实时显示日志
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/python /root/install_custom_nodes.py
+    venv/bin/python -u /root/install_custom_nodes.py
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     cd ${COMFYUI_DIR} && \

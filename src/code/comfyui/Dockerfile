@@ -122,8 +122,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # pip install动态拉取comfyui源码中的requirements.txt
 ENV COMFYUI_DIR="/root/comfyui"
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
-RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
 
 # 安装 ComfyUI插件 所使用的依赖
 # 使用健壮的 PIPInstaller 逻辑来处理依赖冲突
@@ -143,6 +141,14 @@ COPY src/code/comfyui/install_custom_nodes.py /root/install_custom_nodes.py
 # 这会合并所有 requirements.txt，处理依赖冲突，并执行 install.py 脚本
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/python /root/install_custom_nodes.py
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    cd ${COMFYUI_DIR} && \
+    if [ -f requirements.txt ]; then \
+        venv/bin/pip install -r requirements.txt --no-cache-dir; \
+    else \
+        echo "警告: ${COMFYUI_DIR}/requirements.txt 不存在"; \
+    fi
 
 FROM agent AS agent
 

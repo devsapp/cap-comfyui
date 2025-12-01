@@ -118,14 +118,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir onnxruntime-gpu \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
-# 安装 ComfyUI源码 所使用的依赖
-# pip install动态拉取comfyui源码中的requirements.txt
 ENV COMFYUI_DIR="/root/comfyui"
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 
-# 安装 ComfyUI插件 所使用的依赖
-# 使用健壮的 PIPInstaller 逻辑来处理依赖冲突
-# 注意：custom_nodes 已经包含在上面的 COPY 中，这里只需要设置环境变量
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
 ENV AGENT_DIR="/root/agent"
 
@@ -137,17 +132,16 @@ COPY src/code/agent ${AGENT_DIR}
 # 复制安装脚本
 COPY src/code/comfyui/install_custom_nodes.py /root/install_custom_nodes.py
 
-
 # 安装 agent 的依赖（必须在运行 install_custom_nodes.py 前安装）
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
+    /root/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 # 先使用 PIPInstaller 安装自定义节点依赖
 # 这会合并所有 requirements.txt，处理依赖冲突，并执行 install.py 脚本
 # 使用 -u 参数确保 Python 输出无缓冲，实时显示日志
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/python -u /root/install_custom_nodes.py
+    /root/venv/bin/python -u /root/install_custom_nodes.py
 
-# 再安装 ComfyUI 源码的依赖
+# 安装 ComfyUI 源码的依赖
 RUN --mount=type=cache,target=/root/.cache/pip \
     cd ${COMFYUI_DIR} && \
     if [ -f requirements.txt ]; then \
@@ -156,7 +150,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         echo "警告: ${COMFYUI_DIR}/requirements.txt 不存在"; \
     fi
 
-FROM agent:1130-v1 AS agent
+FROM agent:1201 AS agent
 
 
 FROM python:3.12.10-slim AS base
@@ -178,7 +172,6 @@ ENV BUILT_IN_DIR="/built-in"
 COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
-# TODO add pip path of venv
 
 # 复制 ComfyUI 主目录（包含 custom_nodes）
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}

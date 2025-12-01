@@ -104,7 +104,15 @@ class PIPInstaller:
 
         try:
             # 步骤1: 合并所有 requirements.txt 并应用过滤
-            requirements_content = self._merge_requirements_from_nodes(nodes_to_install, nodes_map, timeout, start_time)
+            requirements_content = self._merge_requirements_from_nodes(
+                nodes_to_install, nodes_map, timeout, start_time
+            )
+            print("\n[Installer] requirements.txt merged content:================")
+            if requirements_content.strip():
+                for line in requirements_content.strip().splitlines():
+                    print(f"    {line}")
+            else:
+                print("    (empty)")
             
             # 步骤2: 使用 pip install -r 批量安装依赖包（强制超旲）
             dependency_record = self._install_merged_dependencies(requirements_content, timeout)
@@ -177,10 +185,11 @@ class PIPInstaller:
         print(f"[Installer] ## Merged {len(self._merged_dependencies)} unique dependencies from requirements.txt files")
         
         # 应用过滤逻辑
-        filtered_deps = self._filter_merged_dependencies()
+        # filtered_deps = self._filter_merged_dependencies()
 
         # 应用定制化依赖策略钩子
-        filtered_deps = self._apply_custom_dependency_strategies(filtered_deps, nodes_to_install, nodes_map)
+        # filtered_deps = self._apply_custom_dependency_strategies(filtered_deps, nodes_to_install, nodes_map)
+        filtered_deps = {}
 
         # 生成最终的 requirements.txt 内容
         requirements_content = self._generate_requirements_content(filtered_deps)
@@ -400,64 +409,72 @@ class PIPInstaller:
         """步骤2: 使用 pip install -r 批量安装合并后的依赖"""
         print(f"\n[Installer] ## Step 2: Installing dependencies with pip install -r (timeout: {timeout}s)...")
         
-        # 创建安装记录
         install_record = DependencyInstallRecord(requirements_txt=requirements_content)
-        
-        if not requirements_content.strip():
+        packages = []
+
+        # 处理 requirements.txt 中的特殊情况，比如 PIL 不在维护，pip install 失败，转为 pillow
+        for line in requirements_content.splitlines():
+            package = line.strip()
+            if not package:
+                continue
+            if package.lower() == "pil":
+                package = "pillow"
+            packages.append(package)
+
+        if not packages:
             print("[Installer] ## No dependencies to install.")
             install_record.success = True
             install_record.duration = 0
             return install_record
-        
-        start_install_time = time.time()
-        try:
-            # 创建临时 requirements.txt 文件
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-                f.write(requirements_content)
-                temp_requirements_path = f.name
-            
-            try:
-                # 构建 pip install -r 命令
-                install_cmd = self._construct_pip_cmd(["install", "-r", temp_requirements_path])
-                
-                print(f"[Installer] ## Executing: {' '.join(install_cmd)}")
 
-                try:
-                    # 不捕获输出，让 pip 日志实时打印到控制台
-                    result = subprocess.run(
-                        install_cmd, 
-                        timeout=timeout,  # 子进程超时
-                        env=self._get_pip_install_env()
-                    )
-                    
-                    if result.returncode == 0:
-                        install_record.success = True
-                        print("[Installer] ## Dependencies installed successfully.")
-                    else:
-                        install_record.success = False
-                        install_record.error_msg = f"pip install failed with return code {result.returncode}"
-                        print(f"[Installer] ## Error: {install_record.error_msg}")
-                        
-                except subprocess.TimeoutExpired:
-                    install_record.success = False
-                    install_record.error_msg = f"pip install timed out after {timeout} seconds"
-                    print(f"[Installer] ## Error: {install_record.error_msg}")
-            finally:
-                # 清理临时文件
-                try:
-                    os.unlink(temp_requirements_path)
-                except OSError:
-                    pass
-                    
-        except Exception as e:
+        start_install_time = time.time()
+        failed_packages: List[str] = []
+        succeeded_packages: List[str] = []
+        success_count = 0
+
+        print(f"[Installer] ## Total packages to install: {len(packages)} (sequential mode)")
+
+        for package_line in packages:
+            print(f"[Installer] ## Installing package: {package_line}")
+            install_cmd = self._construct_pip_cmd(["install", package_line])
+            print(f"[Installer] ## Executing: {' '.join(install_cmd)}")
+
+            try:
+                result = subprocess.run(
+                    install_cmd,
+                    timeout=timeout,
+                    env=self._get_pip_install_env()
+                )
+
+                if result.returncode == 0:
+                    success_count += 1
+                    succeeded_packages.append(package_line)
+                    print(f"[Installer] ## ✅ Success: {package_line}")
+                else:
+                    error_msg = f"return code {result.returncode}"
+                    failed_packages.append(f"{package_line} ({error_msg})")
+                    print(f"[Installer] ## ❌ Failed: {package_line} -> {error_msg}")
+
+            except subprocess.TimeoutExpired:
+                error_msg = f"timed out after {timeout}s"
+                failed_packages.append(f"{package_line} ({error_msg})")
+                print(f"[Installer] ## ❌ Timeout: {package_line} -> {error_msg}")
+
+        total_duration = round(time.time() - start_install_time, 1)
+
+        if failed_packages:
             install_record.success = False
-            install_record.error_msg = f"Unexpected error during installation: {str(e)}"
-            print(f"[Installer] ## Error: {install_record.error_msg}")
-            
-        finally:
-            install_record.duration = round(time.time() - start_install_time, 1)
-            
+            install_record.error_msg = "Failed packages: " + "; ".join(failed_packages)
+            print(f"[Installer] ## Summary: {success_count}/{len(packages)} succeeded.")
+            print(f"[Installer] ## Failed packages: {', '.join(failed_packages)}")
+        else:
+            install_record.success = True
+            print(f"[Installer] ## Dependencies installed successfully ({success_count} packages).")
+
+        if succeeded_packages:
+            print(f"[Installer] ## Successful packages ({len(succeeded_packages)}): {', '.join(succeeded_packages)}")
+
+        install_record.duration = total_duration
         return install_record
 
     def _execute_install_scripts(self, nodes_to_install: List[str], timeout: float, start_time: float) -> List[Dict]:

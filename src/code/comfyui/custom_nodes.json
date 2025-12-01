@@ -397,15 +397,6 @@
       "description": "ComfyUI nodes for the Ultimate Stable Diffusion Upscale script by Coyote-A."
     },
     {
-      "id": "comfyui-photoshop",
-      "name": "comfyui-photoshop",
-      "repository": "https://github.com/NimaNzrii/comfyui-photoshop",
-      "version": "beta",
-      "stars": 1349,
-      "enabled": true,
-      "description": "Powerfull bridge to Photoshop by NimaNzrii"
-    },
-    {
       "id": "comfyui-videohelpersuite",
       "name": "ComfyUI-VideoHelperSuite",
       "repository": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite",
@@ -701,15 +692,6 @@
       "stars": 807,
       "enabled": true,
       "description": "This is a workflow for my simple logic amazing upscale node for DIT model. it can be common use for Flux,Hunyuan,SD3 It can simple tile the initial image into pieces and then use image-interrogator to get each tile prompts for more accurate upscale process. The condition will be properly handled and the hallucination will be significantly eliminated."
-    },
-    {
-      "id": "bizyair",
-      "name": "☁️BizyAir",
-      "repository": "https://github.com/siliconflow/BizyAir",
-      "version": "v1.2.8",
-      "stars": 800,
-      "enabled": true,
-      "description": "<a href='https://github.com/siliconflow/BizyAir' target='blank'>BizyAir</a> Comfy Nodes that can run in any environment."
     },
     {
       "id": "ComfyUI-YoloWorld-EfficientSAM",

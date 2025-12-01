@@ -7,7 +7,6 @@ RUN apk add --no-cache jq
 
 ENV COMFYUI_DIR="/root/comfyui"
 
-# 1130 版本
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
     git checkout "v0.3.75"
@@ -90,27 +89,22 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     fi && \
     echo "验证通过: codes stage 中的 custom_nodes 包含 ${PLUGIN_COUNT} 个插件"
 
-FROM python:3.12.10-slim AS models
 
-RUN apt update && apt install -y aria2
 
-# 创建 /models 目录（即使没有模型文件，也要创建空目录以避免 COPY 失败）
-RUN mkdir -p /models
 
 # COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
 
-FROM python:3.12.10-slim AS dependencies
+FROM cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/funart-python-base:3.10.16_3.12.10 AS dependencies
 
 WORKDIR /root
 
-# 升级pip并初始化venv虚拟环境
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
-    python3 -m venv venv
+    python3.12 -m venv venv
 
-# 安装cu128最新PyTorch及相关包
+# 安装 cu128 最新 PyTorch 及相关包
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir torch torchvision torchaudio \
+    /root/venv/bin/pip install --no-cache-dir torch torchvision torchaudio \
     --extra-index-url https://download.pytorch.org/whl/cu128
 
 # issue: 历史原因，被某插件使用 @ohyee
@@ -123,6 +117,7 @@ COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
 ENV AGENT_DIR="/root/agent"
+ENV AGENT_VENV_DIR="${AGENT_DIR}/venv"
 
 # 复制 agent 代码（用于调用 PIPInstaller）
 # 注意：需要从项目根目录构建，构建上下文应该是项目根目录
@@ -132,14 +127,14 @@ COPY src/code/agent ${AGENT_DIR}
 # 复制安装脚本
 COPY src/code/comfyui/install_custom_nodes.py /root/install_custom_nodes.py
 
-# 安装 agent 的依赖（必须在运行 install_custom_nodes.py 前安装）
+# 安装 agent 的依赖（供 PIPInstaller 运行，使用 /root/venv 环境）
 RUN --mount=type=cache,target=/root/.cache/pip \
-    /root/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
+    pip3.10 install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 # 先使用 PIPInstaller 安装自定义节点依赖
 # 这会合并所有 requirements.txt，处理依赖冲突，并执行 install.py 脚本
 # 使用 -u 参数确保 Python 输出无缓冲，实时显示日志
 RUN --mount=type=cache,target=/root/.cache/pip \
-    /root/venv/bin/python -u /root/install_custom_nodes.py
+    python3.10 -u /root/install_custom_nodes.py
 
 # 安装 ComfyUI 源码的依赖
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -150,10 +145,28 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         echo "警告: ${COMFYUI_DIR}/requirements.txt 不存在"; \
     fi
 
-FROM agent:1201-v1 AS agent
+FROM cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/funart-python-base:3.10.16_3.12.10 AS agent
+
+WORKDIR /root
+
+ENV AGENT_DIR="/root/agent"
+
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt update && \
+    apt install -y --no-install-recommends \
+    git curl wget jq ffmpeg gcc g++ build-essential zstd && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY src/code/agent ${AGENT_DIR}
+
+RUN python3.10 -m venv ${AGENT_DIR}/venv
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    ${AGENT_DIR}/venv/bin/pip install --upgrade pip && \
+    ${AGENT_DIR}/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 
 
-FROM python:3.12.10-slim AS base
+FROM cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/funart-python-base:3.10.16_3.12.10 AS base
 
 WORKDIR /root
 
@@ -166,14 +179,11 @@ ENV WORK_DIR="/root"
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
+ENV AGENT_VENV_DIR="${AGENT_DIR}/venv"
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
-ENV BUILT_IN_DIR="/built-in"
-COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
-
-# 复制 ComfyUI 主目录（包含 custom_nodes）
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 
 # 显式复制 custom_nodes 目录（确保被正确复制）
@@ -207,10 +217,5 @@ RUN set -x && \
     echo "验证通过: custom_nodes 目录存在且包含 ${PLUGIN_COUNT} 个插件"
 
 ENV BACKEND_TYPE="comfyui"
-
-# 创建并配置 agent venv
-RUN python3 -m venv ${AGENT_DIR}/venv && \
-    ${AGENT_DIR}/venv/bin/pip install --upgrade pip && \
-    ${AGENT_DIR}/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 
 ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]

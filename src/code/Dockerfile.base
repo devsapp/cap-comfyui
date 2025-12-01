@@ -1,0 +1,9 @@
+# FunArt base image，包含Python 3.10和3.12，用于构建FunArt镜像
+FROM debian:12-slim
+
+# 安装 Python 3.10 和 3.12
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.12 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*

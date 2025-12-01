@@ -90,7 +90,7 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     fi && \
     echo "验证通过: codes stage 中的 custom_nodes 包含 ${PLUGIN_COUNT} 个插件"
 
-FROM python:3.10.16-slim AS models
+FROM python:3.12.10-slim AS models
 
 RUN apt update && apt install -y aria2
 
@@ -99,7 +99,7 @@ RUN mkdir -p /models
 
 # COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
 
-FROM python:3.10.16-slim AS dependencies
+FROM python:3.12.10-slim AS dependencies
 
 WORKDIR /root
 
@@ -156,10 +156,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         echo "警告: ${COMFYUI_DIR}/requirements.txt 不存在"; \
     fi
 
-FROM agent AS agent
+FROM agent:1130-v1 AS agent
 
 
-FROM python:3.10.16-slim AS base
+FROM python:3.12.10-slim AS base
 
 WORKDIR /root
 
@@ -214,4 +214,10 @@ RUN set -x && \
     echo "验证通过: custom_nodes 目录存在且包含 ${PLUGIN_COUNT} 个插件"
 
 ENV BACKEND_TYPE="comfyui"
+
+# 创建并配置 agent venv
+RUN python3 -m venv ${AGENT_DIR}/venv && \
+    ${AGENT_DIR}/venv/bin/pip install --upgrade pip && \
+    ${AGENT_DIR}/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
+
 ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]

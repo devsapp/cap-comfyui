@@ -172,8 +172,9 @@ WORKDIR /root
 
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
-    apt install -y \
-    git curl wget jq ffmpeg gcc g++ build-essential zstd
+    apt install -y --no-install-recommends \
+    git curl wget jq ffmpeg gcc g++ build-essential zstd && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV WORK_DIR="/root"
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
@@ -217,5 +218,7 @@ RUN set -x && \
     echo "验证通过: custom_nodes 目录存在且包含 ${PLUGIN_COUNT} 个插件"
 
 ENV BACKEND_TYPE="comfyui"
+
+RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 
 ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]

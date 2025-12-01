@@ -150,7 +150,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         echo "警告: ${COMFYUI_DIR}/requirements.txt 不存在"; \
     fi
 
-FROM agent:1201 AS agent
+FROM agent:1201-v1 AS agent
 
 
 FROM python:3.12.10-slim AS base

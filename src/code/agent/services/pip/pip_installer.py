@@ -185,11 +185,10 @@ class PIPInstaller:
         print(f"[Installer] ## Merged {len(self._merged_dependencies)} unique dependencies from requirements.txt files")
         
         # 应用过滤逻辑
-        # filtered_deps = self._filter_merged_dependencies()
+        filtered_deps = self._filter_merged_dependencies()
 
         # 应用定制化依赖策略钩子
-        # filtered_deps = self._apply_custom_dependency_strategies(filtered_deps, nodes_to_install, nodes_map)
-        filtered_deps = {}
+        filtered_deps = self._apply_custom_dependency_strategies(filtered_deps, nodes_to_install, nodes_map)
 
         # 生成最终的 requirements.txt 内容
         requirements_content = self._generate_requirements_content(filtered_deps)
@@ -235,9 +234,9 @@ class PIPInstaller:
         
         for base_name, dep_info in self._merged_dependencies.items():
             # 过滤掉所有 git+ 形式的依赖
-            if base_name.startswith(('git+', 'hg+', 'svn+', 'bzr+')):
-                skipped_git_dependencies.append(base_name)
-                continue
+            # if base_name.startswith(('git+', 'hg+', 'svn+', 'bzr+')):
+            #     skipped_git_dependencies.append(base_name)
+            #     continue
                 
             # 检查黑名单
             if base_name.lower() in {pkg.lower() for pkg in self.blacklist}:

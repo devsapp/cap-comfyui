@@ -49,18 +49,11 @@ upload-base:
 	@docker rm comfyuiImage
 
 	@echo "Creating snapshot..."
-	# @tar -C ./tmp -cf ./tmp/venv.tar venv
 	@tar -cf - -C /tmp venv | zstd -10 -T0 -o /tmp/venv.tar.zst
 
 	@cd ./tmp && mv ./comfyui/custom_nodes ./ && mv ./comfyui/models ./ && tar -cf - -C /tmp comfyui | zstd -10 -T0 -o /tmp/comfyui.tar.zst
 
-    # @echo "Uploading files to OSS..." 
-    # @ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
-	# ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/custom_nodes && \
-	# ossutil cp ./tmp/comfyui.zip oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui.zip && \
-	# ossutil cp ./tmp/venv.tar oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar
-	# @rm -rf tmp
-	# @echo "Upload completed successfully"
+	@echo "successfully"
 
 # 根据已发布的snapshot构建生产用的ComfyUI镜像
 COMFYUI_IMAGE_PROD = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-comfyui-prod

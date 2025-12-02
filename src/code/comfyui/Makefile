@@ -52,8 +52,8 @@ upload-base:
 	@tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst
 	@cd ./tmp && mv ./comfyui/custom_nodes ./ && mv ./comfyui/models ./ && tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
 
- 	@echo "Uploading files to OSS..." 
-    @ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
+	@echo "Uploading files to OSS..." 
+	@ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
 	ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/custom_nodes && \
 	ossutil cp ./tmp/comfyui.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui.tar.zst && \
 	ossutil cp ./tmp/venv.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar.zst

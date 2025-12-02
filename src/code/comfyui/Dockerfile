@@ -12,7 +12,7 @@ RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     git checkout "v0.3.75"
 
 # 复制插件列表配置文件
-COPY src/code/comfyui/custom_nodes.json /tmp/custom_nodes.json
+COPY src/code/comfyui/custom_nodes_config/custom_nodes.json /tmp/custom_nodes.json
 
 # 批量安装自定义节点插件
 # 从 custom_nodes.json 读取插件列表，循环安装启用的插件
@@ -89,11 +89,6 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     fi && \
     echo "验证通过: codes stage 中的 custom_nodes 包含 ${PLUGIN_COUNT} 个插件"
 
-
-
-
-# COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
-
 FROM cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/funart-python-base:3.10.16_3.12.10 AS dependencies
 
 WORKDIR /root
@@ -125,7 +120,7 @@ ENV AGENT_VENV_DIR="${AGENT_DIR}/venv"
 COPY src/code/agent ${AGENT_DIR}
 
 # 复制安装脚本
-COPY src/code/comfyui/install_custom_nodes.py /root/install_custom_nodes.py
+COPY src/code/comfyui/custom_nodes_config/install_custom_nodes.py /root/install_custom_nodes.py
 
 # 安装 agent 的依赖（供 PIPInstaller 运行，使用 /root/venv 环境）
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -181,15 +176,16 @@ ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
 ENV AGENT_VENV_DIR="${AGENT_DIR}/venv"
-# MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 
+COPY src/code/comfyui/comfyui_manager_config/config.ini /tmp/comfyui_manager_config.ini
+COPY src/code/comfyui/comfyui_manager_config/channels.list /tmp/comfyui_manager_channels.list
 # 显式复制 custom_nodes 目录（确保被正确复制）
 # 如果上面的 COPY 没有正确复制 custom_nodes，这里作为备选方案
-COPY --from=codes ${COMFYUI_DIR}/custom_nodes ${COMFYUI_DIR}/custom_nodes
+# COPY --from=codes ${COMFYUI_DIR}/custom_nodes ${COMFYUI_DIR}/custom_nodes
 
 # 显式验证并确保 custom_nodes 被正确复制
 # 如果 custom_nodes 不存在，构建应该失败

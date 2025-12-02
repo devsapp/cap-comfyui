@@ -1,4 +1,4 @@
-FROM python:3.10.16-slim
+FROM cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/funart-python-base:3.10.16_3.12.10 
 
 WORKDIR /root
 
@@ -30,18 +30,20 @@ ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV SD_DIR="${WORK_DIR}/stable-diffusion-webui"
 ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
+
 # 用户登录实例时默认使用comfyui/sd的python环境，工作空间启动前会fallback到默认的python环境
 ENV PATH="${VENV_DIR}/bin:$PATH"
 
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
-RUN pip install --no-cache-dir huggingface_hub[cli] modelscope
+# 使用 python 3.12 安装 huggingface_hub[cli] modelscope
+RUN pip3.12 install --no-cache-dir huggingface_hub[cli] modelscope
 
 COPY . ${AGENT_DIR}/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
-    python3 -m venv ${AGENT_DIR}/venv
+    python3.10 -m venv ${AGENT_DIR}/venv
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     ${AGENT_DIR}/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir

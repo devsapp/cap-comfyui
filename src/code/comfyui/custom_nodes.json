@@ -144,15 +144,7 @@
       "enabled": true,
       "description": "It provides language settings. (Contribution from users of various languages is needed due to the support for each language.)"
     },
-    {
-      "id": "easyanimate",
-      "name": "EasyAnimate",
-      "repository": "https://github.com/aigc-apps/EasyAnimate",
-      "version": "v1",
-      "stars": 2235,
-      "enabled": true,
-      "description": "Video Generation Nodes for EasyAnimate, which suppors text-to-video, image-to-video, video-to-video and different controls."
-    },
+
     {
       "id": "comfyui-supir",
       "name": "ComfyUI-SUPIR",

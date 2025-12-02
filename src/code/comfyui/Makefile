@@ -52,7 +52,6 @@ upload-base:
 	# @tar -C ./tmp -cf ./tmp/venv.tar venv
 	@tar -cf - -C /tmp venv | zstd -10 -T0 -o /tmp/venv.tar.zst
 
-	# @cd ./tmp && mv ./comfyui/custom_nodes ./ && mv ./comfyui/models ./ && zip -rq comfyui.zip comfyui
 	@cd ./tmp && mv ./comfyui/custom_nodes ./ && mv ./comfyui/models ./ && tar -cf - -C /tmp comfyui | zstd -10 -T0 -o /tmp/comfyui.tar.zst
 
     # @echo "Uploading files to OSS..." 

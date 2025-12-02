@@ -47,8 +47,8 @@ upload-base:
 	docker cp comfyuiImage:/root/comfyui ./tmp/comfyui && \
 	docker cp comfyuiImage:/root/venv ./tmp/venv
 	@docker rm comfyuiImage
-    mv ./tmp/comfyui/models ./tmp/ 
-	
+	mv ./tmp/comfyui/models ./tmp/ 
+
 	@echo "Creating snapshot..."
 	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst
 	mv ./tmp/comfyui/custom_nodes ./tmp/ && mv ./tmp/comfyui/models ./tmp/ && tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst

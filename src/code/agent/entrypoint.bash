@@ -4,12 +4,14 @@
 # - /root: 工作目录
 # -- agent: agent程序所在目录
 # -- comfyui
-# --- models: comfyui模型目录，软链接到挂载存储中，/root/comfyui/models -> ${MNT_DIR}/models
+# --- models: comfyui模型目录，包含平台共享模型和用户模型的软链接
+# ----  平台共享模型来自 /mnt/shared/models (优先级低)
+# ----  用户模型来自 ${MNT_DIR}/models (优先级高，重名时覆盖平台模型)
 # --- ...
 # -- venv: 依赖目录
 
 # - ${MNT_DIR}: 挂载目录，NAS or OSS
-# -- models: 用户模型本体，/root/comfyui/models -> ${MNT_DIR}/models
+# -- models: 用户模型本体
 # -- input: 输入内容，例如图片
 # -- output: 输出内容，例如图片
 # -- snapshots: 快照目录
@@ -41,21 +43,15 @@ setup_network() {
   if is_domestic_region; then
     echo "[INFO] Domestic region detected: ${REGION}"
     
-    # 设置 HuggingFace 镜像
-    export HF_ENDPOINT="https://hf-mirror.com"
-
-    # ComfyUI-Manager 使用
-    # 设置 Github 镜像
-    export GITHUB_ENDPOINT="https://cap-accor-proxy-qkqnjxeail.ap-southeast-1.fcapp.run/https://github.com/"
+    # 写入 ~/.bashrc（同时满足运行时和登录实例时使用）
+    echo 'export HF_ENDPOINT="https://hf-mirror.com"' >> ~/.bashrc
+    echo 'export GITHUB_ENDPOINT="https://cap-accor-proxy-qkqnjxeail.ap-southeast-1.fcapp.run/https://github.com/"' >> ~/.bashrc
+    echo 'export UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple/"' >> ~/.bashrc
+    echo 'export UV_LINK_MODE="copy"' >> ~/.bashrc
+    echo 'export UV_HTTP_TIMEOUT="300"' >> ~/.bashrc
     
-    # uv 镜像配置
-    export UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple/"
-
-    # 使用 copy 模式，避免 hardlink 警告（当缓存和目标在不同文件系统时）
-    export UV_LINK_MODE="copy"
-    
-    # 增加超时时间（默认30秒太短）
-    export UV_HTTP_TIMEOUT="300"
+    # 加载环境变量（用于当前 entrypoint.bash 及其子进程）
+    source ~/.bashrc
 
     # 启动 GitHub 代理监控守护进程
     GITHUB_PROXY_MONITOR="${AGENT_DIR}/services/proxy/github-proxy-monitor.sh"

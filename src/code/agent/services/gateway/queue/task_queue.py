@@ -11,7 +11,7 @@ import requests
 from typing import Dict, Optional, Callable, List
 
 import constants
-from .task_models import TaskStatus, TaskRequest
+from .task_models import TaskStatus, Task
 from .task_storage_manager import TaskStorageManager
 from .task_status_poller_manager import TaskStatusPollerManager
 from .task_status_broadcaster import TaskStatusBroadcaster
@@ -40,7 +40,7 @@ class TaskQueue:
         if self._initialized:
             return
         
-        self._tasks: Dict[str, TaskRequest] = {}  # 存储任务信息
+        self._tasks: Dict[str, Task] = {}  # 存储任务信息
         self._lock = threading.Lock()  # 实例级别的锁，保护任务字典
         
         # 初始化子模块
@@ -86,7 +86,7 @@ class TaskQueue:
         if task_id is None:
             task_id = str(uuid.uuid4())
         
-        task_request = TaskRequest(
+        task_request = Task(
             task_id=task_id,
             client_id=client_id,
             prompt=prompt,
@@ -135,11 +135,12 @@ class TaskQueue:
         
         return task_id
     
-    def get_all_tasks(self) -> List[TaskRequest]:
+    def get_all_tasks(self) -> List[Task]:
         with self._lock:
             # 快速创建浅拷贝，减少持锁时间
             return list(self._tasks.values())
-    
+
+    # FIXME 取名字
     def get_running_task_count(self) -> int:
         """获取运行中任务数量（PENDING和PROCESSING状态）"""
         with self._lock:
@@ -188,18 +189,11 @@ class TaskQueue:
             
             success = task.update_status(new_status)
             
-            if success:
-                # 计算任务在旧状态的停留时间
-                task_age = task.get_age()
-                log("INFO", f"[TaskStatus] Task {task_id} status updated: {old_status.value} -> {new_status.value} (age={task_age:.1f}s)")
-            else:
-                log("WARNING", f"[TaskStatus] Failed to update task {task_id} status from {old_status.value} to {new_status.value} (invalid transition)")
-            
-        # 同步到 NAS（缩短内存锁持有时间）
-        if success:
-            self._storage_manager.sync_task_status(task_id, old_status, new_status)
+        # # 同步到 NAS（缩短内存锁持有时间）
+        # if success:
+        #     self._storage_manager.sync_task_status(task_id, old_status, new_status)
         
-        if success and old_status == TaskStatus.PENDING and new_status == TaskStatus.PROCESSING:
+        # if success and old_status == TaskStatus.PENDING and new_status == TaskStatus.PROCESSING:
             self._broadcast_queue_status()
         
         return success
@@ -236,7 +230,8 @@ class TaskQueue:
         self._storage_manager.delete_task(task_id)
         
         return True
-    
+
+    # FIXME 改名
     def associate_task_with_client_id(self, task_id: str, client_id: str):
         """
         将任务与指定的ComfyUI客户端关联，使前端能够接收到任务状态更新
@@ -249,12 +244,12 @@ class TaskQueue:
     
     # ========== 内部方法 ==========
     
-    def _get_task_internal(self, task_id: str) -> Optional[TaskRequest]:
+    def _get_task_internal(self, task_id: str) -> Optional[Task]:
         """内部方法：获取任务（供存储管理器使用）"""
         with self._lock:
             return self._tasks.get(task_id)
     
-    def _add_task_to_memory(self, task_id: str, task: TaskRequest):
+    def _add_task_to_memory(self, task_id: str, task: Task):
         """内部方法：添加任务到内存（供存储管理器使用）"""
         with self._lock:
             self._tasks[task_id] = task
@@ -328,15 +323,7 @@ class TaskQueue:
     
     def _broadcast_queue_status(self):
         """广播当前队列状态给所有连接（类似 ComfyUI 的 queue_updated）"""
-        # 获取调用栈，用于追踪谁调用了广播
-        import traceback as tb
-        caller_stack = tb.extract_stack()
-        caller_info = "unknown"
-        if len(caller_stack) >= 2:
-            caller_frame = caller_stack[-2]
-            caller_info = f"{caller_frame.filename.split('/')[-1]}:{caller_frame.lineno} in {caller_frame.name}"
-        
-        self._broadcast_queue_status_internal(caller_info)
+        self._broadcast_queue_status_internal()
     
     def _broadcast_queue_status_internal(self, caller_info: str = "unknown"):
         """内部方法：广播队列状态（供轮询管理器使用）"""

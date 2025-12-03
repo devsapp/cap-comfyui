@@ -81,7 +81,8 @@ class Routes:
                     else:
                         snapshot_to_load = current_snapshot
                         skip_save = False
-                    
+
+                    # Status:Rebooting detailStatus:Saving
                     # 若最近一次管控操作为Start 且未指定 snapshot，则在重启前保存工作空间
                     # TODO： 是否会影响pre-stop逻辑？
                     if not skip_save and service.latest_action and service.latest_action == Action.START:

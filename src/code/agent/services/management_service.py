@@ -15,6 +15,8 @@ class BackendStatus(Enum):
     RUNNING = "Running"
     SAVING = "Saving"
     STOPPING = "Stopping"
+    REBOOTING = "Rebooting"
+    # Saving-->Stop--->Staring-->Running
 
 
 class Action(Enum):

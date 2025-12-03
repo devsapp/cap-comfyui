@@ -20,7 +20,8 @@ class HistoryGatewayService:
     def __init__(self):
         # 直接访问存储路径，不需要依赖 ServerlessApiService
         self.storage_path = f"{constants.MNT_DIR}/output/serverless_api"
-    
+
+    # FIXME 基于queue拿history
     def handle_history_request(self, path):
         """
         处理 history 相关请求
@@ -36,15 +37,6 @@ class HistoryGatewayService:
             
             if path == "api/history" and request.method == "GET":
                 return self._handle_get_all_history()
-            
-            elif path.startswith("api/history/") and request.method == "GET":
-                # GET /api/history/{prompt_id} - 获取特定任务的历史记录
-                prompt_id = path.split("/")[-1]
-                return self._handle_get_history_by_id(prompt_id)
-            
-            elif path == "api/history" and request.method == "POST":
-                # POST /api/history - 清理历史记录
-                return self._handle_clear_history()
             
             # 其他情况返回空结果
             return jsonify({})
@@ -82,41 +74,6 @@ class HistoryGatewayService:
             log("DEBUG", f"Found {len(all_history)} history items (no limit)")
         
         return jsonify(all_history)
-    
-    def _handle_get_history_by_id(self, prompt_id):
-        """
-        处理获取特定任务历史记录的请求
-        """
-        log("DEBUG", f"Retrieving history for prompt_id: {prompt_id}")
-        
-        history_data = self._get_persisted_history_by_prompt_id(prompt_id)
-        
-        if history_data:
-            log("DEBUG", f"Found persisted history for prompt_id: {prompt_id}")
-            return jsonify(history_data)
-        else:
-            log("DEBUG", f"No persisted history found for prompt_id: {prompt_id}")
-            return jsonify({})
-    
-    def _handle_clear_history(self):
-        """
-        处理清理历史记录的请求
-        
-        注意：此方法目前不清理持久化存储的历史，
-        只返回成功响应。如需清理持久化数据，
-        需要单独实现。
-        """
-        request_data = request.get_json() or {}
-        
-        if request_data.get("clear"):
-            log("INFO", f"Clear history requested (persistent storage not affected)")
-            
-            # 持久化存储的历史不清理
-            # 如果需要清理，可以删除 self.storage_path 下的文件
-            
-            return jsonify({"status": "success", "message": "History clear acknowledged (persistent storage preserved)"})
-        
-        return jsonify({})
     
     def _get_all_persisted_history(self, limit=None):
         """
@@ -166,61 +123,7 @@ class HistoryGatewayService:
         except Exception as e:
             log("ERROR", f"Error getting all persisted history: {e}")
             return OrderedDict()
-    
-    def _get_persisted_history_by_prompt_id(self, prompt_id):
-        """
-        根据 prompt_id 从持久化存储获取历史记录
-        
-        首先尝试可能的 task_id 路径，如果失败则遍历所有文件查找
-        """
-        try:
-            # 首先尝试可能的 task_id 路径（性能优化）
-            possible_task_ids = [
-                prompt_id,
-                f"prompt_{constants.INSTANCE_ID}_{prompt_id}",
-            ]
-            
-            for task_id in possible_task_ids:
-                file_path = os.path.join(self.storage_path, task_id)
-                if os.path.exists(file_path) and os.path.isfile(file_path):
-                    try:
-                        status_data = self._get_status_from_file(task_id)
-                        # 验证是否包含该 prompt_id
-                        for status in status_data:
-                            if (status.get("type") == "serverless_api" and 
-                                status.get("data", {}).get("prompt_id") == prompt_id):
-                                file_mtime = os.path.getmtime(file_path)
-                                return self._convert_status_to_history_item(status_data, task_id, file_mtime)
-                    except Exception as e:
-                        log("DEBUG", f"Error checking task_id {task_id} for prompt_id {prompt_id}: {e}")
-                        continue
-            
-            # 如果直接路径查找失败，遍历所有文件查找（降级方案）
-            if os.path.exists(self.storage_path):
-                task_files = glob.glob(os.path.join(self.storage_path, "*"))
-                for task_file in task_files:
-                    if os.path.isfile(task_file):
-                        task_id = os.path.basename(task_file)
-                        # 跳过已经尝试过的 task_id
-                        if task_id in possible_task_ids:
-                            continue
-                        try:
-                            status_data = self._get_status_from_file(task_id)
-                            for status in status_data:
-                                if (status.get("type") == "serverless_api" and 
-                                    status.get("data", {}).get("prompt_id") == prompt_id):
-                                    file_mtime = os.path.getmtime(task_file)
-                                    return self._convert_status_to_history_item(status_data, task_id, file_mtime)
-                        except Exception as e:
-                            log("DEBUG", f"Error checking task_id {task_id} for prompt_id {prompt_id}: {e}")
-                            continue
-            
-            return None
-            
-        except Exception as e:
-            log("ERROR", f"Error getting persisted history for prompt_id {prompt_id}: {e}")
-            return None
-    
+
     def _convert_status_to_history_item(self, status_data, task_id, file_mtime=None):
         """
         将 ServerlessApiService 的状态数据转换为 ComfyUI 完全兼容的历史记录格式
@@ -236,7 +139,8 @@ class HistoryGatewayService:
         try:
             if not status_data:
                 return None
-            
+
+            # FIXME status 数据结构
             # 查找最终结果
             final_result = None
             for status in reversed(status_data):  # 从最新的开始查找
@@ -245,6 +149,7 @@ class HistoryGatewayService:
                     break
             
             if not final_result:
+                # FIXME log
                 return None
             
             data = final_result.get("data", {})
@@ -302,7 +207,8 @@ class HistoryGatewayService:
                 end_timestamp = int(file_mtime * 1000)
                 start_timestamp = end_timestamp - int(execution_time * 1000)
             elif file_mtime is not None:
-                # 没有 execution_time，使用文件修改时间作为结束时间，向前推1秒作为开始时间（默认）
+                # 使用execution_start时间戳
+                # FIXME {"type": "execution_start", "data": {"prompt_id": "aa81cb4c-d285-41f2-bcdf-1fdf5e42faf4", "timestamp": 1764761099823}}
                 end_timestamp = int(file_mtime * 1000)
                 start_timestamp = end_timestamp - 1000  # 默认1秒
             else:

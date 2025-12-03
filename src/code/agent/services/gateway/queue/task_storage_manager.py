@@ -8,7 +8,7 @@ import traceback
 from typing import Dict, Optional, Callable, List
 
 import constants
-from .task_models import TaskStatus, TaskRequest
+from .task_models import TaskStatus, Task
 from store.file_lock import FileLock
 from store.filesystem import FileSystem
 from utils.logger import log
@@ -42,9 +42,9 @@ class TaskStorageManager:
             self.base_dir = self.lock_file = self.fs = None
     
     def set_callbacks(self,
-                     get_task_fn: Optional[Callable[[str], Optional[TaskRequest]]] = None,
-                     add_task_to_memory_fn: Optional[Callable[[str, TaskRequest], None]] = None,
-                     start_polling_fn: Optional[Callable[[str], None]] = None):
+                      get_task_fn: Optional[Callable[[str], Optional[Task]]] = None,
+                      add_task_to_memory_fn: Optional[Callable[[str, Task], None]] = None,
+                      start_polling_fn: Optional[Callable[[str], None]] = None):
         """设置回调函数"""
         if get_task_fn is not None:
             self._get_task = get_task_fn
@@ -80,12 +80,12 @@ class TaskStorageManager:
             raise RuntimeError("Storage not enabled")
         return FileLock(self.lock_file)
     
-    def _save_task_internal(self, task: TaskRequest):
+    def _save_task_internal(self, task: Task):
         """保存任务到文件系统（需持锁）"""
         task_data = task.to_dict()
         self.fs.put(f"tasks/{task.task_id}.json", json.dumps(task_data, ensure_ascii=False))
     
-    def _load_task_internal(self, task_id: str) -> Optional[TaskRequest]:
+    def _load_task_internal(self, task_id: str) -> Optional[Task]:
         """从文件系统加载任务（需持锁）
         
         Args:
@@ -98,7 +98,7 @@ class TaskStorageManager:
             data = self.fs.get(f"tasks/{task_id}.json")
             if not data:
                 return None
-            task = TaskRequest.from_dict(json.loads(data))
+            task = Task.from_dict(json.loads(data))
             return task
         except Exception as e:
             log("ERROR", f"[NAS] Failed to load task {task_id}: {e}")
@@ -175,7 +175,7 @@ class TaskStorageManager:
         idx = self._get_index()
         return sum(len(idx.get(k, [])) for k in self._INDEX_KEYS)
     
-    def restore_tasks_from_nas(self) -> List[TaskRequest]:
+    def restore_tasks_from_nas(self) -> List[Task]:
         """从 NAS 恢复活跃任务到内存"""
         if not self.has_storage:
             return []
@@ -226,7 +226,7 @@ class TaskStorageManager:
             traceback.print_exc()
             return []
     
-    def save_task(self, task: TaskRequest):
+    def save_task(self, task: Task):
         """保存任务到NAS"""
         if not self.has_storage:
             return

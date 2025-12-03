@@ -121,8 +121,7 @@ class GpuForwarder:
             
             forward_headers = {
                 constants.HEADER_FORWARDED_BY: forward_by_name,
-                'x-fc-async-task-id': task_id,  # 优先使用这个作为 task_id
-                'x-fc-request-id': task_id,
+                'x-fc-async-task-id': task_id,  # 优先使用这个作为
                 'x-fc-trace-id': task_id,       # 使GPU的request-id与task-id一致
                 constants.HEADER_FC_INVOCATION_TYPE: 'Async'
             }
@@ -171,6 +170,8 @@ class GpuForwarder:
             if resp.status_code == 202:
                 return task_id, resp
             else:
+                # FIXME log
+                # FIXME 任务提交失败
                 return None, (500, "async_invocation_error", f"Failed to invoke GPU function asynchronously: HTTP {resp.status_code}")
                 
         except Exception as e:

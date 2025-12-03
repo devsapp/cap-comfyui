@@ -18,7 +18,7 @@ class WebSocketManager:
         self._task_subscriptions: Dict[str, Set[Any]] = {}  # task_id -> set of websockets
         self._client_subscriptions: Dict[Any, Set[str]] = {}  # websocket -> set of task_ids
         self._client_id_mapping: Dict[str, Set[Any]] = {}  # client_id -> set of websockets
-        self._ws_client_id_mapping: Dict[Any, str] = {}  # websocket -> client_id
+        self._ws_client_id_mapping: Dict[Any, str] = {}  # 旧的websocket
         
         # 使用消息队列序列化所有发送操作
         self._message_queue = Queue()  # 线程安全的消息队列
@@ -266,7 +266,7 @@ class WebSocketManager:
             int: 成功关联的连接数
         """
         with self._lock:
-            connections = self._client_id_mapping.get(client_id, set()).copy()
+            connections = self._task_subscriptions.get(task_id, set()).copy()
         
         if not connections:
             return 0

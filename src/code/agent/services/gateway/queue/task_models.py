@@ -10,10 +10,10 @@ from enum import Enum
 
 class TaskStatus(Enum):
     """任务状态枚举"""
-    PENDING = "pending"          # 等待执行
-    PROCESSING = "processing"    # 正在执行
-    COMPLETED = "completed"      # 已完成
-    FAILED = "failed"            # 执行失败
+    PENDING = "pending"          # 等待执行 到达CPU，未转发给GPU
+    PROCESSING = "processing"    # 正在执行 GPU返回202
+    COMPLETED = "completed"      # 已完成 serverless_api success
+    FAILED = "failed"            # 执行失败 转发失败、serverless_api failure
     
     def is_terminal(self) -> bool:
         """判断是否为终态"""
@@ -25,8 +25,8 @@ class TaskStatus(Enum):
 
 
 @dataclass
-class TaskRequest:
-    """任务请求数据模型"""
+class Task:
+    """任务数据模型"""
     task_id: str
     client_id: str
     prompt: dict
@@ -73,7 +73,7 @@ class TaskRequest:
             self.completed_at = time.time()
         
         return True
-    
+
     def get_elapsed_time(self) -> Optional[float]:
         """获取任务执行耗时(秒)"""
         if not self.started_at:
@@ -107,7 +107,7 @@ class TaskRequest:
         return result
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'TaskRequest':
+    def from_dict(cls, data: dict) -> 'Task':
         """从字典恢复任务对象
         
         Args:

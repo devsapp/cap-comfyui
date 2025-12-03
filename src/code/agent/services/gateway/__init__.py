@@ -2,7 +2,7 @@ from .handlers import CpuGatewayService, HistoryGatewayService
 from .status import StatusPoller
 from .queue import (
     TaskStatus,
-    TaskRequest,
+    Task,
     TaskQueue,
     get_task_queue
 )

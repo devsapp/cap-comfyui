@@ -57,17 +57,21 @@ class ServerlessApiService:
         #
         # 必要时，也可以参考对应代码实现基于 Redis、TableStore、MySQL 等方式的状态持久化
         self.store: Store = FileSystem(f"{constants.MNT_DIR}/output/serverless_api")
-        
+
         # 记录启动信息和日志级别
         log("INFO", f"ServerlessApiService initialized with endpoint: {self.endpoint}")
         log("INFO", f"Current log level: {constants.LOG_LEVEL}")
 
+        # 用于检测状态变化的缓存
+        self._last_status_cache = {}  # task_id -> last_status_summary
+        self._cache_lock = threading.Lock()
+
     def get_credentials(self):
         """
         获取阿里云访问凭证
-        
+
         优先从 HTTP 请求 header 中获取，如果获取失败则从环境变量中获取。
-        
+
         Returns:
             tuple: (access_key_id, access_key_secret, security_token)
         """
@@ -98,9 +102,9 @@ class ServerlessApiService:
     def get_oss_store(self):
         """
         创建 OSS 存储客户端
-        
+
         使用当前请求的凭证创建 OSS 客户端实例，用于上传生成的图片/视频到阿里云 OSS。
-        
+
         Returns:
             OSS: OSS 客户端实例
         """
@@ -119,24 +123,50 @@ class ServerlessApiService:
     def api_prompt(self, client_id: str, prompt: Any):
         """
         提交 ComfyUI 工作流任务
-        
+
         将处理后的 prompt（工作流定义）提交给 ComfyUI 后端执行。
-        
+
         Args:
             client_id: WebSocket 客户端 ID，用于关联 WebSocket 连接
             prompt: ComfyUI 工作流定义（节点图）
-            
+
         Returns:
             dict: 包含 prompt_id 等信息的响应
-            
+
         Raises:
             ComfyUIException: 当 ComfyUI API 调用失败时抛出
         """
         req = {"client_id": client_id, "prompt": prompt}
-        res = requests.post(
-            os.path.join(self.endpoint, "prompt"),
-            json=req,
-        )
+        try:
+            res = requests.post(
+                os.path.join(self.endpoint, "prompt"),
+                json=req,
+                timeout=30,  # 添加超时设置
+            )
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f"Failed to connect to ComfyUI service at {self.endpoint}. Please ensure ComfyUI is running."
+            log("ERROR", f"{error_msg} Error: {e}")
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
+        except requests.exceptions.Timeout as e:
+            error_msg = f"Request to ComfyUI service at {self.endpoint} timed out."
+            log("ERROR", f"{error_msg} Error: {e}")
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Request to ComfyUI service at {self.endpoint} failed: {str(e)}"
+            log("ERROR", error_msg)
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
 
         if res.status_code != 200:
             log("ERROR", f"ComfyUI prompt request failed: {req}")
@@ -159,13 +189,13 @@ class ServerlessApiService:
     def api_websocket(self, client_id: str, on_message):
         """
         创建 WebSocket 连接到 ComfyUI
-        
+
         用于实时接收任务执行状态更新（如进度、完成、错误等）。
-        
+
         Args:
             client_id: 客户端 ID，用于标识此连接
             on_message: 消息回调函数，接收 (ws, message) 参数
-            
+
         Returns:
             WebSocketApp: WebSocket 应用实例
         """
@@ -182,13 +212,13 @@ class ServerlessApiService:
     def api_upload_image(self, content: bytes, overwrite: bool):
         """
         上传图片到 ComfyUI
-        
+
         将图片内容上传到 ComfyUI 的 input 目录，供工作流节点使用。
-        
+
         Args:
             content: 图片二进制内容
             overwrite: 是否覆盖同名文件
-            
+
         Returns:
             dict: 包含上传后的文件信息（如 name 字段）
         """
@@ -202,70 +232,141 @@ class ServerlessApiService:
         if overwrite:
             files["overwrite"] = bytes("1")
 
-        res = requests.post(
-            os.path.join(self.endpoint, "upload/image"),
-            files=files,
-        )
+        try:
+            res = requests.post(
+                os.path.join(self.endpoint, "upload/image"),
+                files=files,
+                timeout=30,
+            )
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f"Failed to connect to ComfyUI service at {self.endpoint}. Please ensure ComfyUI is running."
+            log("ERROR", f"{error_msg} Error: {e}")
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Request to ComfyUI service at {self.endpoint} failed: {str(e)}"
+            log("ERROR", error_msg)
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
 
         return res.json()
 
     def api_get_history(self, prompt_id: str):
         """
         获取任务执行历史
-        
+
         Args:
             prompt_id: 任务 ID
-            
+
         Returns:
             dict: 包含任务执行结果、输出文件等信息
         """
-        return requests.get(os.path.join(self.endpoint, "history", prompt_id)).json()
+        try:
+            res = requests.get(
+                os.path.join(self.endpoint, "history", prompt_id),
+                timeout=30,
+            )
+            return res.json()
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f"Failed to connect to ComfyUI service at {self.endpoint}. Please ensure ComfyUI is running."
+            log("ERROR", f"{error_msg} Error: {e}")
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Request to ComfyUI service at {self.endpoint} failed: {str(e)}"
+            log("ERROR", error_msg)
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
 
     def api_view_image(self, filename: str, img_type: str, sub_folder: str):
         """
         下载生成的图片/视频文件
-        
+
         Args:
             filename: 文件名
             img_type: 文件类型（如 "output", "temp"）
             sub_folder: 子目录名
-            
+
         Returns:
             bytes: 文件二进制内容
         """
-        return requests.get(
-            os.path.join(self.endpoint, "view"),
-            params={
-                "filename": filename,
-                "type": img_type,
-                "subfolder": sub_folder,
-                "rand": random.random(),
-            },
-        ).content
+        try:
+            res = requests.get(
+                os.path.join(self.endpoint, "view"),
+                params={
+                    "filename": filename,
+                    "type": img_type,
+                    "subfolder": sub_folder,
+                    "rand": random.random(),
+                },
+                timeout=30,
+            )
+            return res.content
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f"Failed to connect to ComfyUI service at {self.endpoint}. Please ensure ComfyUI is running."
+            log("ERROR", f"{error_msg} Error: {e}")
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Request to ComfyUI service at {self.endpoint} failed: {str(e)}"
+            log("ERROR", error_msg)
+            raise ComfyUIException(
+                error_msg,
+                constants.ERROR_CODE.EXECUTION_FAILED.value,
+                str(e),
+            )
 
     def api_clear_history(self):
         """
         清除 ComfyUI 的历史记录
-        
+
         释放内存和磁盘空间。
         """
-        requests.post(os.path.join(self.endpoint, "history"), json={"clear": True})
+        try:
+            requests.post(
+                os.path.join(self.endpoint, "history"),
+                json={"clear": True},
+                timeout=30,
+            )
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f"Failed to connect to ComfyUI service at {self.endpoint}. Please ensure ComfyUI is running."
+            log("ERROR", f"{error_msg} Error: {e}")
+            # 清除历史记录失败不应该阻止其他操作，只记录错误
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Request to ComfyUI service at {self.endpoint} failed: {str(e)}"
+            log("ERROR", error_msg)
+            # 清除历史记录失败不应该阻止其他操作，只记录错误
 
     def parse_prompt(self, prompt: map):
         """
         预处理工作流定义
-        
+
         自动处理以下内容：
         1. LoadImage/LoadImageMask 节点：支持 HTTP URL、OSS URL、Base64 格式的图片输入
         2. KSampler 节点：自动生成随机种子（当 seed=-1 时）
         3. SaveImage 节点：自动添加实例 ID 到文件名前缀
-        
+
         Args:
             prompt: ComfyUI 工作流定义（字典格式）
-            
+
         Returns:
             map: 处理后的工作流定义
-            
+
         Raises:
             Exception: 当图片加载失败时抛出
         """
@@ -287,7 +388,7 @@ class ServerlessApiService:
                     else:
                         input_key = "image"
                         file_type = "image"
-                    
+
                     file_url = value.get("inputs", {}).get(input_key, "")
                     content = ""
 
@@ -296,7 +397,7 @@ class ServerlessApiService:
                         log("DEBUG", f"downloading {file_type} from HTTP URL: {file_url}")
                         start_time = time.perf_counter()
                         response = requests.get(file_url)
-                        
+
                         if response.status_code >= 400:
                             raise Exception(
                                 f"can not get {file_type} {file_url} from http url, got status code {response.status_code}"
@@ -305,7 +406,7 @@ class ServerlessApiService:
                         content = response.content
                         if content == "":
                             raise Exception(f"can not get {file_type} {file_url} from http url")
-                        
+
                         elapsed = time.perf_counter() - start_time
                         log("INFO", f"successfully downloaded {file_type} from HTTP URL ({len(content)} bytes) in {elapsed:.2f}s")
 
@@ -322,9 +423,9 @@ class ServerlessApiService:
 
                         if content == "":
                             raise Exception(f"can not get {file_type} {file_url} from oss")
-                        
+
                         log("DEBUG", f"successfully downloaded {file_type} from OSS ({len(content)} bytes) in {elapsed:.2f}s")
-                            
+
                     elif len(file_url) > 64:
                         # 文件可能是 base64，尝试解析
                         log("DEBUG", f"decoding {file_type} from Base64")
@@ -337,7 +438,7 @@ class ServerlessApiService:
                             elapsed = time.perf_counter() - start_time
                             log("DEBUG", f"failed to decode {file_type} from Base64 in {elapsed:.2f}s")
                             pass
-                            
+
                     if content:
                         # 上传文件并更新对应的输入字段
                         log("DEBUG", f"uploading {file_type} to ComfyUI")
@@ -346,7 +447,7 @@ class ServerlessApiService:
                         elapsed = time.perf_counter() - start_time
                         log("INFO", f"successfully uploaded {file_type} to ComfyUI as '{res['name']}' in {elapsed:.2f}s")
                         prompt[key]["inputs"][input_key] = res["name"]
-                        
+
                 except Exception as e:
                     raise Exception(f"{class_type} failed: {e}")
 
@@ -369,16 +470,16 @@ class ServerlessApiService:
     def get_history_result(self, prompt_id: str, output_base64=False, output_oss=False):
         """
         获取任务执行结果并处理输出文件
-        
+
         从 ComfyUI 历史记录中提取输出文件（图片/视频），并根据参数选择：
         - 下载文件并转换为 Base64
         - 上传文件到 OSS 并生成签名 URL
-        
+
         Args:
             prompt_id: 任务 ID
             output_base64: 是否将输出文件转换为 Base64 编码
             output_oss: 是否上传输出文件到 OSS
-            
+
         Returns:
             dict: 包含所有输出结果的字典，格式：
                 {
@@ -412,7 +513,7 @@ class ServerlessApiService:
                     # 调试日志：查看实际的数据类型和结构
                     log("DEBUG", f"node_id={node_id}, output_type={output_type}, index={index}")
                     log("DEBUG", f"img type: {type(img)}, img: {img}")
-                    
+
                     if type(img) != dict or not img.get("filename"):
                         log("DEBUG", f"skipping: type check={type(img) != dict}, filename check={not img.get('filename') if isinstance(img, dict) else 'N/A'}")
                         continue
@@ -492,7 +593,7 @@ class ServerlessApiService:
     def put_status_to_store(self, task_id: str, status: str):
         """
         保存任务状态到持久化存储
-        
+
         用于异步场景，状态信息以追加方式存储，每条状态占一行。
         这样多个实例可以通过共享存储（如 NAS）查询任务状态。
 
@@ -509,21 +610,35 @@ class ServerlessApiService:
             finally:
                 pass
 
+    def refresh_storage_cache(self):
+        """刷新存储缓存，确保能获取到最新文件
+        
+        用于解决实例冻结导致的 NFS 缓存问题
+        """
+        if self.store and hasattr(self.store, 'refresh_cache'):
+            try:
+                self.store.refresh_cache()
+            except Exception as e:
+                log("WARNING", f"Failed to refresh storage cache: {e}")
+    
     def get_status_from_store(self, task_id: str):
         """
         从持久化存储中读取任务状态历史
-        
+
         Args:
             task_id: 任务 ID
-            
+
         Returns:
             list: 状态历史列表，每个元素是一条状态消息（已解析为字典）
         """
         if self.store:
             value = self.store.get(task_id)
-            return [json.loads(line) for line in value.split("\n") if line]
+            result = [json.loads(line) for line in value.split("\n") if line]
+            
+            return result
         else:
             return []
+
 
     def run(
         self,
@@ -535,7 +650,7 @@ class ServerlessApiService:
     ):
         """
         执行 ComfyUI 工作流（Serverless API 核心方法）
-        
+
         完整流程：
         1. 预处理工作流定义（parse_prompt）
         2. 建立 WebSocket 连接监听任务状态
@@ -543,17 +658,17 @@ class ServerlessApiService:
         4. 等待任务完成
         5. 获取并处理输出结果
         6. 保存状态到持久化存储
-        
+
         Args:
             prompt: ComfyUI 工作流定义
             output_base64: 是否将输出转换为 Base64（适用于小文件）
             output_oss: 是否上传输出到 OSS（推荐用于生产环境）
             callback: WebSocket 消息回调函数，接收原始消息
             task_id: 任务 ID，用于状态持久化（默认使用 prompt_id）
-            
+
         Returns:
             dict: 任务执行结果，包含所有输出文件信息
-            
+
         Raises:
             ComfyUIException: 当 ComfyUI 执行出错时
             Exception: 其他异常
@@ -574,7 +689,7 @@ class ServerlessApiService:
                     # 忽略空消息
                     if not message or not message.strip():
                         return
-                    
+
                     # 尝试解析 JSON
                     try:
                         msg = json.loads(message)
@@ -627,9 +742,12 @@ class ServerlessApiService:
                             log("DEBUG", f"executing node: {node_id} for prompt_id={current_prompt_id}")
                     elif msg_type == "execution_error":
                         # 执行出错
-                        error_msg = msg.get('data', {}).get('exception_message', 'unknown error')
-                        node_type = msg.get('data', {}).get('node_type', 'unknown')
-                        log("ERROR", f"execution error in node type '{node_type}' for prompt_id={current_prompt_id}: {error_msg}")
+                        error_data = msg.get('data', {})
+                        error_msg = error_data.get('exception_message', 'unknown error')
+                        node_type = error_data.get('node_type', 'unknown')
+                        node_id = error_data.get('node', 'unknown')
+                        exception_type = error_data.get('exception_type', 'RuntimeError')
+                        log("ERROR", f"[WorkflowExecution] Execution error (prompt_id={current_prompt_id}, task_id={task_id}, node_id={node_id}, node_type={node_type}, exception_type={exception_type}): {error_msg}")
                         ws.close()
 
                         raise ComfyUIException(
@@ -639,10 +757,10 @@ class ServerlessApiService:
                         )
                     elif msg_type == "execution_success":
                         # 执行成功
-                        log("INFO", f"execution success for prompt_id={current_prompt_id}, closing websocket")
+                        log("INFO", f"[WorkflowExecution] Execution success (prompt_id={current_prompt_id}, task_id={task_id}), closing websocket")
                         ws.close()
                     elif msg_type == "execution_start":
-                        log("INFO", f"execution started for prompt_id={current_prompt_id}")
+                        log("INFO", f"[WorkflowExecution] Execution started (prompt_id={current_prompt_id}, task_id={task_id})")
                     elif msg_type == "progress":
                         # 进度更新
                         value = msg.get('data', {}).get('value', 0)
@@ -676,31 +794,37 @@ class ServerlessApiService:
             prompt_result = self.api_prompt(client_id, prompt)
             prompt_id = prompt_result.get("prompt_id", "")
             log("DEBUG", f"workflow submitted, prompt_id: {prompt_id}")
+            log("DEBUG", f"received task_id: {task_id}, type: {type(task_id).__name__}")
 
-            # 如果 task id 未指定，则使用 prompt id
+            # 如果 task id 未指定,则使用 prompt id
             if not task_id:
                 task_id = prompt_id
+                log("DEBUG", f"task_id not provided, using prompt_id: {task_id}")
+            else:
+                log("DEBUG", f"using provided task_id: {task_id}")
 
             if not prompt_id:
                 raise Exception("can not get prompt_id from ComfyUI")
 
+            # 记录执行开始时间
+            execution_start_time = time.time()
+            
             # 已经有结果，则不必等待
             if len(self.api_get_history(prompt_id)) > 0:
                 ws.close()
             else:
                 # 等待工作流完成：WebSocket（主） + 轮询历史记录（备用）
                 check_interval = int(os.getenv("SERVERLESS_API_CHECK_INTERVAL", "60"))
-                log("INFO", f"waiting for prompt {prompt_id} to complete (check_interval={check_interval}s)")
-                start_time = time.time()
-                
+                log("INFO", f"[WorkflowExecution] Waiting for prompt to complete (prompt_id={prompt_id}, task_id={task_id}, check_interval={check_interval}s)")
+
                 while ws_threading.is_alive():
                     # 等待一小段时间
                     ws_threading.join(timeout=check_interval)
-                    
+
                     # 如果线程已结束，退出循环。仅当 ws.close() 被调用时，线程才会结束。
                     if not ws_threading.is_alive():
                         break
-                    
+
                     # 定期检查历史记录（备用检测）
                     try:
                         if len(self.api_get_history(prompt_id)) > 0:
@@ -709,21 +833,27 @@ class ServerlessApiService:
                             break
                     except Exception as e:
                         log("DEBUG", f"history check failed: {e}")
-                
-                elapsed = time.time() - start_time
-                log("INFO", f"workflow completed in {elapsed:.1f}s")
+
+            # 计算执行时间
+            execution_time = time.time() - execution_start_time
+            log("INFO", f"[WorkflowExecution] Workflow completed (prompt_id={prompt_id}, execution_time={execution_time:.2f}s, task_id={task_id})")
 
             if ws_err:
-                log("ERROR", f"websocket error occurred: {ws_err}")
+                log("ERROR", f"[WorkflowExecution] WebSocket error occurred (prompt_id={prompt_id}, task_id={task_id}): {ws_err}")
                 raise ws_err
 
             log("DEBUG", f"fetching results for prompt_id: {prompt_id}")
             result = self.get_history_result(
                 prompt_id, output_base64=output_base64, output_oss=output_oss
             )
+            
+            # 添加执行时间到结果数据中
+            if result and "data" in result:
+                result["data"]["execution_time"] = execution_time
+            
             log("DEBUG", f"saving result to store for task_id: {task_id}")
             self.put_status_to_store(task_id, json.dumps(result))
-            log("INFO", f"finished running prompt: {prompt_id}")
+            log("INFO", f"[WorkflowExecution] Finished running prompt (prompt_id={prompt_id}, task_id={task_id}, execution_time={execution_time:.2f}s, output_base64={output_base64}, output_oss={output_oss})")
             return result
         except ComfyUIException as e:
             self.put_status_to_store(

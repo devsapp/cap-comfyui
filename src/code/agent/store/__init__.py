@@ -1,6 +1,7 @@
 from abc import ABC
 from .filesystem import FileSystem
 from .oss import OSS
+from .file_lock import FileLock
 
 
 class Store(ABC):
@@ -15,4 +16,5 @@ __all__ = [
     FileSystem,
     Store,
     OSS,
+    FileLock,
 ]

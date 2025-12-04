@@ -1,0 +1,27 @@
+FROM python:3.12.10-slim
+
+# 安装编译依赖
+RUN apt-get update && apt-get install -y \
+    build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
+    libsqlite3-dev wget libffi-dev liblzma-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 下载并编译安装 Python 3.10.16
+RUN wget -q https://www.python.org/ftp/python/3.10.16/Python-3.10.16.tgz && \
+    tar xzf Python-3.10.16.tgz && \
+    cd Python-3.10.16 && \
+    ./configure --enable-optimizations --prefix=/usr/local/python3.10 && \
+    make -j$(nproc) && \
+    make altinstall && \
+    cd .. && \
+    rm -rf Python-3.10.16 Python-3.10.16.tgz
+
+# 创建符号链接
+RUN ln -s /usr/local/python3.10/bin/python3.10 /usr/local/bin/python3.10 && \
+    ln -s /usr/local/python3.10/bin/pip3.10 /usr/local/bin/pip3.10
+
+# 卸载编译工具
+RUN apt-get purge -y build-essential wget && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*

@@ -4,12 +4,16 @@
 # - /root: 工作目录
 # -- agent: agent程序所在目录
 # -- comfyui
-# --- models: comfyui模型目录，软链接到挂载存储中，/root/comfyui/models -> ${MNT_DIR}/models
+# --- models -> ${MNT_DIR}/models (软链接到用户模型目录)
 # --- ...
 # -- venv: 依赖目录
 
 # - ${MNT_DIR}: 挂载目录，NAS or OSS
-# -- models: 用户模型本体，/root/comfyui/models -> ${MNT_DIR}/models
+# -- models: 用户模型目录
+# --- checkpoints/
+# ---- shared/ -> /mnt/shared/models/checkpoints/ (共享模型软链接)
+# ---- model1.safetensors (用户自己的模型)
+# --- loras/, vae/, embeddings/ ... (同上结构)
 # -- input: 输入内容，例如图片
 # -- output: 输出内容，例如图片
 # -- snapshots: 快照目录
@@ -85,6 +89,57 @@ if [ "${SKIP_SNAPSHOT_LOADING_LOWER}" != "true" ]; then
     fi
 fi
 
+# 配置 shared models - 使用软链接方案
+setup_shared_models() {
+    local shared_models_dir="/mnt/shared/models"
+    local user_models_dir="${MNT_DIR}/models"
+    
+    echo "[INFO] Setting up shared models ..."
+    
+    # 确保用户模型目录存在，如果已存在，则跳过；如果不存在，创建目录
+    mkdir -p "${user_models_dir}"
+    
+    # 如果共享模型目录不存在，跳过
+    if [ ! -d "${shared_models_dir}" ]; then
+        echo "[WARN] Shared models directory ${shared_models_dir} does not exist, skipping"
+        return
+    fi
+    
+    # 遍历共享模型目录中的所有子目录
+    for shared_subdir in "${shared_models_dir}"/*/ ; do
+        # 跳过不存在的情况（如果目录为空）
+        [ -e "${shared_subdir}" ] || continue
+        
+        # 获取目录名称（去掉路径和尾部斜杠）
+        local dir_name=$(basename "${shared_subdir}")
+        
+        # 用户模型中对应的子目录
+        local user_subdir="${user_models_dir}/${dir_name}"
+        
+        # 如果用户模型中没有这个目录，创建它
+        if [ ! -d "${user_subdir}" ]; then
+            mkdir -p "${user_subdir}"
+            echo "[INFO] Created user model directory: ${dir_name}/"
+        fi
+        
+        # 在用户模型子目录中创建 shared/ 软链接
+        local shared_link="${user_subdir}/shared"
+        
+        # 如果链接已存在，先删除
+        if [ -e "${shared_link}" ] || [ -L "${shared_link}" ]; then
+            rm -f "${shared_link}"
+        fi
+        
+        # 创建软链接
+        ln -sf "${shared_subdir}" "${shared_link}"
+        echo "[INFO] Created shared link: ${dir_name}/shared/ -> ${shared_subdir}"
+    done
+    
+    echo "[INFO] Shared models setup completed"
+}
+
+setup_shared_models
+
 mkdir -p ${MNT_DIR}/input
 mkdir -p ${MNT_DIR}/output
 source ${AGENT_DIR}/venv/bin/activate
@@ -92,5 +147,8 @@ echo "Using python venv, python path '$(which python)', pip path '$(which pip)'.
 
 # ==================== 网络配置 ====================
 setup_network
+
+# git diff 忽略文件权限变化，ComfyUI 中 Windows 可执行文件在 Linux 中自动没有可执行权限，导致有 git diff，影响 ComfyUI 版本升级
+git config --global core.fileMode false
 
 python ${AGENT_DIR}/main.py

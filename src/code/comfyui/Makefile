@@ -1,16 +1,17 @@
 # 定义变量
 REGION ?= cn-hangzhou
-COMFYUI_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-comfyui
+COMFYUI_IMAGE = comfyui:1201-v6
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
+OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.75-alpha
 
 .PHONY: upgrade
 upgrade: build upload-base
 
 # 构建镜像, 需要先构建Agent镜像
+# 注意：从项目根目录构建，以便访问 src/code/agent 目录
 .PHONY: build
 build:
-	docker build -t $(COMFYUI_IMAGE) .
+	cd ../../ && docker build -f src/code/comfyui/Dockerfile -t $(COMFYUI_IMAGE) .
 
 # 本地测试运行
 # curl -X POST http://localhost:9000/management/start
@@ -46,18 +47,18 @@ upload-base:
 	docker cp comfyuiImage:/root/comfyui ./tmp/comfyui && \
 	docker cp comfyuiImage:/root/venv ./tmp/venv
 	@docker rm comfyuiImage
+	mv ./tmp/comfyui/models ./tmp/ 
 
 	@echo "Creating snapshot..."
-	@tar -C ./tmp -cf ./tmp/venv.tar venv
-	@cd ./tmp && mv ./comfyui/custom_nodes ./ && mv ./comfyui/models ./ && zip -rq comfyui.zip comfyui
+	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst
+	mv ./tmp/comfyui/custom_nodes ./tmp/ && mv ./tmp/comfyui/models ./tmp/ && tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
 
-	@echo "Uploading files to OSS..."
-	@ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
-	ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/custom_nodes && \
-	ossutil cp ./tmp/comfyui.zip oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui.zip && \
-	ossutil cp ./tmp/venv.tar oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar
-
-	@rm -rf tmp
+	@echo "Uploading files to OSS..." 
+	ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
+	# ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/custom_nodes && \
+	# ossutil cp ./tmp/comfyui.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui.tar.zst && \
+	# ossutil cp ./tmp/venv.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar.zst
+	
 	@echo "Upload completed successfully"
 
 # 根据已发布的snapshot构建生产用的ComfyUI镜像

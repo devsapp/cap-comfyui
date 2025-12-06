@@ -79,7 +79,7 @@ echo "  - Mount Directory: ${MNT_DIR}"
 echo "  - Skip Snapshot Loading: ${SKIP_SNAPSHOT_LOADING_LOWER}"
 
 if [ "${SKIP_SNAPSHOT_LOADING_LOWER}" != "true" ]; then
-    if [ ! -e "${MNT_DIR}/snapshots" ] || [ -z "$(find "${MNT_DIR}/snapshots" -type d -mindepth 1 2>/dev/null)" ]; then
+    if [ ! -e "${MNT_DIR}/snapshots" ] || [ -z "$(find "${MNT_DIR}/snapshots" -type d -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
         echo "[ERROR] Missing snapshots folder in your mount dir"
         exit 1
     fi

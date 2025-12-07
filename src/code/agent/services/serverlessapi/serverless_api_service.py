@@ -517,13 +517,26 @@ class ServerlessApiService:
             task_id: 任务 ID
             
         Returns:
-            list: 状态历史列表，每个元素是一条状态消息（已解析为字典）
+            list: 状态历史列表，每个元素可能是 JSON 对象（dict）或原始字符串
         """
-        if self.store:
-            value = self.store.get(task_id)
-            return [json.loads(line) for line in value.split("\n") if line]
-        else:
+        if not self.store:
             return []
+        
+        value = self.store.get(task_id)
+        results = []
+        
+        for line in value.split("\n"):
+            if not line:
+                continue
+            
+            # 尝试解析为 JSON
+            try:
+                results.append(json.loads(line))
+            except (json.JSONDecodeError, ValueError):
+                # 如果不是 JSON，原封不动返回原始字符串
+                results.append(line)
+        
+        return results
 
     def run(
         self,
@@ -575,6 +588,10 @@ class ServerlessApiService:
                     if not message or not message.strip():
                         return
                     
+                    # 先持久化原始消息（不管是否为 JSON）
+                    if task_id:
+                        self.put_status_to_store(task_id, message)
+                    
                     # 尝试解析 JSON
                     try:
                         msg = json.loads(message)
@@ -599,8 +616,6 @@ class ServerlessApiService:
                     if callback and hasattr(callback, "__call__"):
                         callback(message)
 
-                    if task_id:
-                        self.put_status_to_store(task_id, message)
 
                     if msg_type == "executing":
                         # 节点执行

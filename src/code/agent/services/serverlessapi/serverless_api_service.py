@@ -575,6 +575,10 @@ class ServerlessApiService:
                     if not message or not message.strip():
                         return
                     
+                    # 先持久化原始消息（不管是否为 JSON）
+                    if task_id:
+                        self.put_status_to_store(task_id, message)
+                    
                     # 尝试解析 JSON
                     try:
                         msg = json.loads(message)
@@ -590,7 +594,7 @@ class ServerlessApiService:
                     current_prompt_id = msg.get("data", {}).get("prompt_id", "")
 
                     # 记录收到的消息类型（DEBUG 级别）
-                    log("DEBUG", f"websocket message: type={msg_type}, node={node_id}, prompt_id={current_prompt_id}, message={message}")
+                    log("DEBUG", f"websocket message: type={msg_type}, node={node_id}, prompt_id={current_prompt_id}, message={message}")         
 
                     if msg_type == "status":
                         nonlocal client_id
@@ -599,8 +603,6 @@ class ServerlessApiService:
                     if callback and hasattr(callback, "__call__"):
                         callback(message)
 
-                    if task_id:
-                        self.put_status_to_store(task_id, message)
 
                     if msg_type == "executing":
                         # 节点执行

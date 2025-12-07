@@ -15,12 +15,14 @@ class BackendStatus(Enum):
     RUNNING = "Running"
     SAVING = "Saving"
     STOPPING = "Stopping"
+    REBOOTING = "Rebooting"
 
 
 class Action(Enum):
     START = "start"
     STOP = "stop"
     SAVE = "save"
+    REBOOT = "reboot"
 
 
 class StartingSubStatus(Enum):
@@ -51,9 +53,13 @@ class ManagementService:
     _VALID_TRANSITIONS: Dict[BackendStatus, Set[BackendStatus]] = {
         BackendStatus.STOPPED: {BackendStatus.STARTING},
         BackendStatus.STARTING: {BackendStatus.RUNNING, BackendStatus.STOPPED},
-        BackendStatus.RUNNING: {BackendStatus.SAVING, BackendStatus.STOPPING},
+        BackendStatus.RUNNING: {BackendStatus.SAVING, BackendStatus.STOPPING, BackendStatus.REBOOTING},
         BackendStatus.SAVING: {BackendStatus.RUNNING},
-        BackendStatus.STOPPING: {BackendStatus.STOPPED, BackendStatus.RUNNING}
+        BackendStatus.STOPPING: {BackendStatus.STOPPED, BackendStatus.RUNNING},
+        BackendStatus.REBOOTING: {
+            BackendStatus.RUNNING,   # 重启成功
+            BackendStatus.STOPPED    # 重启失败
+        }
     }
 
     def __init__(self):
@@ -134,8 +140,13 @@ class ManagementService:
                     - 非空字典 (例: `{'NodeA': 'v1'}`): 只安装字典中指定的有效插件。
                     - 空字典 (`{}`): 启动安装流程，但不安装任何插件。这个场景可用于获取环境的依赖基线(`install_baseline`)而不执行任何实际安装。
         """
+        # 记录调用前是否在 REBOOTING 状态
+        was_rebooting = self.status == BackendStatus.REBOOTING
+        
         print(f"Starting backend process using snapshot '{snapshot_name}'...")
-        self._transition_to(BackendStatus.STARTING, Action.START)
+        # 如果在 REBOOTING 状态，保持 REBOOTING 状态，不转换到 STARTING
+        if not was_rebooting:
+            self._transition_to(BackendStatus.STARTING, Action.START)
         self.sub_status = StartingSubStatus.DOWNLOADING.value
 
         try:
@@ -162,42 +173,75 @@ class ManagementService:
                 self._process_mgr.wait_until_ready()
             result_map["time_start_process"] = round(t_start_process.elapsed, 2)
 
-            self._transition_to(BackendStatus.RUNNING, Action.START)
+            # 如果之前在 REBOOTING 状态，保持 REBOOTING 状态（已经在 REBOOTING，不需要转换）
+            # 否则转换到 RUNNING
+            if not was_rebooting:
+                self._transition_to(BackendStatus.RUNNING, Action.START)
             self.sub_status = ""
             return result_map
         except Exception:
-            self._transition_to(BackendStatus.STOPPED, Action.START)
+            # 如果之前在 REBOOTING 状态，失败时转换到 STOPPED；否则保持原逻辑
+            if was_rebooting:
+                self._transition_to(BackendStatus.STOPPED, Action.REBOOT)
+            else:
+                self._transition_to(BackendStatus.STOPPED, Action.START)
             self.sub_status = ""
             raise
 
     def save(self, snapshot_type: str) -> Dict:
+        # 记录调用前是否在 REBOOTING 状态
+        was_rebooting = self.status == BackendStatus.REBOOTING
+        
         print(f"Saving workspace (type {snapshot_type})...")
-        self._transition_to(BackendStatus.SAVING, Action.SAVE)
+        # 如果在 REBOOTING 状态，保持 REBOOTING 状态，不转换到 SAVING
+        if not was_rebooting:
+            self._transition_to(BackendStatus.SAVING, Action.SAVE)
         self.sub_status = SavingSubStatus.PACKAGING.value
 
         try:
             result_map = self._snapshot_mgr.save(snapshot_type)
-            self._transition_to(BackendStatus.RUNNING, Action.SAVE)
+            # 如果之前在 REBOOTING 状态，保持 REBOOTING 状态（已经在 REBOOTING，不需要转换）
+            # 否则转换到 RUNNING
+            if not was_rebooting:
+                self._transition_to(BackendStatus.RUNNING, Action.SAVE)
             self.sub_status = ""
             return result_map
         except Exception:
-            self._transition_to(BackendStatus.RUNNING, Action.SAVE)
+            # 如果之前在 REBOOTING 状态，失败时保持 REBOOTING；否则转换到 RUNNING
+            if was_rebooting:
+                # 保持在 REBOOTING 状态，不转换
+                pass
+            else:
+                self._transition_to(BackendStatus.RUNNING, Action.SAVE)
             self.sub_status = ""
             raise
 
     def stop(self) -> Dict:
+        # 记录调用前是否在 REBOOTING 状态
+        was_rebooting = self.status == BackendStatus.REBOOTING
+        
         print("Stopping workspace...")
-        self._transition_to(BackendStatus.STOPPING, Action.STOP)
+        # 如果在 REBOOTING 状态，保持 REBOOTING 状态，不转换到 STOPPING
+        if not was_rebooting:
+            self._transition_to(BackendStatus.STOPPING, Action.STOP)
 
         try:
             result_map = {}
             with timer("Stop process") as t_stop_process:
                 self._process_mgr.stop()
             result_map["time_stop_process"] = round(t_stop_process.elapsed, 2)
-            self._transition_to(BackendStatus.STOPPED, Action.STOP)
+            # 如果之前在 REBOOTING 状态，保持 REBOOTING 状态（已经在 REBOOTING，不需要转换）
+            # 否则转换到 STOPPED
+            if not was_rebooting:
+                self._transition_to(BackendStatus.STOPPED, Action.STOP)
             return result_map
         except Exception:
-            self._transition_to(BackendStatus.RUNNING, Action.STOP)
+            # 如果之前在 REBOOTING 状态，失败时保持 REBOOTING；否则转换到 RUNNING
+            if was_rebooting:
+                # 保持在 REBOOTING 状态，不转换
+                pass
+            else:
+                self._transition_to(BackendStatus.RUNNING, Action.STOP)
             raise
 
     def save_and_stop(self, snapshot_type: str) -> Dict:

@@ -217,6 +217,9 @@ def compress_with_zstd(target_file_path, source_dir, selected_files=None, level=
         log("INFO", f"Removing existing file: {target_file_path}")
         os.remove(target_file_path)
     
+    import time
+    start_time = time.time()
+    
     try:
         # 保存当前工作目录
         original_dir = os.getcwd()
@@ -235,6 +238,7 @@ def compress_with_zstd(target_file_path, source_dir, selected_files=None, level=
             #   -T0: 使用多线程（0 表示使用所有 CPU 核心）
             #   -o: 指定输出文件路径
             cmd = f"tar -cf - {files_str} | zstd -{level} -T0 -o {target_file_path}"
+            log("DEBUG", f"Executing compression command: {cmd}")
             result = subprocess.run(
                 cmd,
                 shell=True,
@@ -243,6 +247,8 @@ def compress_with_zstd(target_file_path, source_dir, selected_files=None, level=
                 check=False
             )
             
+            elapsed_time = time.time() - start_time
+            
             if result.returncode != 0:
                 # 如果压缩失败，确保清理可能损坏的文件
                 if os.path.exists(target_file_path):
@@ -250,13 +256,20 @@ def compress_with_zstd(target_file_path, source_dir, selected_files=None, level=
                         os.remove(target_file_path)
                     except:
                         pass
-                raise Exception(f"Compression failed: {result.stderr}")
+                error_msg = f"Compression failed after {elapsed_time:.2f}s: {result.stderr}"
+                log("ERROR", error_msg)
+                raise Exception(error_msg)
             
             # 验证文件是否存在且大小大于 0
-            if not os.path.exists(target_file_path) or os.path.getsize(target_file_path) == 0:
-                raise Exception("Compressed file is missing or empty")
+            if not os.path.exists(target_file_path):
+                raise Exception(f"Compressed file not found after {elapsed_time:.2f}s")
             
-            log("INFO", f"Successfully compressed with zstd: {target_file_path}")
+            compressed_size = os.path.getsize(target_file_path)
+            if compressed_size == 0:
+                raise Exception("Compressed file is empty")
+            
+            compressed_size_mb = compressed_size / (1024 * 1024)
+            log("INFO", f"Successfully compressed with zstd: {target_file_path} ({compressed_size_mb:.2f} MB, took {elapsed_time:.2f}s)")
                 
         finally:
             # 恢复原始工作目录

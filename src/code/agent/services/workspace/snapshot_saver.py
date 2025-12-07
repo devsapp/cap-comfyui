@@ -55,8 +55,12 @@ class SnapshotSaver(ABC):
 class ComfyUISnapshotSaver(SnapshotSaver):
     def _compress(self):
         # 使用 zstd 压缩（级别 10，平衡压缩比和速度）
+        from utils.logger import log
+        log("INFO", "Starting compression: venv")
         file_ops.compress_with_zstd(f"{constants.WORK_DIR}/venv.tar.zst", constants.WORK_DIR, ["venv"], level=10)
+        log("INFO", "Starting compression: comfyui")
         file_ops.compress_with_zstd(f"{constants.WORK_DIR}/comfyui.tar.zst", constants.WORK_DIR, ["comfyui"], level=10)
+        log("INFO", "Compression completed for all components")
 
     def _upload(self, snapshot_path: str):
         file_ops.copy(f"{constants.WORK_DIR}/venv.tar.zst", f"{snapshot_path}/venv.tar.zst")
@@ -69,10 +73,15 @@ class ComfyUISnapshotSaver(SnapshotSaver):
 class SDSnapshotSaver(SnapshotSaver):
     def _compress(self):
         # 使用 zstd 压缩（级别 10，平衡压缩比和速度）
+        from utils.logger import log
+        log("INFO", "Starting compression: venv")
         file_ops.compress_with_zstd(f"{constants.WORK_DIR}/venv.tar.zst", constants.WORK_DIR, ["venv"], level=10)
+        log("INFO", "Starting compression: stable-diffusion-webui")
         file_ops.compress_with_zstd(f"{constants.WORK_DIR}/stable-diffusion-webui.tar.zst", constants.WORK_DIR, ["stable-diffusion-webui"], level=10)
         if os.path.exists(f"{constants.WORK_DIR}/.cache"):
+            log("INFO", "Starting compression: .cache")
             file_ops.compress_with_zstd(f"{constants.WORK_DIR}/.cache.tar.zst", constants.WORK_DIR, [".cache"], level=10)
+        log("INFO", "Compression completed for all components")
 
     def _upload(self, snapshot_path: str):
         file_ops.copy(f"{constants.WORK_DIR}/venv.tar.zst", f"{snapshot_path}/venv.tar.zst")

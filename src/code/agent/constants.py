@@ -116,8 +116,8 @@ GPU_FUNCTION_URL = os.getenv("GPU_FUNCTION_URL", "")
 HEADER_SNAPSHOT_NAME = "X-FunArt-Snapshot"
 HEADER_FC_INVOCATION_TYPE = "X-FC-Invocation-Type"
 
-# 是否禁用工作流保存
-DISABLE_FLOW_SAVE = os.getenv('DISABLE_WORKFLOW_SAVE', '').lower() in ('true')
+# 是否禁用工作流保存,默认允许保存
+DISABLE_FLOW_SAVE = os.getenv('DISABLE_WORKFLOW_SAVE', '').lower() == 'true'
 
 # 日志配置
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

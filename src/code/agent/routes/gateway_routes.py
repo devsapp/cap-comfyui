@@ -1,10 +1,13 @@
 import json
+import logging
 import os
+import threading
 import time
 import traceback
 
 from flask import Blueprint, Flask, jsonify, request
 from flask_sock import Sock
+import websocket
 
 import constants
 from services.management_service import ManagementService, BackendStatus
@@ -34,13 +37,14 @@ class GatewayRoutes:
         self.sock.bp = self.ws_bp  # 将 WebSocket 绑定到单独的 Blueprint
         
         # 初始化各个 handler
+        self.reboot_handler = RebootHandler()
+
         task_manager = get_task_manager()
-        
+
         self.queue_handler = QueueHandler(task_manager)
         self.prompt_handler = PromptHandler(task_manager)
         self.serverless_handler = ServerlessHandler(task_manager)
         self.history_handler = HistoryHandler()
-        self.reboot_handler = RebootHandler()
         self.userdata_handler = UserdataHandler()
         self.ws_handler = WsHandler()
         self.serverless_ws_handler = ServerlessWsHandler(constants.GPU_FUNCTION_URL, task_manager)
@@ -54,16 +58,22 @@ class GatewayRoutes:
     def setup_routes(self):
         """设置所有路由"""
         self._register_backend_status_middleware()
-        self._register_websocket()
-        self._register_serverless_websocket()  # Serverless WebSocket 转发
-        self._register_queue_handler()
-        self._register_prompt_handler()
-        self._register_serverless_run_handler()
-        self._register_history_handler()
         self._register_reboot_handler()
-        # 通过环境变量控制是否禁用工作流保存
-        if constants.DISABLE_FLOW_SAVE:
-            self._register_userdata_handler()
+        
+        # 只在 CPU 模式下注册这些路由
+        if constants.COMFYUI_MODE == 'cpu':
+            self._register_websocket()
+            self._register_serverless_websocket()  # Serverless WebSocket 转发
+            self._register_queue_handler()
+            self._register_prompt_handler()
+            self._register_serverless_run_handler()
+            self._register_history_handler()
+            # 通过环境变量控制是否禁用工作流保存
+            if constants.DISABLE_FLOW_SAVE:
+                self._register_userdata_handler()
+        else:
+            # GPU 模式：注册通用 WebSocket 代理
+            self._register_gpu_websocket_proxy()
     
     def _register_backend_status_middleware(self):
         """注册后端状态检查中间件，在每个请求前检查后端服务状态"""
@@ -79,7 +89,7 @@ class GatewayRoutes:
                 return ErrorResponse.create(
                     error_type="service_not_running",
                     message="Please start your comfyui/sd service first",
-                    status_code=503
+                    status_code=500
                 )
     
     def _register_websocket(self):
@@ -94,6 +104,65 @@ class GatewayRoutes:
             - 重连时会复用相同的 client_id，确保能接收到之前任务的状态更新
             """
             self.ws_handler.handle_connection(ws)
+    
+    def _register_gpu_websocket_proxy(self):
+        @self.sock.route('/<path:path>')
+        def proxy_ws(ws, path):
+            """
+            GPU 模式下的通用 WebSocket 代理
+            将所有 WebSocket 请求转发到后端 ComfyUI 服务 (127.0.0.1:8188)
+            """
+            # 检查后端服务状态（middleware 不对 WebSocket Blueprint 生效，需要手动检查）
+            backend_status = self.service.status
+            if backend_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
+                return jsonify({
+                    "status": "failed",
+                    "message": "Please start your comfyui/sd service first"
+                }), 500
+            
+            # 构造目标 WebSocket URL
+            target_url = f"ws://{constants.APP_HOST}/{path}"
+            query_string = request.query_string.decode('utf-8')
+            if query_string:
+                target_url += f"?{query_string}"
+            
+            log("INFO", f"Forwarding WebSocket: /{path} -> {target_url}")
+            
+            def on_message(_, message):
+                try:
+                    ws.send(message)
+                except Exception as ex:
+                    log("ERROR", f"Error sending message to client: {ex}")
+            
+            def on_error(_, error):
+                log("ERROR", f"WebSocket client error: {error}")
+            
+            def on_close(_, close_status_code, close_msg):
+                log("INFO", f"WebSocket connection closed: {close_status_code} - {close_msg}")
+            
+            ws_client = websocket.WebSocketApp(
+                target_url,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close
+            )
+            
+            ws_thread = threading.Thread(target=ws_client.run_forever)
+            ws_thread.daemon = True
+            ws_thread.start()
+            
+            from services.process.websocket.websocket_manager import ws_manager
+            
+            try:
+                ws_manager.add_connection(ws)
+                while True:
+                    message = ws.receive()
+                    ws_client.send(message)
+            except Exception as e:
+                log("INFO", f"WebSocket event: {e}")
+            finally:
+                ws_manager.remove_connection(ws)
+                ws_client.close()
     
     def _register_serverless_websocket(self):
         @self.sock.route("/api/serverless/ws")

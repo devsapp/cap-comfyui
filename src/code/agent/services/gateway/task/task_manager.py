@@ -431,7 +431,7 @@ class TaskManager:
         
         forward_headers = {
             'x-fc-async-task-id': task_id,  # 优先使用这个作为 task_id
-            'x-fc-trace-id': task_id,       # 使GPU的request-id与task-id一致
+            'x-fc-trace-id': task_id,       # GPU的request-id与task-id一致
             'x-fc-invocation-type': 'Async' # 异步调用
         }
         

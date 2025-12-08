@@ -75,7 +75,7 @@ class WebSocketManager:
                 self._client_id_mapping[client_id] = ws
             
             conn_info = self.get_connection_info(ws)
-            log("INFO", f"[WebSocketManager] Connection added: {json.dumps(conn_info, indent=2)}" + (f" (client_id: {client_id})" if client_id else ""))
+            log("DEBUG", f"[WebSocketManager] Connection added: {json.dumps(conn_info, indent=2)}" + (f" (client_id: {client_id})" if client_id else ""))
         
         if self._send_thread is None or not self._send_thread.is_alive():
             log("WARNING", "[WebSocketManager] Send thread not running, restarting...")
@@ -102,7 +102,7 @@ class WebSocketManager:
             if start_time:
                 duration = (datetime.now() - start_time).total_seconds()
                 conn_info['duration'] = f"{duration:.2f}s"
-            log("INFO", f"[WebSocketManager] Connection removed: {json.dumps(conn_info, indent=2)}")
+            log("DEBUG", f"[WebSocketManager] Connection removed: {json.dumps(conn_info, indent=2)}")
 
     def get_connection(self, client_id: str) -> Optional[Any]:
         """

@@ -65,9 +65,9 @@ class GatewayRoutes:
             self._register_prompt_handler()
             self._register_serverless_run_handler()
             self._register_history_handler()
-            # 通过环境变量控制是否禁用工作流保存
-            if constants.DISABLE_FLOW_SAVE:
-                self._register_userdata_handler()
+            # # 通过环境变量控制是否禁用工作流保存
+            # if constants.DISABLE_FLOW_SAVE:
+            #     self._register_userdata_handler()
     
     def _register_backend_status_middleware(self):
         """注册后端状态检查中间件，在每个请求前检查后端服务状态"""

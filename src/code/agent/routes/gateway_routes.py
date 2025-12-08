@@ -34,13 +34,14 @@ class GatewayRoutes:
         self.sock.bp = self.ws_bp  # 将 WebSocket 绑定到单独的 Blueprint
         
         # 初始化各个 handler
+        self.reboot_handler = RebootHandler()
+
         task_manager = get_task_manager()
-        
+
         self.queue_handler = QueueHandler(task_manager)
         self.prompt_handler = PromptHandler(task_manager)
         self.serverless_handler = ServerlessHandler(task_manager)
         self.history_handler = HistoryHandler()
-        self.reboot_handler = RebootHandler()
         self.userdata_handler = UserdataHandler()
         self.ws_handler = WsHandler()
         self.serverless_ws_handler = ServerlessWsHandler(constants.GPU_FUNCTION_URL, task_manager)
@@ -54,16 +55,19 @@ class GatewayRoutes:
     def setup_routes(self):
         """设置所有路由"""
         self._register_backend_status_middleware()
-        self._register_websocket()
-        self._register_serverless_websocket()  # Serverless WebSocket 转发
-        self._register_queue_handler()
-        self._register_prompt_handler()
-        self._register_serverless_run_handler()
-        self._register_history_handler()
         self._register_reboot_handler()
-        # 通过环境变量控制是否禁用工作流保存
-        if constants.DISABLE_FLOW_SAVE:
-            self._register_userdata_handler()
+        
+        # 只在 CPU 模式下注册这些路由
+        if constants.COMFYUI_MODE == 'cpu':
+            self._register_websocket()
+            self._register_serverless_websocket()  # Serverless WebSocket 转发
+            self._register_queue_handler()
+            self._register_prompt_handler()
+            self._register_serverless_run_handler()
+            self._register_history_handler()
+            # 通过环境变量控制是否禁用工作流保存
+            if constants.DISABLE_FLOW_SAVE:
+                self._register_userdata_handler()
     
     def _register_backend_status_middleware(self):
         """注册后端状态检查中间件，在每个请求前检查后端服务状态"""

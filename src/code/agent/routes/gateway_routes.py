@@ -68,9 +68,9 @@ class GatewayRoutes:
             self._register_prompt_handler()
             self._register_serverless_run_handler()
             self._register_history_handler()
-            # # 通过环境变量控制是否禁用工作流保存
-            # if constants.DISABLE_FLOW_SAVE:
-            #     self._register_userdata_handler()
+            # 通过环境变量控制是否禁用工作流保存
+            if constants.DISABLE_FLOW_SAVE:
+                self._register_userdata_handler()
         else:
             # GPU 模式：注册通用 WebSocket 代理
             self._register_gpu_websocket_proxy()

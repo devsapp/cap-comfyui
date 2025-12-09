@@ -87,6 +87,7 @@ fi
 
 mkdir -p ${MNT_DIR}/input
 mkdir -p ${MNT_DIR}/output
+mkdir -p ${MNT_DIR}/output/serverless_api
 source ${AGENT_DIR}/venv/bin/activate
 echo "Using python venv, python path '$(which python)', pip path '$(which pip)'... "
 

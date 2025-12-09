@@ -349,6 +349,7 @@ class HistoryHandler:
             t for t in tasks 
             if t.status in (self.TaskStatus.COMPLETED, self.TaskStatus.FAILED)
         ]
+        # TODO 按照create_at排序还是completed_at?
         ended.sort(key=lambda t: t.completed_at or 0, reverse=True)
         
         if isinstance(limit, int) and limit > 0:

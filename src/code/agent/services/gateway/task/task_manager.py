@@ -240,6 +240,20 @@ class TaskManager:
             message: 消息数据（dict 或原始字符串）
         """
         try:
+            # 如果是字符串，尝试解析为 JSON
+            if isinstance(message, str):
+                try:
+                    message = json.loads(message)
+                except (json.JSONDecodeError, ValueError):
+                    # 无法解析的字符串，记录警告并跳过
+                    log("WARNING", f"[TaskManager] Failed to parse message as JSON for task {task_id}: {message[:200]}")
+                    return
+            
+            # 此时 message 应该是 dict
+            if not isinstance(message, dict):
+                log("WARNING", f"[TaskManager] Unexpected message type {type(message)} for task {task_id}")
+                return
+            
             status_type = message.get('type', '')
             # TODO 原生comfyui history 兜底逻辑
             if status_type == 'execution_start':
@@ -259,7 +273,8 @@ class TaskManager:
                 return
             self._record_task_status(task_id, message)
         except Exception as e:
-            log("ERROR", f"[TaskManager] Error handling message {message}: {e}")
+            log("ERROR", f"[TaskManager] Error handling message for task {task_id}: {e}")
+
 
         TaskStatusBroadcaster.broadcast_task_status(task_id, message)
     
@@ -595,17 +610,28 @@ class MessagesPoller:
         log("DEBUG", f"[MessagesPoller] Polling stopped for task {self.task_id}, processed {self.last_message_count} messages")
     
     @staticmethod
-    def _is_message_completed(message: dict) -> bool:
+    def _is_message_completed(message: Union[dict, str]) -> bool:
         """
         检查单个消息是否表示任务完成
         
         Args:
-            message: 消息数据字典
+            message: 消息数据（dict 或 JSON 字符串）
         
         Returns:
             True if message indicates task completion, False otherwise
         """
-        if not message:
+        # 如果是字符串，尝试解析为 JSON
+        if isinstance(message, str):
+            try:
+                message = json.loads(message)
+            except (json.JSONDecodeError, ValueError):
+                # 无法解析的字符串，不认为是完成消息
+                log("WARNING", f"[MessagesPoller] Failed to parse message as JSON: {message[:200]}")
+                return False
+        
+        # 此时 message 应该是 dict
+        if not isinstance(message, dict):
+            log("WARNING", f"[MessagesPoller] Unexpected message type {type(message)}")
             return False
         
         message_type = message.get("type", "")

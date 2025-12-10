@@ -429,8 +429,6 @@ class TaskManager:
             log("ERROR", f"[TaskManager][RequestId={request_id}] {str(e)}")
             return None, (500, "missing_task_id", str(e))
 
-        prompt['prompt_id'] = task_id
-
         # 将任务添加到管理器(用于跟踪和状态管理)
         try:
             self.submit_task(

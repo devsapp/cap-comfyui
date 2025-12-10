@@ -7,6 +7,7 @@ import random
 import hashlib
 import threading
 from traceback import print_exception
+from typing_extensions import Optional
 import requests
 import websocket
 from typing import Any
@@ -120,7 +121,7 @@ class ServerlessApiService:
             constants.OSS_EXPIRES_IN_SECOND,
         )
 
-    def api_prompt(self, client_id: str, prompt: Any):
+    def api_prompt(self, client_id: str, prompt: Any, task_id: Optional[str] = None):
         """
         提交 ComfyUI 工作流任务
         
@@ -137,6 +138,8 @@ class ServerlessApiService:
             ComfyUIException: 当 ComfyUI API 调用失败时抛出
         """
         req = {"client_id": client_id, "prompt": prompt}
+        if task_id:
+            req = {"client_id": client_id, "prompt": prompt, "prompt_id": task_id}
         res = requests.post(
             os.path.join(self.endpoint, "prompt"),
             json=req,
@@ -699,7 +702,7 @@ class ServerlessApiService:
             log("DEBUG", f"got client_id: {client_id}")
 
             log("DEBUG", "submitting workflow to ComfyUI")
-            prompt_result = self.api_prompt(client_id, prompt)
+            prompt_result = self.api_prompt(client_id, prompt, task_id)
             prompt_id = prompt_result.get("prompt_id", "")
             log("DEBUG", f"workflow submitted, prompt_id: {prompt_id}")
 

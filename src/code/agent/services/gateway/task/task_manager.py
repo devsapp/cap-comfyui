@@ -7,7 +7,7 @@ import threading
 import time
 import traceback
 import uuid
-from typing import Dict, Optional, Callable, List, Tuple, Union
+from typing import Dict, Optional, Callable, List, Tuple, Union, Any
 
 import constants
 import requests
@@ -33,6 +33,10 @@ class TaskManager:
         # 任务字典
         self._tasks: Dict[str, Task] = {}
         self._lock = threading.Lock()
+
+        # 已完成的历史记录
+        # {prompt_id: {prompt, outputs, status, meta}}
+        self.history = {}
         
         # 已完成任务计数器（COMPLETED + FAILED）
         self._completed_task_count = 0
@@ -102,6 +106,63 @@ class TaskManager:
                 1 for task in self._tasks.values()
                 if task.status in [TaskStatus.PENDING, TaskStatus.RUNNING]
             )
+
+    def get_history(self, max_items=None, offset: int = -1) -> dict[Any, Any]:
+        """
+        获取历史记录（从 self.history 获取）
+        
+        Args:
+            max_items: 最大返回数量
+            offset: 偏移量，-1 表示从末尾开始
+            
+        Returns:
+            dict: 历史记录字典，格式为 {prompt_id: {prompt, outputs, status, meta}}
+                  只返回已完成（status.completed == True）的历史记录
+        """
+        with self._lock:
+            # 先过滤出已完成的历史记录
+            completed_history = {}
+            for prompt_id, history_item in self.history.items():
+                status = history_item.get("status", {})
+                if status.get("completed", False):
+                    completed_history[prompt_id] = history_item
+            
+            # 应用 offset 和 max_items 限制
+            out = {}
+            i = 0
+            if offset < 0 and max_items is not None:
+                offset = len(completed_history) - max_items
+            for k in completed_history:
+                if i >= offset:
+                    out[k] = completed_history[k]
+                    if max_items is not None and len(out) >= max_items:
+                        break
+                i += 1
+            return out
+    
+    def _extract_prompt_id(self, task: Task) -> str:
+        """
+        从 Task 对象中提取 prompt_id
+        
+        优先级：
+        1. task.final_status_data.data.prompt_id
+        2. task.prompt.prompt_id
+        3. task.task_id (fallback)
+        """
+        # 优先从 final_status_data 获取
+        if task.final_status_data:
+            prompt_id = (task.final_status_data.get("data", {}) or {}).get("prompt_id")
+            if prompt_id:
+                return prompt_id
+        
+        # 其次从 prompt 获取
+        if isinstance(task.prompt, dict):
+            prompt_id = task.prompt.get("prompt_id")
+            if prompt_id:
+                return prompt_id
+        
+        # 最后使用 task_id 作为 fallback
+        return task.task_id
     
     def clear_queue(self) -> int:
         """
@@ -245,14 +306,85 @@ class TaskManager:
             if status_type == 'execution_start':
                 # 任务开始执行
                 self._update_task_status(task_id, message, TaskStatus.RUNNING)
+                # 初始化 history_item（在 execution_start 时最合适）
+                self._init_history_item(task_id, message)
 
             elif status_type == 'execution_success':
                 # 任务完成
                 self._update_task_status(task_id, message, TaskStatus.COMPLETED)
+                # 更新 history_item 的 status
+                self._update_history_status(message, "success")
 
+            elif status_type == 'execution_cached':
+                # 节点执行缓存（节点已缓存，跳过执行）
+                # 更新 history_item 的 status
+                self._update_history_status(message, "running")
+
+            elif status_type == 'executed':
+                # 单节点任务之行结束
+                # {"type": "executed", "data": {"node": "13", "display_node": "13", "output": {"images": [{"filename": "fe_edit_preview.png", "type": "temp"}]}, "prompt_id": "8fabf03e-0030-478b-b61b-8917126479bd"}}
+                # {"type": "executed", "data": {"node": "33", "display_node": "33", "output": {"images": [{"filename": "ComfyUI_00462_.png", "subfolder": "", "type": "output"}]}, "prompt_id": "9c1d6ac9-3eb2-497a-b77f-3d2305e575db"}}
+                data = message.get("data", {})
+                task = self._tasks.get(task_id)
+                if not task:
+                    return
+                
+                prompt_id = data.get("prompt_id")
+                if not prompt_id:
+                    return
+                
+                # 获取已存在的history item（应该在 execution_start 时已初始化）
+                history_item = self.history.get(prompt_id)
+                if not history_item:
+                    # 如果 history_item 不存在，记录警告并尝试初始化
+                    log("WARNING", f"[TaskManager] History item not found for prompt_id {prompt_id} in executed message, initializing now")
+                    self._init_history_item(task_id, {"type": "executed", "data": {"prompt_id": prompt_id}})
+                    history_item = self.history.get(prompt_id)
+                    if not history_item:
+                        return
+
+                
+                node_id = data.get("node")
+                if not node_id:
+                    return
+                
+                # 构造meta
+                if "meta" not in history_item:
+                    history_item["meta"] = {}
+                history_item["meta"][node_id] = {
+                    "node_id": node_id,
+                    "display_node": data.get("display_node", node_id),
+                    "parent_node": None,
+                    "real_node_id": node_id
+                }
+                
+                # 构造outputs，从 output.images 中获取图片信息
+                output_data = data.get("output", {})
+                images = output_data.get("images", [])
+                if images:
+                    if "outputs" not in history_item:
+                        history_item["outputs"] = {}
+                    if node_id not in history_item["outputs"]:
+                        history_item["outputs"][node_id] = {}
+                    if "images" not in history_item["outputs"][node_id]:
+                        history_item["outputs"][node_id]["images"] = []
+                    
+                    # 处理每个图片，确保包含所有必要字段
+                    # 追加到现有列表，而不是覆盖（支持同一节点多个图片）
+                    for img in images:
+                        image_item = {
+                            "filename": img.get("filename", ""),
+                            "type": img.get("type", "output"),
+                            "subfolder": img.get("subfolder", "")  # 始终包含 subfolder 字段，即使为空
+                        }
+                        # 避免重复添加相同的图片
+                        if image_item not in history_item["outputs"][node_id]["images"]:
+                            history_item["outputs"][node_id]["images"].append(image_item)
             elif status_type == 'execution_error':
                 # 任务失败
                 self._update_task_status(task_id, message, TaskStatus.FAILED)
+                # 更新 history_item 的 status
+                self._update_history_status(message, "error")
 
             elif status_type == 'status':
                 # 忽略纯 status 消息, agent的队列代替comfyui自己的队列
@@ -263,6 +395,177 @@ class TaskManager:
 
 
         TaskStatusBroadcaster.broadcast_task_status(task_id, message)
+    
+    def _init_history_item(self, task_id: str, message: dict) -> None:
+        """
+        初始化 history_item（在 execution_start 时调用）
+        
+        Args:
+            task_id: 任务ID
+            message: execution_start 消息
+        """
+        try:
+            data = message.get("data", {})
+            prompt_id = data.get("prompt_id")
+            if not prompt_id:
+                # 如果没有 prompt_id，尝试从 task 中获取
+                with self._lock:
+                    task = self._tasks.get(task_id)
+                    if task:
+                        prompt_id = self._extract_prompt_id(task)
+            
+            if not prompt_id:
+                log("WARNING", f"[TaskManager] Cannot initialize history_item: no prompt_id found for task {task_id}")
+                return
+            
+            # 如果已存在，不重复初始化
+            if prompt_id in self.history:
+                return
+            
+            # 获取任务信息
+            with self._lock:
+                task = self._tasks.get(task_id)
+                if not task:
+                    log("WARNING", f"[TaskManager] Cannot initialize history_item: task {task_id} not found")
+                    return
+            
+            # 提取 prompt 节点定义和 outputs_to_execute
+            outputs_to_execute = []
+            prompt_dict = task.prompt or {}
+            
+            # 处理 task.prompt 可能是不同格式的情况
+            if isinstance(prompt_dict, dict):
+                # 情况1: prompt 是包含 prompt 字段的对象，如 {prompt: {...}, outputs_to_execute: [...]}
+                if "prompt" in prompt_dict and isinstance(prompt_dict.get("prompt"), dict):
+                    outputs_to_execute = prompt_dict.get("outputs_to_execute", [])
+                    prompt_dict = prompt_dict["prompt"]
+                # 情况2: prompt 本身就是节点定义的字典（最常见的情况）
+                # 这种情况下 outputs_to_execute 通常为空，由 ComfyUI 自动推断
+            
+            # 构造 extra_data，参考示例结构
+            extra_data = {}
+            if task.client_id:
+                extra_data["client_id"] = task.client_id
+            # extra_pnginfo 通常包含 workflow 信息，如果有的话也添加
+            # 注意：extra_pnginfo 通常在保存图片时才有，执行时可能没有
+            
+            # 计算序号：使用历史记录数量 + 1
+            # 注意：这个序号应该在整个历史记录中唯一且递增
+            sequence_number = len(self.history) + 1
+            
+            # 提取时间戳
+            msg_data = message.get("data", {})
+            timestamp = msg_data.get("timestamp")
+            if timestamp is None:
+                timestamp = int(time.time() * 1000)
+            else:
+                # 标准化时间戳为毫秒
+                if timestamp < 10000000000:
+                    timestamp = int(timestamp * 1000)
+                else:
+                    timestamp = int(timestamp)
+            
+            # 构造 prompt 数组，格式：[number, prompt_id, prompt_dict, extra_data, outputs_to_execute]
+            history_item = {
+                "meta": {},
+                "outputs": {},
+                "prompt": [
+                    sequence_number,
+                    prompt_id,
+                    prompt_dict,
+                    extra_data,
+                    outputs_to_execute
+                ],
+                "status": {
+                    "status_str": "running",
+                    "completed": False,
+                    "messages": [
+                        ["execution_start", {"prompt_id": prompt_id, "timestamp": timestamp}]
+                    ]
+                }
+            }
+            
+            with self._lock:
+                self.history[prompt_id] = history_item
+            
+            log("DEBUG", f"[TaskManager] Initialized history_item for prompt_id {prompt_id}")
+            
+        except Exception as e:
+            log("ERROR", f"[TaskManager] Error initializing history_item for task {task_id}: {e}\n{traceback.format_exc()}")
+    
+    def _update_history_status(self, message: dict, status_str: str) -> None:
+        """
+        更新 history_item 的 status
+        
+        Args:
+            message: 消息数据（execution_success、execution_error、execution_cached）
+            status_str: 状态字符串（"success"、"error"、"running"）
+        """
+        try:
+            data = message.get("data", {})
+            prompt_id = data.get("prompt_id")
+            if not prompt_id:
+                return
+            
+            with self._lock:
+                history_item = self.history.get(prompt_id)
+                if not history_item:
+                    log("WARNING", f"[TaskManager] Cannot update history status: history_item not found for prompt_id {prompt_id}")
+                    return
+                
+                if "status" not in history_item:
+                    history_item["status"] = {
+                        "status_str": status_str,
+                        "completed": False,
+                        "messages": []
+                    }
+                
+                status = history_item["status"]
+                
+                # 提取时间戳
+                timestamp = data.get("timestamp")
+                if timestamp is None:
+                    timestamp = int(time.time() * 1000)
+                else:
+                    # 标准化时间戳为毫秒
+                    if timestamp < 10000000000:
+                        timestamp = int(timestamp * 1000)
+                    else:
+                        timestamp = int(timestamp)
+                
+                # 更新状态
+                status["status_str"] = status_str
+                
+                # 根据状态类型添加消息
+                if status_str == "success":
+                    status["completed"] = True
+                    # 添加 execution_success 消息（如果还没有）
+                    if not any(msg[0] == "execution_success" for msg in status.get("messages", [])):
+                        status.setdefault("messages", []).append(
+                            ["execution_success", {"prompt_id": prompt_id, "timestamp": timestamp}]
+                        )
+                elif status_str == "error":
+                    status["completed"] = True
+                    # 添加 execution_error 消息（如果还没有）
+                    if not any(msg[0] == "execution_error" for msg in status.get("messages", [])):
+                        error_info = {
+                            "prompt_id": prompt_id,
+                            "node_id": data.get("node_id") or data.get("node", "unknown"),
+                            "exception_message": data.get("exception_message", "Unknown error"),
+                            "timestamp": timestamp
+                        }
+                        status.setdefault("messages", []).append(["execution_error", error_info])
+                elif status_str == "running":
+                    # execution_cached 或其他运行中状态，不改变 completed 标志
+                    # 可以添加 execution_cached 消息
+                    if message.get("type") == "execution_cached":
+                        if not any(msg[0] == "execution_cached" for msg in status.get("messages", [])):
+                            status.setdefault("messages", []).append(
+                                ["execution_cached", {"prompt_id": prompt_id, "timestamp": timestamp}]
+                            )
+                
+        except Exception as e:
+            log("ERROR", f"[TaskManager] Error updating history status: {e}\n{traceback.format_exc()}")
     
     def _update_task_status(self, task_id: str, status_data: dict, target_status: TaskStatus) -> bool:
         """
@@ -327,7 +630,7 @@ class TaskManager:
 
                 # 只存储 history 需要的消息类型
                 s_type = status_data.get("type")
-                if s_type in ("execution_start", "serverless_api", "execution_success", "execution_error", "error"):
+                if s_type in ("execution_start", "execution_cached", "serverless_api", "execution_success", "execution_error", "error"):
                     task.status_history.append(status_data)
 
                 if s_type == "serverless_api":

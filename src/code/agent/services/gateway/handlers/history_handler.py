@@ -29,8 +29,11 @@ class HistoryHandler:
     
     def handle_get_request(self):
         """处理 GET /api/history 请求"""
+        if not self._is_initialized():
+            return jsonify({}), 503
+        
         limit = self._parse_limit_param()
-        history = self._get_all_history_from_queue(limit)
+        history = self.task_manager.get_history(max_items=limit)
         log("DEBUG", f"Retrieved {len(history)} history items from queue")
         return jsonify(history)
     

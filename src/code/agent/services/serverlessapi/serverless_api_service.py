@@ -14,6 +14,7 @@ from typing import Any
 import constants
 from store import Store, FileSystem, OSS
 from utils.logger import log
+from utils import file_ops
 
 from uuid import uuid4, UUID
 from flask import request
@@ -90,13 +91,13 @@ class ServerlessApiService:
 
         # 如果 header 没有，尝试从 env 获取
         if ak == "" or sk == "":
-            log("WARNING", "failed to get credentials from header")
+            log("DEBUG", "failed to get credentials from header")
 
             ak = constants.ALIBABA_CLOUD_ACCESS_KEY_ID
             sk = constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET
             sts = constants.ALIBABA_CLOUD_SECURITY_TOKEN
         if ak == "" or sk == "":
-            log("WARNING", "failed to get credentials from env")
+            log("DEBUG", "failed to get credentials from env")
         return ak, sk, sts
 
     def get_oss_store(self):
@@ -341,6 +342,23 @@ class ServerlessApiService:
                             elapsed = time.perf_counter() - start_time
                             log("DEBUG", f"failed to decode {file_type} from Base64 in {elapsed:.2f}s")
                             pass
+                    
+                    else:
+                        # 使用文件名
+                        input_dir = constants.INPUT_DIR
+                        file_path = os.path.join(input_dir, file_url)
+                        mnt_input_dir = constants.MNT_INPUT_DIR
+                        mnt_file_path = os.path.join(mnt_input_dir, file_url)
+                        
+                        # 若 input_dir 不在挂载的共享存储中(在实例磁盘)，则需要尝试从共享存储中查找同名文件
+                        # issue: https://aliyuque.antfin.com/lnpq52/cc8sut/slcnbzw0t7q9snbb
+                        if  input_dir != mnt_input_dir and not os.path.exists(file_path) and os.path.exists(mnt_file_path):
+                            log("DEBUG", f"copying {file_type}: {mnt_file_path} -> {file_path}")
+                            start_time = time.perf_counter()
+                            file_ops.copy(mnt_file_path, file_path)
+                            elapsed = time.perf_counter() - start_time
+                            file_size = os.path.getsize(file_path)
+                            log("DEBUG", f"successfully copied {file_type}: {file_url} ({file_size} bytes) in {elapsed:.2f}s")
                             
                     if content:
                         # 上传文件并更新对应的输入字段

@@ -38,7 +38,7 @@ class OSS:
             and arr[2] == "aliyuncs"
             and arr[3] == "com"
         ):
-            log("ERROR", f"OSS endpoint '{self.oss_endpoint}' is invalid (expected format: bucket.oss-region.aliyuncs.com)")
+            log("DEBUG", f"OSS endpoint '{self.oss_endpoint}' is invalid (expected format: bucket.oss-region.aliyuncs.com)")
             return
 
         self.bucket_name = arr[0].split("/")[-1] if "/" in arr[0] else arr[0]

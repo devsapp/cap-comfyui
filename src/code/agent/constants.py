@@ -26,43 +26,50 @@ SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
 COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
 COMFYUI_PROCESS_PORT = 8188
 
-# CPU模式启动命令
-COMFYUI_CPU_BOOT_CMD = [
-    f"{VENV_DIR}/bin/python",
-    f"{COMFYUI_DIR}/main.py",
-    "--cpu",
-    "--listen",
-    "0.0.0.0",
-    "--input-directory",
-    f"{MNT_DIR}/input",
-    "--output-directory",
-    f"{MNT_DIR}/output",
-    "--temp-directory",
-    f"{MNT_DIR}/output",
-    "--user-directory",
-    f"{MNT_DIR}/output",
-    "--disable-metadata"
-]
+# 共享存储中的输入目录（NAS 中的 input 目录），issue: https://aliyuque.antfin.com/lnpq52/cc8sut/slcnbzw0t7q9snbb
+MNT_INPUT_DIR = os.getenv('MNT_INPUT_DIR', f"{MNT_DIR}/input")
 
-# GPU模式启动命令（不包含--cpu参数）
-COMFYUI_GPU_BOOT_CMD = [
-    f"{VENV_DIR}/bin/python",
-    f"{COMFYUI_DIR}/main.py",
-    "--listen",
-    "0.0.0.0",
-    "--input-directory",
-    f"{MNT_DIR}/input",
-    "--output-directory",
-    f"{MNT_DIR}/output",
-    "--temp-directory",
-    f"{MNT_DIR}/output",
-    "--user-directory",
-    f"{MNT_DIR}/output",
-    "--disable-metadata"
-]
-
-# 根据模式选择启动命令
-COMFYUI_BOOT_CMD = COMFYUI_CPU_BOOT_CMD if COMFYUI_MODE == 'cpu' else COMFYUI_GPU_BOOT_CMD
+# 根据 COMFYUI_MODE 配置输入目录和启动命令
+if COMFYUI_MODE == 'cpu':
+    # CPU模式：输入目录默认使用 MNT_INPUT_DIR
+    INPUT_DIR = os.getenv('INPUT_DIR', MNT_INPUT_DIR)
+    COMFYUI_BOOT_CMD = [
+        f"{VENV_DIR}/bin/python",
+        f"{COMFYUI_DIR}/main.py",
+        "--cpu",
+        "--listen",
+        "0.0.0.0",
+        "--input-directory",
+        INPUT_DIR,
+        "--output-directory",
+        f"{MNT_DIR}/output",
+        "--temp-directory",
+        f"{MNT_DIR}/output",
+        "--user-directory",
+        f"{MNT_DIR}/output",
+        "--disable-metadata"
+    ]
+else:
+    # GPU模式：线上服务输入目录默认使用 COMFYUI_DIR/input(实例磁盘)，项目开发默认使用 MNT_INPUT_DIR
+    if USE_API_MODE:
+        INPUT_DIR = os.getenv('INPUT_DIR', f"{COMFYUI_DIR}/input")
+    else:
+        INPUT_DIR = os.getenv('INPUT_DIR', MNT_INPUT_DIR)
+    COMFYUI_BOOT_CMD = [
+        f"{VENV_DIR}/bin/python",
+        f"{COMFYUI_DIR}/main.py",
+        "--listen",
+        "0.0.0.0",
+        "--input-directory",
+        INPUT_DIR,
+        "--output-directory",
+        f"{MNT_DIR}/output",
+        "--temp-directory",
+        f"{MNT_DIR}/output",
+        "--user-directory",
+        f"{MNT_DIR}/output",
+        "--disable-metadata"
+    ]
 SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
 SD_PROCESS_PORT = 7860
 SD_BOOT_CMD = [

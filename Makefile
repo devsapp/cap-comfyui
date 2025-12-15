@@ -7,33 +7,27 @@ $(error Invalid REGION: $(REGION). Must be one of: $(VALID_REGIONS))
 endif
 
 VERSION ?= $(shell date "+%Y%m%d%H%M%S")
-AGENT_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:agent-$(VERSION)
+AGENT_IMAGE = cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/image-generation-comfyui-agent-dev:$(VERSION)
 export OSS_BUCKET = dipper-cache-$(REGION)
 
-# 构建并推送Agent镜像到所有Region
+# 构建并推送Agent镜像
 # make all
 # CR_PWD=xxx make all
-# REGIONS="cn-hangzhou cn-shanghai" CR_PWD=xxx make all
-# CR_PWD=xxx VERSION=v0.0.1-alpha.0 make all
+# CR_USER=xxx CR_PWD=xxx make all
+# CR_PWD=xxx VERSION=v1.0.0 make all
 .PHONY: all
 all:
-	@REGIONS_TO_DEPLOY="$${REGIONS:-$(VALID_REGIONS)}"; \
-	echo "====== Will process regions: $$REGIONS_TO_DEPLOY ======"; \
-	for region in $$REGIONS_TO_DEPLOY; do \
-		if ! echo "$(VALID_REGIONS)" | grep -w "$$region" > /dev/null; then \
-			echo "Error: Invalid region '$$region'. Must be one of: $(VALID_REGIONS)"; \
-			exit 1; \
-		fi; \
-	done; \
-	for region in $$REGIONS_TO_DEPLOY; do \
-		echo "\n====== Processing region: $$region ======"; \
-		$(MAKE) REGION=$$region CR_PWD="$$CR_PWD" VERSION=$(VERSION) login build push; \
-		if [ $$? -ne 0 ]; then \
-			echo "====== Failed in region $$region ======"; \
-			exit 1; \
-		fi; \
-		echo "====== Completed region: $$region ======"; \
-	done
+	@echo "====== Building and pushing agent image ======"; \
+	BUILD_VERSION=$${VERSION:-$$(date "+%Y%m%d%H%M%S")}; \
+	$(MAKE) VERSION=$$BUILD_VERSION login && \
+	$(MAKE) VERSION=$$BUILD_VERSION build && \
+	$(MAKE) VERSION=$$BUILD_VERSION push; \
+	if [ $$? -eq 0 ]; then \
+		echo "====== Build and push completed successfully ======"; \
+	else \
+		echo "====== Build and push failed ======"; \
+		exit 1; \
+	fi
 
 # 构建Agent镜像
 .PHONY: build
@@ -49,18 +43,19 @@ run:
 # 本地测试登录
 .PHONY: exec
 exec:
-	docker run -it --rm -p 9000:9000 --entrypoint /bin/bash $(IMAGE_NAME):$(TAG)
+	docker run -it --rm -p 9000:9000 --entrypoint /bin/bash agent
 
 # 登录镜像仓库
-# REGION=xxx CR_PWD=xxx make login
+# CR_USER=xxx CR_PWD=xxx make login
 .PHONY: login
 login:
 	@if [ -z "$$CR_PWD" ]; then \
-		echo "[$(REGION)] No CR_PWD provided, using interactive login..."; \
-		docker login --username=oyohyee@gmail.com registry.$(REGION).aliyuncs.com; \
+		echo "No CR_PWD provided, using interactive login..."; \
+		docker login cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com; \
 	else \
-		echo "[$(REGION)] Using provided CR_PWD for login..."; \
-		echo "$$CR_PWD" | docker login --username=oyohyee@gmail.com --password-stdin registry.$(REGION).aliyuncs.com; \
+		echo "Using provided credentials for login..."; \
+		CR_USER=$${CR_USER:-oyohyee@gmail.com}; \
+		echo "$$CR_PWD" | docker login --username=$$CR_USER --password-stdin cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com; \
 	fi
 
 # 推送镜像

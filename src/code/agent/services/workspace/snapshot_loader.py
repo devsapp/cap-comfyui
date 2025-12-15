@@ -189,6 +189,9 @@ class ComfyUIProdSnapshotLoader(SnapshotLoader):
                 link_path=f"{constants.COMFYUI_DIR}/custom_nodes",
                 force=True
             )
+        # 线上服务GPU实例使用实例磁盘中的input目录，需确保目录存在防止comfyui启动过程中LoadImage节点加载失败
+        if not os.path.exists(constants.INPUT_DIR):
+            os.makedirs(constants.INPUT_DIR, exist_ok=True)
 
 
 class SDSnapshotLoader(SnapshotLoader):

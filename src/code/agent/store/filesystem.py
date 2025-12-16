@@ -20,28 +20,46 @@ class FileSystem:
     def get(self, key: str) -> str:
         """读取文件内容
         
+        采用优化的缓存策略：
+        1. 首先尝试直接打开文件（最快路径，Page Cache Hit / GETATTR + READ）
+        2. 如果捕获到 ENOENT 错误，表示文件在客户端缓存中不可见
+        3. 强制刷新目录缓存（执行 listdir，触发 READDIR RPC）
+        4. 重试读取文件内容
+        
         Args:
             key: 文件键名
         
         Returns:
             文件内容字符串
         """
+        file_path = self.__file_path(key)
+        
+        # 第一次尝试：直接读取文件（性能最优路径）
         try:
-            file_path = self.__file_path(key)
-            
-            # 刷新单个文件缓存
-            try:
-                os.stat(file_path)
-            except:
-                pass
-            
-            # 读取文件内容
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
+        except FileNotFoundError:
+            # 捕获 ENOENT 错误：文件在客户端缓存中不可见
+            # 强制刷新目录缓存（执行昂贵的 listdir 操作）
+            try:
+                if os.path.exists(self.output_folder):
+                    os.listdir(self.output_folder)
+            except Exception:
+                pass
+            
+            # 重试读取文件内容
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except FileNotFoundError:
+                # 文件确实不存在，返回空字符串
+                return ""
+            except Exception as e:
+                print(f"Error reading file {file_path}: {e}")
+                return ""
         except Exception as e:
-            if "No such file or directory" not in str(e):
-                print(e)
-
+            # 其他非 ENOENT 错误
+            print(f"Error reading file {file_path}: {e}")
             return ""
 
     def put(self, key: str, value: str):

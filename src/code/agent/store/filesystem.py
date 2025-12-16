@@ -2,6 +2,8 @@ import os
 import threading
 import time
 
+from utils.logger import log
+
 
 class FileSystem:
 
@@ -20,28 +22,48 @@ class FileSystem:
     def get(self, key: str) -> str:
         """读取文件内容
         
+        采用优化的缓存策略：
+        1. 首先尝试直接打开文件（最快路径，Page Cache Hit / GETATTR + READ）
+        2. 如果捕获到 ENOENT 错误，表示文件在客户端缓存中不可见
+        3. 强制刷新目录缓存（执行 listdir，触发 READDIR RPC）
+        4. 重试读取文件内容
+        
         Args:
             key: 文件键名
         
         Returns:
             文件内容字符串
         """
+        file_path = self.__file_path(key)
+        
+        # 第一次尝试：直接读取文件
+        # 先调用 os.stat() 强制刷新 NFS 属性缓存
         try:
-            file_path = self.__file_path(key)
-            
-            # 刷新单个文件缓存
-            try:
-                os.stat(file_path)
-            except:
-                pass
-            
-            # 读取文件内容
+            os.stat(file_path)  # 强制刷新文件属性缓存
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
+        except FileNotFoundError:
+            # 捕获 ENOENT 错误：文件在客户端缓存中不可见
+            # 强制刷新目录缓存（执行昂贵的 listdir 操作）
+            try:
+                if os.path.exists(self.output_folder):
+                    os.listdir(self.output_folder)
+            except Exception:
+                pass
+            
+            # 重试读取文件内容
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except FileNotFoundError:
+                # 文件确实不存在，返回空字符串
+                return ""
+            except Exception as e:
+                log("ERROR", f"Error reading file {file_path}: {type(e).__name__}: {str(e)}")
+                return ""
         except Exception as e:
-            if "No such file or directory" not in str(e):
-                print(e)
-
+            # 其他非 ENOENT 错误
+            log("ERROR", f"Error reading file {file_path}: {type(e).__name__}: {str(e)}")
             return ""
 
     def put(self, key: str, value: str):
@@ -51,7 +73,7 @@ class FileSystem:
             with open(self.__file_path(key), "w", encoding="utf-8") as f:
                 f.write(value)
         except Exception as e:
-            print(e)
+            log("ERROR", f"Error writing file {self.__file_path(key)}: {type(e).__name__}: {str(e)}")
     
     def _start_cache_refresh_thread(self):
         """启动后台线程定期刷新 NFS 目录缓存"""

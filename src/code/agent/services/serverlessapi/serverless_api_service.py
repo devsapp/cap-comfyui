@@ -535,17 +535,6 @@ class ServerlessApiService:
             finally:
                 pass
 
-    def refresh_storage_cache(self):
-        """刷新存储缓存，确保能获取到最新文件
-
-        用于解决实例冻结导致的 NFS 缓存问题
-        """
-        if self.store and hasattr(self.store, 'refresh_cache'):
-            try:
-                self.store.refresh_cache()
-            except Exception as e:
-                log("WARNING", f"Failed to refresh storage cache: {e}")
-
     def get_status_from_store(self, task_id: str):
         """
         从持久化存储中读取任务状态历史

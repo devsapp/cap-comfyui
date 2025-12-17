@@ -101,6 +101,9 @@ DEFAULT_LIVENESS_POLL_INTERVAL = 5
 # 插件安装相关超时配置
 DEFAULT_INSTALL_TIMEOUT = 600  # 10min default timeout for custom nodes installation
 
+# PreStop 相关配置
+PRESTOP_TIMEOUT = int(os.getenv("PRESTOP_TIMEOUT", "280"))  # preStop 超时时间，默认 280 秒（留 20 秒缓冲）
+
 INSTANCE_ID = os.getenv("FC_INSTANCE_ID", socket.gethostname())
 # OSS
 HEADER_KEY_ACCESS_KEY_ID = "x-fc-access-key-id"

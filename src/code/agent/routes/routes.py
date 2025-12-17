@@ -80,22 +80,83 @@ class Routes:
             return "Function is initialized, request_id: " + request_id + "\n"
 
         @self.app.route("/pre-stop", methods=["GET"])
-        def pre_stop():
+        def pre_stop():            
             request_id = request.headers.get("x-fc-request-id", "")
             log("INFO", f"FC PreStop Start RequestId: {request_id}")
-
             service = ManagementService()  # singleton
+            
             # 若最近一次管控操作为Start或Reboot，且实例非预期销毁时，需要在pre-stop中保存工作空间从而兜底;
             # 其他情况：例如按量实例并未启动服务子进程、例如已经使用SaveAndStop保存了工作空间再销毁实例，均不需要在pre-stop中再次保存
-            if service.latest_action and service.latest_action in (Action.START, Action.REBOOT):
+            if not service.latest_action or service.latest_action not in (Action.START, Action.REBOOT):
+                log("INFO", "Do nothing in pre-stop")
+                log("INFO", f"FC PreStop End RequestId: {request_id}")
+                return "OK"
+            
+            def do_save(result_queue, target_snapshot_name):
+                """在子进程中执行 save 操作"""
                 try:
                     from services.workspace.snapshot_manager import SnapshotManager
-                    result_map = service.save(SnapshotManager.TYPE_DEV)
-                    log("INFO", f"save resp when preStop: {json.dumps(result_map, indent=2)}")
+                    
+                    mgr = SnapshotManager()
+                    # 使用主进程预生成的 snapshot_name
+                    result_map = mgr.save(SnapshotManager.TYPE_DEV, snapshot_name=target_snapshot_name)
+                    
+                    result_queue.put({"success": True, "result": result_map})
                 except Exception as e:
-                    log("ERROR", f"error occur when preStop: {str(e)}")
-            else:
-                log("INFO", "Do nothing in pre-stop")
+                    import traceback
+                    result_queue.put({"success": False, "error": str(e), "traceback": traceback.format_exc()})
+
+            # 启动子进程完成工作站生图环境保存，并在PreStop超时时间到达前进行不完整目录清理
+            import multiprocessing
+            from datetime import datetime
+            from services.workspace.snapshot_manager import SnapshotManager
+            snapshot_mgr = SnapshotManager()
+            snapshot_name_suffix = datetime.utcnow().strftime(constants.SNAPSHOT_PATTERN)
+            snapshot_name = f"{SnapshotManager.TYPE_DEV}-{snapshot_name_suffix}"
+            result_queue = multiprocessing.Queue()
+            save_process = multiprocessing.Process(target=do_save, args=(result_queue, snapshot_name))
+            
+            try:
+                save_process.start()
+                log("INFO", f"Started save process with PID: {save_process.pid}, snapshot: {snapshot_name}")
+                
+                # 等待进程完成或超时
+                save_process.join(timeout=constants.PRESTOP_TIMEOUT)
+                
+                if save_process.is_alive():
+                    # 超时：强制终止进程（子进程没有 SIGTERM 处理逻辑，直接 SIGKILL）
+                    log("WARNING", f"preStop save timeout after {constants.PRESTOP_TIMEOUT}s, killing process {save_process.pid}...")
+                    save_process.kill()
+                    save_process.join(timeout=5)
+                    
+                    log("INFO", f"Save process killed, cleaning up incomplete save...")
+                    # 进程终止后清理未完成的保存，传入预生成的 snapshot_name
+                    snapshot_mgr.cleanup_incomplete_save(snapshot_name)
+                    log("INFO", "preStop cleanup completed due to timeout")
+                else:
+                    # 进程正常结束，检查结果
+                    try:
+                        result = result_queue.get_nowait()
+                        if result.get("success"):
+                            log("INFO", f"save resp when preStop: {json.dumps(result.get('result'), indent=2)}")
+                        else:
+                            log("ERROR", f"error occur when preStop: {result.get('error')}")
+                            if result.get("traceback"):
+                                log("ERROR", f"traceback: {result.get('traceback')}")
+                            snapshot_mgr.cleanup_incomplete_save(snapshot_name)
+                    except Exception:
+                        log("WARNING", "Could not get result from save process")
+            except Exception as e:
+                log("ERROR", f"error occur when preStop: {str(e)}")
+                # 发生异常时确保进程被终止并清理
+                if save_process.is_alive():
+                    save_process.kill()
+                    save_process.join(timeout=5)
+                try:
+                    snapshot_mgr.cleanup_incomplete_save(snapshot_name)
+                except Exception as cleanup_error:
+                    log("ERROR", f"error during cleanup: {str(cleanup_error)}")
+            
             log("INFO", f"FC PreStop End RequestId: {request_id}")
             return "OK"
 

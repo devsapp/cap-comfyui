@@ -6,6 +6,7 @@ from typing import Optional
 
 import constants
 from constants import BACKEND_TYPE
+from utils.logger import log
 
 
 class ProcessManager(ABC):
@@ -32,7 +33,7 @@ class ProcessManager(ABC):
                 universal_newlines=True,
                 bufsize=1  # 行缓冲
             )
-            print(f"Started {BACKEND_TYPE.capitalize()} process with PID: {self.process.pid}")
+            log("INFO", f"Started {BACKEND_TYPE.capitalize()} process with PID: {self.process.pid}")
 
             # 启动标准输出和标准错误的读取线程
             def read_output(pipe):
@@ -53,7 +54,7 @@ class ProcessManager(ABC):
             self.stdout_thread.start()
             self.stderr_thread.start()
         except Exception as e:
-            print(f"Failed to start {BACKEND_TYPE.capitalize()} process: {e}")
+            log("ERROR", f"Failed to start {BACKEND_TYPE.capitalize()} process: {e}")
             raise
 
     def wait_until_ready(self,
@@ -74,12 +75,12 @@ class ProcessManager(ABC):
         while True:
             # 检查是否超时
             if time.time() - start_time > timeout:
-                print(f"{BACKEND_TYPE.capitalize()} process startup timed out after {timeout} seconds")
+                log("ERROR", f"{BACKEND_TYPE.capitalize()} process startup timed out after {timeout} seconds")
                 raise RuntimeError(f"{BACKEND_TYPE.capitalize()} process startup timed out")
 
             # 检查是否就绪
-            if self.is_ready():
-                print(f"{BACKEND_TYPE.capitalize()} process is ready")
+            if self._is_ready():
+                log("INFO", f"{BACKEND_TYPE.capitalize()} process is ready")
                 # 进程就绪后启动liveness探针
                 self.start_health_check()
                 return
@@ -91,20 +92,12 @@ class ProcessManager(ABC):
         """健康检查线程函数"""
         while self.should_monitor:
             try:
-                if not self.is_alive():
-                    print(f"{BACKEND_TYPE.capitalize()} process is not running, waiting for restart...")
+                if not self._is_alive():
                     self._on_process_died()
                 time.sleep(poll_interval)
             except Exception as e:
-                print(f"Error in health check: {e}")
+                log("ERROR", f"Error in health check: {e}")
                 raise
-
-    def _on_process_died(self):
-        """进程死亡时的回调处理"""
-        with self._lock:
-            if self.process is not None:
-                print(f"{BACKEND_TYPE.capitalize()} process (PID: {self.process.pid}) exited")
-                # TODO: 增加处理逻辑
 
     def start_health_check(self, poll_interval: float = constants.DEFAULT_LIVENESS_POLL_INTERVAL):
         """启动健康检查线程"""
@@ -117,7 +110,7 @@ class ProcessManager(ABC):
                     daemon=True
                 )
                 self.health_check_thread.start()
-                print(f"{BACKEND_TYPE.capitalize()} health check thread started")
+                log("INFO", f"{BACKEND_TYPE.capitalize()} health check thread started")
 
     def stop(self) -> None:
         """停止子进程"""
@@ -153,17 +146,37 @@ class ProcessManager(ABC):
                 self.stderr_thread = None
                 self.health_check_thread = None
 
-                print(f"{BACKEND_TYPE.capitalize()} process killed")
+                log("INFO", f"{BACKEND_TYPE.capitalize()} process killed")
             except Exception as e:
-                print(f"Error stopping {BACKEND_TYPE.capitalize()} process: {e}")
+                log("ERROR", f"Error stopping {BACKEND_TYPE.capitalize()} process: {e}")
                 raise
 
+    def _cleanup_dead_process(self):
+        """清理已死亡的进程资源，防止僵尸进程"""
+        if self.process is not None:
+            try:
+                # 回收僵尸进程
+                self.process.wait(timeout=1)
+            except Exception:
+                pass
+            # 关闭管道
+            if self.process.stdout:
+                self.process.stdout.close()
+            if self.process.stderr:
+                self.process.stderr.close()
+            self.process = None
+
     @abstractmethod
-    def is_ready(self) -> bool:
-        """检查进程是否就绪"""
+    def _is_ready(self) -> bool:
+        """检查进程是否就绪，由子类实现"""
         pass
 
     @abstractmethod
-    def is_alive(self) -> bool:
-        """检查进程是否存活"""
+    def _is_alive(self) -> bool:
+        """检查进程是否存活，由子类实现"""
+        pass
+
+    @abstractmethod
+    def _on_process_died(self):
+        """进程死亡时的回调处理，由子类实现具体逻辑"""
         pass

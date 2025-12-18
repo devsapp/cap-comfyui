@@ -4,7 +4,7 @@ from typing import Dict, Set, Optional
 
 import constants
 from exceptions.exceptions import StateTransitionError
-from services.process.backend_process_manager import BackendProcessManager
+from services.process.comfyui_process_manager import ComfyUIProcessManager
 from services.workspace.snapshot_manager import SnapshotManager
 from utils.timer import timer
 
@@ -63,7 +63,7 @@ class ManagementService:
     }
 
     def __init__(self):
-        self._process_mgr = BackendProcessManager()  # 管理ComfyUI/SD子进程
+        self._process_mgr = ComfyUIProcessManager()  # 管理 ComfyUI 子进程
         self._snapshot_mgr = SnapshotManager()  # 管理实例磁盘空间中的工作空间快照
         self._status = BackendStatus.STOPPED  # 服务进程状态
         self._sub_status = ""  # 服务进程子状态，例如启动过程中的"下载"、"解压"、"服务启动"

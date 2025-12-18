@@ -8,7 +8,7 @@ from services.management_service import ManagementService, BackendStatus, Action
 
 @pytest.fixture
 def mock_process_mgr():
-    with patch('services.process.backend_process_manager.BackendProcessManager') as mock:
+    with patch('services.process.comfyui_process_manager.ComfyUIProcessManager') as mock:
         instance = mock.return_value
         instance.start = Mock()
         instance.wait_until_ready = Mock(side_effect=lambda: time.sleep(1))

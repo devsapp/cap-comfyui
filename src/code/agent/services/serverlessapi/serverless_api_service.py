@@ -572,6 +572,38 @@ class ServerlessApiService:
 
         return results
 
+    def _wait_for_ready(self, timeout: float = 600, poll_interval: float = 1, log_interval: float = 5):
+        """
+        等待服务状态变为 RUNNING
+        
+        当服务处于 REBOOTING 状态时，阻塞等待直到变为 RUNNING
+        
+        Args:
+            timeout: 超时时间（秒），默认 10 分钟
+            poll_interval: 轮询间隔（秒）
+            log_interval: 日志打印间隔（秒）
+            
+        Raises:
+            Exception: 等待超时时抛出异常
+        """
+        from services.management_service import ManagementService, BackendStatus
+        
+        service = ManagementService()
+        start_time = time.time()
+        last_log_time = 0
+        
+        while service.status == BackendStatus.REBOOTING:
+            elapsed = time.time() - start_time
+            if elapsed > timeout:
+                raise Exception("ComfyUI service is rebooting, timeout waiting for ready")
+            
+            # 每隔 log_interval 秒打印一次日志
+            if elapsed - last_log_time >= log_interval:
+                log("INFO", f"ComfyUI service is rebooting, waiting... ({elapsed:.1f}s)")
+                last_log_time = elapsed
+            
+            time.sleep(poll_interval)
+
     def run(
         self,
         prompt: map,
@@ -607,6 +639,9 @@ class ServerlessApiService:
         """
 
         try:
+            # 等待服务就绪（如果正在重启中）
+            self._wait_for_ready()
+            
             # 解析请求中是否存在 base64、http url 形式的图片
             prompt = self.parse_prompt(prompt)
 

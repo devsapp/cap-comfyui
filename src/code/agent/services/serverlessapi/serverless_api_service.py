@@ -14,9 +14,11 @@ from typing import Any
 import constants
 from store import Store, FileSystem, OSS
 from utils.logger import log
+from utils import file_ops
 
 from uuid import uuid4, UUID
 from flask import request
+from services.serverlessapi.input_cleaner import wake as wake_input_cleaner
 
 
 class ComfyUIException(Exception):
@@ -90,13 +92,13 @@ class ServerlessApiService:
 
         # 如果 header 没有，尝试从 env 获取
         if ak == "" or sk == "":
-            log("WARNING", "failed to get credentials from header")
+            log("DEBUG", "failed to get credentials from header")
 
             ak = constants.ALIBABA_CLOUD_ACCESS_KEY_ID
             sk = constants.ALIBABA_CLOUD_ACCESS_KEY_SECRET
             sts = constants.ALIBABA_CLOUD_SECURITY_TOKEN
         if ak == "" or sk == "":
-            log("WARNING", "failed to get credentials from env")
+            log("DEBUG", "failed to get credentials from env")
         return ak, sk, sts
 
     def get_oss_store(self):
@@ -183,35 +185,34 @@ class ServerlessApiService:
 
         return ws
 
-    def api_upload_image(self, content: bytes, overwrite: bool):
+    def api_upload_image(self, content: bytes):
         """
-        上传图片到 ComfyUI
+        上传图片到 ComfyUI 的 input 目录
         
-        将图片内容上传到 ComfyUI 的 input 目录，供工作流节点使用。
+        直接将图片写入 INPUT_DIR; 
+        文件名基于内容 MD5 生成，相同内容产生相同文件名。
+        如果文件已存在（内容相同），仅更新 mtime 而不重写内容。
         
         Args:
             content: 图片二进制内容
-            overwrite: 是否覆盖同名文件
             
         Returns:
-            dict: 包含上传后的文件信息（如 name 字段）
+            dict: 包含上传后的文件信息，格式 {"name": "filename"}
         """
-        # 基于内容生成确定性的 UUID，相同内容产生相同 UUID
+        # 基于内容生成确定性的文件名，相同内容产生相同文件名
         content_hash = hashlib.md5(content).hexdigest()
-        uuid = str(UUID(content_hash))
-        files = {
-            "image": (uuid, content),
-        }
-
-        if overwrite:
-            files["overwrite"] = bytes("1")
-
-        res = requests.post(
-            os.path.join(self.endpoint, "upload/image"),
-            files=files,
-        )
-
-        return res.json()
+        filename = str(UUID(content_hash))
+        filepath = os.path.join(constants.INPUT_DIR, filename)
+        
+        if os.path.exists(filepath):
+            # 文件已存在（内容相同），仅更新 mtime，防止被清理
+            os.utime(filepath, None)
+        else:
+            # 文件不存在，写入内容
+            with open(filepath, 'wb') as f:
+                f.write(content)
+        
+        return {"name": filename}
 
     def api_get_history(self, prompt_id: str):
         """
@@ -341,12 +342,27 @@ class ServerlessApiService:
                             elapsed = time.perf_counter() - start_time
                             log("DEBUG", f"failed to decode {file_type} from Base64 in {elapsed:.2f}s")
                             pass
+                    
+                    else:
+                        # 文件来源于共享存储（NAS），利用api_upload_image拷贝到实例磁盘
+                        # issue: https://aliyuque.antfin.com/lnpq52/cc8sut/slcnbzw0t7q9snbb
+                        input_dir = constants.INPUT_DIR
+                        file_path = os.path.join(input_dir, file_url)
+                        mnt_input_dir = constants.MNT_INPUT_DIR
+                        mnt_file_path = os.path.join(mnt_input_dir, file_url)
+                        if input_dir != mnt_input_dir and not os.path.exists(file_path) and os.path.exists(mnt_file_path):
+                            log("DEBUG", f"reading {file_type} from MNT: {mnt_file_path}")
+                            start_time = time.perf_counter()
+                            with open(mnt_file_path, 'rb') as f:
+                                content = f.read()
+                            elapsed = time.perf_counter() - start_time
+                            log("DEBUG", f"successfully read {file_type}: {file_url} ({len(content)} bytes) in {elapsed:.2f}s")
                             
                     if content:
                         # 上传文件并更新对应的输入字段
                         log("DEBUG", f"uploading {file_type} to ComfyUI")
                         start_time = time.perf_counter()
-                        res = self.api_upload_image(content, False)
+                        res = self.api_upload_image(content)
                         elapsed = time.perf_counter() - start_time
                         log("INFO", f"successfully uploaded {file_type} to ComfyUI as '{res['name']}' in {elapsed:.2f}s")
                         prompt[key]["inputs"][input_key] = res["name"]
@@ -588,9 +604,11 @@ class ServerlessApiService:
         """
 
         try:
-
             # 解析请求中是否存在 base64、http url 形式的图片
             prompt = self.parse_prompt(prompt)
+
+            # 唤醒 input 目录清理线程（在 parse_prompt 之后，确保上传的文件 mtime 已更新，防止清理ttl到期的同名文件）
+            wake_input_cleaner()
 
             client_id = ""
             prompt_id = ""

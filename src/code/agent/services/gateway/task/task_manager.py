@@ -259,7 +259,8 @@ class TaskManager:
                 return
             self._record_task_status(task_id, message)
         except Exception as e:
-            log("ERROR", f"[TaskManager] Error handling message {message}: {e}")
+            log("DEBUG", f"[TaskManager] Error handling message for task {task_id}: {e}")
+
 
         TaskStatusBroadcaster.broadcast_task_status(task_id, message)
     
@@ -593,20 +594,21 @@ class MessagesPoller:
         log("DEBUG", f"[MessagesPoller] Polling stopped for task {self.task_id}, processed {self.last_message_count} messages")
     
     @staticmethod
-    def _is_message_completed(message: dict) -> bool:
+    def _is_message_completed(message: Union[dict, str]) -> bool:
         """
         检查单个消息是否表示任务完成
         
         Args:
-            message: 消息数据字典
+            message: 消息数据（dict 或 JSON 字符串）
         
         Returns:
             True if message indicates task completion, False otherwise
         """
-        if not message:
+        try:
+            message_type = message.get("type", "")
+        except Exception as e:
+            log("DEBUG", f"[MessagesPoller] Error checking message completion: {e}")
             return False
-        
-        message_type = message.get("type", "")
         
         # 只有收到 serverless_api 时才认为任务完成
         # execution_success 和 execution_error 只是中间状态，需要等待 serverless_api

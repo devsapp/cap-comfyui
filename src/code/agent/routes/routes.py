@@ -52,6 +52,15 @@ class Routes:
             # access_key_secret = request.headers['x-fc-access-key-secret']
             # access_security_token = request.headers['x-fc-security-token']
 
+            # 执行滚动备份（pre-start）
+            try:
+                from utils.rolling_backup import RollingBackup
+                backup = RollingBackup()
+                result = backup.run()
+                log("INFO", f"Rolling backup completed in initialize: {result}")
+            except Exception as e:
+                log("ERROR", f"Rolling backup failed in initialize: {str(e)}")
+
             # API模式需要自动启动comfyui进程
             # TODO 防止抛出5xx导致函数计算一直重试产生大量费用
             service = ManagementService()
@@ -83,6 +92,15 @@ class Routes:
         def pre_stop():
             request_id = request.headers.get("x-fc-request-id", "")
             log("INFO", f"FC PreStop Start RequestId: {request_id}")
+
+            # 执行滚动备份（pre-stop）
+            try:
+                from utils.rolling_backup import RollingBackup
+                backup = RollingBackup()
+                result = backup.run()
+                log("INFO", f"Rolling backup completed in pre-stop: {result}")
+            except Exception as e:
+                log("ERROR", f"Rolling backup failed in pre-stop: {str(e)}")
 
             service = ManagementService()  # singleton
             # 若最近一次管控操作为Start或Reboot，且实例非预期销毁时，需要在pre-stop中保存工作空间从而兜底;

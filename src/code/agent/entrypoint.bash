@@ -95,6 +95,7 @@ echo "Using python venv, python path '$(which python)', pip path '$(which pip)'.
 setup_network
 
 # ==================== 执行 prestart 脚本 ====================
+# 执行 shell 脚本（如果有）
 PRESTART_DIR="${AGENT_DIR}/sh"
 if [ -d "$PRESTART_DIR" ]; then
   echo "[INFO] Running prestart scripts from: $PRESTART_DIR"

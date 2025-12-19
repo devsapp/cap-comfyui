@@ -3,15 +3,15 @@ import logging
 import os
 import traceback
 
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request
 from flask_sock import Sock
-import requests
 
 import constants
 from exceptions.exceptions import CustomError
 from services.management_service import ManagementService, Action, BackendStatus
 from utils.logger import log
 from utils.error_handler import ErrorResponse
+from .proxy_util import proxy_to_comfyui
 from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
 from .gateway_routes import GatewayRoutes
@@ -102,41 +102,14 @@ class Routes:
         @self.app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         @self.app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         def proxy(path=""):
-            backend_status = self.management.service.status
-            if backend_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
-                return ErrorResponse.create(
-                    error_type="service_not_running",
-                    message="Please start your comfyui/sd service first",
-                    status_code=503
-                )
-
             # issue: https://teambition.alibaba-inc.com/task/67c96194e6efb1c42a7ee904
-            original_uri = request.environ['RAW_URI']
-            target_url = f"http://{constants.APP_HOST}{original_uri}"
-            # print(f"Forwarding http request to path: {target_url}")
-
-            resp = requests.request(
-                method=request.method,
-                url=target_url,
-                headers=dict(request.headers),
-                params=request.args,
-                data=request.get_data(),
-                cookies=request.cookies,
-                allow_redirects=False,
-                verify=False  # 如果需要验证SSL证书，将其设置为True
-            )
-
-            # issue: 实际内容被requests库解码，若保留content-encoding，可能会导致客户端试图重复解码，导致浏览器渲染SD页面失败
-            excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-            response_headers = {}
-            for name, value in resp.headers.items():
-                if name.lower() not in excluded_headers:
-                    response_headers[name] = value
-
-            return Response(
-                response=resp.content,
-                status=resp.status_code,
-                headers=response_headers
+            # 使用 RAW_URI 保持原始请求路径
+            return proxy_to_comfyui(
+                uri=request.environ.get('RAW_URI', request.path),
+                check_status=True,
+                timeout=30,
+                log_prefix="RoutesProxy",
+                service=self.management.service
             )
 
         @self.app.errorhandler(Exception)

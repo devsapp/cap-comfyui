@@ -13,6 +13,7 @@ import constants
 from services.management_service import ManagementService, BackendStatus
 from utils.logger import log
 from utils.error_handler import handle_exceptions, ErrorResponse
+from .proxy_util import proxy_to_comfyui
 from services.gateway import get_task_manager
 from services.gateway.handlers.queue_handler import QueueHandler
 from services.gateway.handlers.prompt_handler import PromptHandler
@@ -59,6 +60,7 @@ class GatewayRoutes:
         """设置所有路由"""
         self._register_backend_status_middleware()
         self._register_reboot_handler()
+        self._register_manager_proxy()  # 注册 manager 代理路由（处理其他 /api/manager/* 请求）
         
         # 只在 CPU 模式下注册这些路由
         if constants.COMFYUI_MODE == 'cpu':
@@ -222,6 +224,17 @@ class GatewayRoutes:
         def handle_reboot():
             """处理服务重启请求"""
             return self.reboot_handler.handle_reboot()
+    
+    def _register_manager_proxy(self):
+        @self.bp.route("/manager/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+        @handle_exceptions(error_type="manager_proxy_error", log_prefix="ManagerProxy")
+        def proxy_manager(path):
+            """
+            将其他 /api/manager/* 请求代理到 ComfyUI 后端
+            
+            注意：/api/manager/reboot 由 _register_reboot_handler 处理
+            """
+            return proxy_to_comfyui(log_prefix="ManagerProxy", service=self.service)
     
     def _register_userdata_handler(self):
         @self.bp.route("/userdata/workflows/<path:filename>", methods=["POST"])

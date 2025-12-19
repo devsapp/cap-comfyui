@@ -53,5 +53,8 @@ RUN mkdir -p ~/.pip \
 # 设置 GitHub 代理监控脚本执行权限
 RUN chmod +x ${AGENT_DIR}/services/proxy/github-proxy-monitor.sh
 
+# 设置 prestart 脚本执行权限
+RUN if [ -d "${AGENT_DIR}/sh" ]; then chmod +x ${AGENT_DIR}/sh/*.sh 2>/dev/null || true; fi
+
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

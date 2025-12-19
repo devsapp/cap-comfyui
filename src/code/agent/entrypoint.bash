@@ -94,4 +94,25 @@ echo "Using python venv, python path '$(which python)', pip path '$(which pip)'.
 # ==================== 网络配置 ====================
 setup_network
 
+# ==================== 执行 prestart 脚本 ====================
+PRESTART_DIR="${AGENT_DIR}/sh"
+if [ -d "$PRESTART_DIR" ]; then
+  echo "[INFO] Running prestart scripts from: $PRESTART_DIR"
+  for script in $(find "$PRESTART_DIR" -maxdepth 1 -name "*.sh" -type f | sort); do
+    if [ -x "$script" ]; then
+      echo "[INFO] Executing prestart script: $(basename "$script")"
+      if bash "$script"; then
+        echo "[INFO] Prestart script completed: $(basename "$script")"
+      else
+        echo "[ERROR] Prestart script failed: $(basename "$script")"
+        exit 1
+      fi
+    else
+      echo "[WARN] Prestart script is not executable, skipping: $(basename "$script")"
+    fi
+  done
+else
+  echo "[INFO] Prestart scripts directory not found: $PRESTART_DIR"
+fi
+
 python ${AGENT_DIR}/main.py

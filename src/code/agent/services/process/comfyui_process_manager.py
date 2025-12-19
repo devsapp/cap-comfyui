@@ -116,7 +116,7 @@ class ComfyUIProcessManager(ProcessManager):
             log("WARNING", f"Failed to save dmesg log: {e}")
 
     def _do_restart(self):
-        """重启 ComfyUI 进程（项目开发模式），无需加载 snapshot"""
+        """重启 ComfyUI 进程，无需加载 snapshot"""
         from services.management_service import ManagementService, BackendStatus, Action
         service = ManagementService()
         
@@ -131,7 +131,7 @@ class ComfyUIProcessManager(ProcessManager):
             self.wait_until_ready()
             
         except Exception as e:
-            # 如果重启失败，有两种方案：则退出主进程作为兜底
+            # 如果重启失败，有两种方案：
             # 1. 依靠健康检查机制进行重试
             # 2. 退出主进程作为兜底
             #    若是项目开发环境，则会触发实例轮转，旧的工作空间丢失

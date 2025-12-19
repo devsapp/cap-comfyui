@@ -165,7 +165,7 @@ class ServerlessApiService:
 
         return res.json()
 
-    def api_websocket(self, client_id: str, on_message):
+    def api_websocket(self, client_id: str, on_message, on_error=None, on_close=None):
         """
         创建 WebSocket 连接到 ComfyUI
         
@@ -174,6 +174,8 @@ class ServerlessApiService:
         Args:
             client_id: 客户端 ID，用于标识此连接
             on_message: 消息回调函数，接收 (ws, message) 参数
+            on_error: 错误回调函数，接收 (ws, error) 参数
+            on_close: 关闭回调函数，接收 (ws, close_status_code, close_msg) 参数
             
         Returns:
             WebSocketApp: WebSocket 应用实例
@@ -183,7 +185,8 @@ class ServerlessApiService:
         ws = websocket.WebSocketApp(
             f'{os.path.join(endpoint, "ws")}?clientId={client_id}',
             on_message=on_message,
-            keep_running=True,
+            on_error=on_error,
+            on_close=on_close,
         )
 
         return ws
@@ -652,6 +655,21 @@ class ServerlessApiService:
             prompt_id = ""
 
             ws_err = None
+            ws_closed = threading.Event()  # 用于检测 WebSocket 连接是否已关闭
+
+            def on_ws_error(ws, error):
+                """WebSocket 错误回调"""
+                nonlocal ws_err
+                log("ERROR", f"WebSocket error with ComfyUI process: {error}")
+                ws_err = error
+                ws_closed.set()
+
+            def on_ws_close(ws, close_status_code, close_msg):
+                """WebSocket 关闭回调"""
+                # 正常关闭：状态码为 None（客户端主动关闭）或 1000（正常关闭）
+                if close_status_code is not None and close_status_code != 1000:
+                    log("WARNING", f"WebSocket closed abnormally with ComfyUI process: status={close_status_code}, msg={close_msg}")
+                ws_closed.set()
 
             def on_message(ws: websocket.WebSocket, message: str):
                 try:
@@ -743,14 +761,20 @@ class ServerlessApiService:
                     ws.close()
 
             log("DEBUG", "creating websocket connection to ComfyUI")
-            ws = self.api_websocket(client_id, on_message)
+            ws = self.api_websocket(client_id, on_message, on_error=on_ws_error, on_close=on_ws_close)
             ws_threading = threading.Thread(target=ws.run_forever)
             ws_threading.start()
             log("DEBUG", "websocket thread started")
 
             # 提交出图任务
             log("DEBUG", "waiting for client_id from websocket status message")
+            client_id_timeout = 30  # 等待 client_id 的超时时间（秒）
+            client_id_start = time.time()
             while client_id == "":
+                if ws_closed.is_set():
+                    raise Exception("WebSocket connection closed before receiving client_id from ComfyUI process")
+                if time.time() - client_id_start > client_id_timeout:
+                    raise Exception(f"Timeout waiting for WebSocket client_id from ComfyUI process after {client_id_timeout}s")
                 time.sleep(0.1)
             log("DEBUG", f"got client_id: {client_id}")
 
@@ -794,6 +818,19 @@ class ServerlessApiService:
                             break
                     except Exception as e:
                         log("DEBUG", f"history check failed: {e}")
+                
+                # WebSocket 线程结束后，检查是否因为连接异常断开
+                if ws_closed.is_set() and not ws_err:
+                    # 连接已关闭但没有收到错误，检查是否有结果
+                    try:
+                        if len(self.api_get_history(prompt_id)) == 0:
+                            # 没有结果，说明 ComfyUI 崩溃了
+                            log("WARNING", f"WebSocket closed without completion for prompt_id={prompt_id}, ComfyUI process likely crashed")
+                            raise Exception("ComfyUI process crashed (commonly due to OOM). Please try switching to a different GPU type or adjust your workflow configuration.")
+                    except requests.RequestException as e:
+                        # 历史记录请求也失败了，说明 ComfyUI 确实挂了
+                        log("WARNING", f"WebSocket closed without completion for prompt_id={prompt_id}: {e}")
+                        raise Exception("ComfyUI process crashed (commonly due to OOM). Please try switching to a different GPU type or adjust your workflow configuration.")
 
             # 计算执行时间
             execution_time = time.time() - execution_start_time

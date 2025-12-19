@@ -9,7 +9,7 @@ import threading
 from traceback import print_exception
 import requests
 import websocket
-from typing import Any
+from typing import Any, Optional
 
 import constants
 from store import Store, FileSystem, OSS
@@ -122,13 +122,14 @@ class ServerlessApiService:
             constants.OSS_EXPIRES_IN_SECOND,
         )
 
-    def api_prompt(self, client_id: str, prompt: Any):
+    def api_prompt(self, client_id: str, prompt: Any, task_id: Optional[str] = None):
         """
         提交 ComfyUI 工作流任务
         
         将处理后的 prompt（工作流定义）提交给 ComfyUI 后端执行。
         
         Args:
+            task_id: requestId, cpu/gpu/comfyui promptId 一致
             client_id: WebSocket 客户端 ID，用于关联 WebSocket 连接
             prompt: ComfyUI 工作流定义（节点图）
             
@@ -139,6 +140,8 @@ class ServerlessApiService:
             ComfyUIException: 当 ComfyUI API 调用失败时抛出
         """
         req = {"client_id": client_id, "prompt": prompt}
+        if task_id:
+            req["prompt_id"] = task_id
         res = requests.post(
             os.path.join(self.endpoint, "prompt"),
             json=req,
@@ -717,7 +720,7 @@ class ServerlessApiService:
             log("DEBUG", f"got client_id: {client_id}")
 
             log("DEBUG", "submitting workflow to ComfyUI")
-            prompt_result = self.api_prompt(client_id, prompt)
+            prompt_result = self.api_prompt(client_id, prompt, task_id)
             prompt_id = prompt_result.get("prompt_id", "")
             log("DEBUG", f"workflow submitted, prompt_id: {prompt_id}")
 

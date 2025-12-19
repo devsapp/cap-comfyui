@@ -818,24 +818,12 @@ class ServerlessApiService:
                             break
                     except Exception as e:
                         log("DEBUG", f"history check failed: {e}")
-                
-                # WebSocket 线程结束后，检查是否因为连接异常断开
-                if ws_closed.is_set() and not ws_err:
-                    # 连接已关闭但没有收到错误，检查是否有结果
-                    try:
-                        if len(self.api_get_history(prompt_id)) == 0:
-                            # 没有结果，说明 ComfyUI 崩溃了
-                            log("WARNING", f"WebSocket closed without completion for prompt_id={prompt_id}, ComfyUI process likely crashed")
-                            raise Exception("ComfyUI process crashed (commonly due to OOM). Please try switching to a different GPU type or adjust your workflow configuration.")
-                    except requests.RequestException as e:
-                        # 历史记录请求也失败了，说明 ComfyUI 确实挂了
-                        log("WARNING", f"WebSocket closed without completion for prompt_id={prompt_id}: {e}")
-                        raise Exception("ComfyUI process crashed (commonly due to OOM). Please try switching to a different GPU type or adjust your workflow configuration.")
 
             # 计算执行时间
             execution_time = time.time() - execution_start_time
             log("INFO", f"workflow completed (prompt_id={prompt_id}, execution_time={execution_time:.2f}s, task_id={task_id})")
 
+            # WebSocket 连接异常断开（如 ComfyUI 进程崩溃）
             if ws_err:
                 log("ERROR", f"websocket error occurred: {ws_err}")
                 raise ws_err

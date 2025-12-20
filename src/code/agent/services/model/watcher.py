@@ -538,7 +538,9 @@ _watcher_lock = threading.Lock()
 
 def start_model_watcher(
     comfyui_models_dir: str,
-    user_models_dir: Optional[str] = None
+    user_models_dir: Optional[str] = None,
+    watch_comfyui_dir: bool = True,
+    watch_user_dir: bool = True
 ) -> None:
     """
     启动模型目录双向监听（全局单例）
@@ -546,6 +548,8 @@ def start_model_watcher(
     Args:
         comfyui_models_dir: ComfyUI 模型目录
         user_models_dir: 用户模型目录
+        watch_comfyui_dir: 是否监听 ComfyUI 目录变化并同步到用户目录（默认 True）
+        watch_user_dir: 是否监听用户目录变化并同步到 ComfyUI 目录（默认 True）
     """
     global _comfyui_watcher, _user_poller
     
@@ -563,19 +567,26 @@ def start_model_watcher(
             _user_poller.stop()
         
         # 创建并启动用户目录轮询器
-        if not constants.USE_API_MODE:
+        if watch_user_dir:
             _user_poller = UserModelDirPoller(
                 user_models_dir=user_models_dir,
                 comfyui_models_dir=comfyui_models_dir
             )
             _user_poller.start()
+            log("INFO", "UserModelDirPoller started")
+        else:
+            log("DEBUG", "UserModelDirPoller disabled by configuration")
 
         # 创建并启动 ComfyUI 目录监听器
-        _comfyui_watcher = ComfyUIModelDirWatcher(
-            comfyui_models_dir=comfyui_models_dir,
-            user_models_dir=user_models_dir
-        )
-        _comfyui_watcher.start()
+        if watch_comfyui_dir:
+            _comfyui_watcher = ComfyUIModelDirWatcher(
+                comfyui_models_dir=comfyui_models_dir,
+                user_models_dir=user_models_dir
+            )
+            _comfyui_watcher.start()
+            log("INFO", "ComfyUIModelDirWatcher started")
+        else:
+            log("DEBUG", "ComfyUIModelDirWatcher disabled by configuration")
         
         log("INFO", "Model directory watcher started successfully")
 
@@ -594,3 +605,4 @@ def stop_model_watcher() -> None:
             _user_poller = None
         
         log("INFO", "Model directory watcher stopped")
+

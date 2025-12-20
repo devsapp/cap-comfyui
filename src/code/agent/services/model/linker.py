@@ -7,13 +7,15 @@ import os
 from typing import Optional
 from utils.logger import log
 from utils import file_ops
+import constants
 
 
 def prepare_models(
     target_dir: str,
     user_models_dir: Optional[str] = None,
-    shared_models_dir: Optional[str] = "/mnt/shared/models",
-    enable_watch: bool = True
+    shared_models_dir: Optional[str] = constants.SHARED_MODELS_DIR,
+    watch_comfyui_dir: bool = True,
+    watch_user_dir: bool = True
 ) -> None:
     """
     准备模型目录：将平台共享模型和用户模型链接到目标目录
@@ -28,17 +30,19 @@ def prepare_models(
         target_dir: 目标模型目录（如 /root/comfyui/models）
         user_models_dir: 用户模型目录（可选，如 /mnt/auto/models）
         shared_models_dir: 平台共享模型目录（可选，默认 /mnt/shared/models）
-        enable_watch: 是否启用实时监听（默认 True，仅在非整体软链接时生效）
+        watch_comfyui_dir: 是否监听 ComfyUI 目录变化并同步到用户目录（默认 True）
+        watch_user_dir: 是否监听用户目录变化并同步到 ComfyUI 目录（默认 True）
     
     Example:
         prepare_models(
             target_dir="/root/comfyui/models",
             user_models_dir="/mnt/auto/models",
             shared_models_dir="/mnt/shared/models",
-            enable_watch=True
+            watch_comfyui_dir=True,
+            watch_user_dir=True
         )
     """
-    log("INFO", f"Preparing models: target={target_dir}, user={user_models_dir or 'None'}, shared={shared_models_dir or 'None'}, watch={enable_watch}")
+    log("INFO", f"Preparing models: target={target_dir}, user={user_models_dir or 'None'}, shared={shared_models_dir or 'None'}")
     
     shared_models_exists = shared_models_dir and os.path.isdir(shared_models_dir)
     user_models_exists = user_models_dir and os.path.isdir(user_models_dir)
@@ -73,13 +77,15 @@ def prepare_models(
     
     log("INFO", "Model preparation completed successfully")
     
-    # 步骤3: 启动用户模型实时监听（如果启用）
-    if enable_watch and user_models_exists:
+    # 步骤3: 启动用户模型实时监听
+    if user_models_exists:
         try:
-            from services.utils.model.model_watcher import start_model_watcher
+            from services.model.watcher import start_model_watcher
             start_model_watcher(
                 comfyui_models_dir=target_dir,
-                user_models_dir=user_models_dir
+                user_models_dir=user_models_dir,
+                watch_comfyui_dir=watch_comfyui_dir,
+                watch_user_dir=watch_user_dir
             )
             log("DEBUG", "Model watcher started")
         except ImportError as e:
@@ -101,16 +107,21 @@ def _link_directory(source_dir: str, target_dir: str, description: str, override
     log("DEBUG", f"Linking {description} models from {source_dir}")
     
     for item_name in os.listdir(source_dir):
-        source_path = os.path.join(source_dir, item_name)
-        target_path = os.path.join(target_dir, item_name)
-        
-        if os.path.isdir(source_path):
-            # 目录：确保存在，然后递归处理
-            os.makedirs(target_path, exist_ok=True)
-            _link_directory(source_path, target_path, description, override)
-        else:
-            # 文件：创建软链接
-            _create_link(source_path, target_path, item_name, override)
+        try:
+            source_path = os.path.join(source_dir, item_name)
+            target_path = os.path.join(target_dir, item_name)
+            
+            if os.path.isdir(source_path):
+                # 目录：确保存在，然后递归处理
+                os.makedirs(target_path, exist_ok=True)
+                _link_directory(source_path, target_path, description, override)
+            else:
+                # 文件：创建软链接
+                _create_link(source_path, target_path, item_name, override)
+        except Exception as e:
+            # 单个文件/目录失败不影响其他文件，记录错误并继续
+            log("ERROR", f"Failed to link {description} item '{item_name}': {e}")
+            continue
 
 
 def _create_link(source_path: str, target_path: str, item_name: str, override: bool = False) -> None:
@@ -122,21 +133,28 @@ def _create_link(source_path: str, target_path: str, item_name: str, override: b
         target_path: 目标链接路径
         item_name: 文件名（用于日志）
         override: 是否覆盖已存在的链接
+    
+    Raises:
+        Exception: 如果链接创建/覆盖失败
     """
-    if os.path.exists(target_path) or os.path.islink(target_path):
-        if os.path.islink(target_path):
-            if override:
-                # 覆盖旧链接
-                os.unlink(target_path)
-                os.symlink(source_path, target_path)
-                log("DEBUG", f"Overridden: {item_name}")
+    try:
+        if os.path.exists(target_path) or os.path.islink(target_path):
+            if os.path.islink(target_path):
+                if override:
+                    # 覆盖旧链接
+                    os.unlink(target_path)
+                    os.symlink(source_path, target_path)
+                    log("DEBUG", f"Overridden: {item_name}")
+                else:
+                    log("DEBUG", f"Skipped existing: {item_name}")
             else:
-                log("DEBUG", f"Skipped existing: {item_name}")
+                # 实体文件不覆盖
+                log("DEBUG", f"Skipped real file: {item_name}")
         else:
-            # 实体文件不覆盖
-            log("DEBUG", f"Skipped real file: {item_name}")
-    else:
-        # 创建新链接
-        os.symlink(source_path, target_path)
-        log("DEBUG", f"Linked: {item_name}")
+            # 创建新链接
+            os.symlink(source_path, target_path)
+            log("DEBUG", f"Linked: {item_name}")
+    except Exception as e:
+        log("ERROR", f"Unexpected error when linking '{item_name}': {e}")
+        raise
 

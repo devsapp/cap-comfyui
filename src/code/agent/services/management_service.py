@@ -160,11 +160,13 @@ class ManagementService:
             
             # 准备模型目录（只对 ComfyUI 生效，必须在快照加载后执行）
             if constants.BACKEND_TYPE == constants.TYPE_COMFYUI:
-                from services.utils.model.model_utils import prepare_models
+                from services.model.linker import prepare_models
                 prepare_models(
                     target_dir=f"{constants.COMFYUI_DIR}/models",
                     user_models_dir=constants.MODEL_DIR,
-                    shared_models_dir="/mnt/shared/models"
+                    shared_models_dir=constants.SHARED_MODELS_DIR,
+                    watch_comfyui_dir=True,
+                    watch_user_dir=not constants.USE_API_MODE
                 )
 
             # 安装缺失插件依赖
@@ -239,7 +241,7 @@ class ManagementService:
             
             # 停止模型目录监听
             try:
-                from services.utils.model.model_watcher import stop_model_watcher
+                from services.model.watcher import stop_model_watcher
                 stop_model_watcher()
             except Exception as e:
                 print(f"Warning: Failed to stop model watcher: {e}")

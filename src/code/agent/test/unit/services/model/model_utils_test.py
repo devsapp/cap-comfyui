@@ -10,7 +10,7 @@ import pytest
 import constants
 from types import SimpleNamespace
 
-from services.utils.model.model_utils import prepare_models
+from services.model.linker import prepare_models
 
 
 def _create_test_file(path: str, content: str):
@@ -297,6 +297,79 @@ class TestPrepareModels:
         assert os.path.isdir(os.path.join(self.setup.target_models_dir, "loras/styles/anime/characters"))
         assert os.path.isdir(os.path.join(self.setup.target_models_dir, "loras/styles/anime"))
     
+    def test_mixed_errors_some_files_succeed(self):
+        """测试混合错误场景：部分文件失败不影响其他文件成功链接"""
+        from unittest.mock import patch
+        
+        # 创建更多测试文件
+        _create_test_file(
+            os.path.join(self.setup.user_models_dir, "checkpoints/user3.ckpt"),
+            "user3"
+        )
+        _create_test_file(
+            os.path.join(self.setup.shared_models_dir, "checkpoints/shared_extra.ckpt"),
+            "shared_extra"
+        )
+        
+        original_symlink = os.symlink
+        
+        def selective_fail_symlink(src, dst):
+            # 让包含 "base_model" 的链接失败（模拟权限问题）
+            if "base_model" in dst:
+                raise PermissionError("Mock: Permission denied for base_model")
+            return original_symlink(src, dst)
+        
+        with patch('services.model.linker.os.symlink', side_effect=selective_fail_symlink):
+            # 执行 prepare_models
+            prepare_models(
+                target_dir=self.setup.target_models_dir,
+                user_models_dir=self.setup.user_models_dir,
+                shared_models_dir=self.setup.shared_models_dir
+            )
+        
+        # 验证成功的文件
+        sd_link = os.path.join(self.setup.target_models_dir, "checkpoints/sd_v1.5.safetensors")
+        my_model_link = os.path.join(self.setup.target_models_dir, "checkpoints/my_model.safetensors")
+        lora_link = os.path.join(self.setup.target_models_dir, "loras/style_lora.safetensors")
+        user3_link = os.path.join(self.setup.target_models_dir, "checkpoints/user3.ckpt")
+        
+        assert os.path.islink(sd_link), "sd_v1.5 应该成功链接"
+        assert os.path.islink(my_model_link), "my_model 应该成功链接"
+        assert os.path.islink(lora_link), "style_lora 应该成功链接"
+        assert os.path.islink(user3_link), "user3 应该成功链接"
+        
+        # 验证失败的文件不存在或不是软链接
+        base_model_link = os.path.join(self.setup.target_models_dir, "checkpoints/base_model.ckpt")
+        # base_model 应该链接失败（虽然在 shared 和 user 中都存在）
+        assert not os.path.exists(base_model_link) or not os.path.islink(base_model_link), \
+            "base_model 应该因为权限错误而失败"
+    
+    def test_no_crash_on_complete_failure(self):
+        """测试所有文件链接都失败时不会崩溃，启动流程继续"""
+        from unittest.mock import patch
+        
+        # 模拟所有 symlink 操作都失败
+        with patch('services.model.linker.os.symlink', side_effect=OSError("Mock: Complete failure - disk full")):
+            # 执行 prepare_models - 应该不会抛出异常
+            try:
+                prepare_models(
+                    target_dir=self.setup.target_models_dir,
+                    user_models_dir=self.setup.user_models_dir,
+                    shared_models_dir=self.setup.shared_models_dir
+                )
+                # 成功完成（虽然所有链接都失败了）
+                success = True
+            except Exception as e:
+                success = False
+                pytest.fail(f"prepare_models 不应该崩溃，即使所有文件都失败: {e}")
+        
+        assert success, "prepare_models 应该完成而不崩溃"
+        # 目标目录应该被创建（即使是空的或只有目录结构）
+        assert os.path.isdir(self.setup.target_models_dir), "目标目录应该存在"
+        # 子目录应该被创建（即使链接失败）
+        checkpoints_dir = os.path.join(self.setup.target_models_dir, "checkpoints")
+        assert os.path.isdir(checkpoints_dir), "子目录应该被创建"
+
 class TestModelWatcher:
     """测试 model_watcher 自动同步功能
     
@@ -346,7 +419,7 @@ class TestModelWatcher:
     def teardown_method(self):
         """每个测试方法执行后的cleanup"""
         try:
-            from services.utils.model.model_watcher import stop_model_watcher
+            from services.model.watcher import stop_model_watcher
             stop_model_watcher()
         except:
             pass
@@ -354,18 +427,17 @@ class TestModelWatcher:
         if hasattr(self, 'setup') and os.path.exists(self.setup.test_dir):
             shutil.rmtree(self.setup.test_dir)
     
-    def test_watcher_started_with_enable_watch(self):
-        """测试 enable_watch=True 时，watcher 被正确启动"""
-        # 调用 prepare_models 并启用 watcher
+    def test_watcher_started(self):
+        """测试 watcher 被正确启动"""
+        # 调用 prepare_models，watcher 会自动启动
         prepare_models(
             target_dir=self.setup.comfyui_models_dir,
             user_models_dir=self.setup.user_models_dir,
-            shared_models_dir=self.setup.shared_models_dir,
-            enable_watch=True
+            shared_models_dir=self.setup.shared_models_dir
         )
         
         # 在 prepare_models 之后导入全局变量
-        from services.utils.model.model_watcher import _comfyui_watcher, _user_poller
+        from services.model.watcher import _comfyui_watcher, _user_poller
         
         # 验证 watcher 已启动
         assert _comfyui_watcher is not None, "ComfyUI watcher 应该被创建"
@@ -383,12 +455,11 @@ class TestModelWatcher:
         """
         import time
         
-        # 启动 prepare_models 并启用 watcher
+        # 启动 prepare_models，watcher 会自动启动
         prepare_models(
             target_dir=self.setup.comfyui_models_dir,
             user_models_dir=self.setup.user_models_dir,
-            shared_models_dir=self.setup.shared_models_dir,
-            enable_watch=True
+            shared_models_dir=self.setup.shared_models_dir
         )
         
         # 在 comfyui/models 中创建新的实体文件
@@ -420,8 +491,7 @@ class TestModelWatcher:
         prepare_models(
             target_dir=self.setup.comfyui_models_dir,
             user_models_dir=self.setup.user_models_dir,
-            shared_models_dir=self.setup.shared_models_dir,
-            enable_watch=True
+            shared_models_dir=self.setup.shared_models_dir
         )
         
         comfyui_file = os.path.join(self.setup.comfyui_models_dir, "checkpoints/existing.ckpt")
@@ -446,12 +516,11 @@ class TestModelWatcher:
         """
         import time
         
-        # 启动 prepare_models 并启用 watcher
+        # 启动 prepare_models，watcher 会自动启动
         prepare_models(
             target_dir=self.setup.comfyui_models_dir,
             user_models_dir=self.setup.user_models_dir,
-            shared_models_dir=self.setup.shared_models_dir,
-            enable_watch=True
+            shared_models_dir=self.setup.shared_models_dir
         )
         
         # 等待 poller 完成初始扫描（避免竞态条件）
@@ -478,8 +547,7 @@ class TestModelWatcher:
         prepare_models(
             target_dir=self.setup.comfyui_models_dir,
             user_models_dir=self.setup.user_models_dir,
-            shared_models_dir=self.setup.shared_models_dir,
-            enable_watch=True
+            shared_models_dir=self.setup.shared_models_dir
         )
         
         # 验证初始链接
@@ -503,8 +571,7 @@ class TestModelWatcher:
         prepare_models(
             target_dir=self.setup.comfyui_models_dir,
             user_models_dir=self.setup.user_models_dir,
-            shared_models_dir=self.setup.shared_models_dir,
-            enable_watch=True
+            shared_models_dir=self.setup.shared_models_dir
         )
         
         comfyui_file = os.path.join(self.setup.comfyui_models_dir, "checkpoints/existing.ckpt")
@@ -521,4 +588,46 @@ class TestModelWatcher:
         # 验证 comfyui/models 中的软链接被删除
         assert not os.path.exists(comfyui_file), "软链接应该被删除"
 
-    # 请在这里补充 on_moved case
+    
+    @pytest.mark.slow
+    def test_file_moved_from_cache_to_target_syncs_to_user(self):
+        """测试文件从 .cache 目录移动到正常目录时，watcher 自动同步到 user_models
+        
+        模拟 huggingface_cli 下载行为：先下载到 .cache，下载完成后 move 到目标目录
+        """
+        import time
+        
+        # 启动 prepare_models 并启用 watcher
+        prepare_models(
+            target_dir=self.setup.comfyui_models_dir,
+            user_models_dir=self.setup.user_models_dir,
+            shared_models_dir=self.setup.shared_models_dir
+        )
+        
+        # 创建 .cache 目录（被忽略的目录）
+        cache_dir = os.path.join(self.setup.comfyui_models_dir, "checkpoints/.cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # 在 .cache 目录中创建文件（模拟下载中）
+        cache_file = os.path.join(cache_dir, "new_model.safetensors")
+        _create_test_file(cache_file, "new_model_content")
+        
+        # 等待一下，确保 watcher 看到这个文件（但应该被忽略）
+        time.sleep(1)
+        
+        # 将文件从 .cache 移动到正常目录（模拟下载完成）
+        target_file = os.path.join(self.setup.comfyui_models_dir, "checkpoints/new_model.safetensors")
+        user_file = os.path.join(self.setup.user_models_dir, "checkpoints/new_model.safetensors")
+        
+        shutil.move(cache_file, target_file)
+        
+        # 等待 watcher 处理（文件稳定性检查 + 处理时间）
+        time.sleep(8)
+        
+        # 验证文件被同步到 user_models
+        assert os.path.exists(user_file), "文件应该被移动到 user_models"
+        assert _read_file(user_file) == "new_model_content", "文件内容应该正确"
+        
+        # 验证 comfyui/models 中现在是软链接
+        assert os.path.islink(target_file), "comfyui/models 中应该是软链接"
+        assert os.readlink(target_file) == user_file, "软链接应该指向 user_models"

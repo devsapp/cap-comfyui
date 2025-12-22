@@ -18,33 +18,33 @@ class RollingBackup:
     def __init__(
         self,
         source_dir: Optional[str] = None,
-        history_dir: Optional[str] = None,
-        source_keep_count: int = 1,
-        source_keep_minutes: int = 5,  # 24小时 = 1440分钟
-        history_keep_days: int = 1
+        archived_dir: Optional[str] = None,
+        source_keep_count: int = 1000,
+        source_keep_days: int = 1,
+        archived_keep_days: int = 5
     ):
         """
         初始化滚动备份管理器
         
         Args:
             source_dir: 源目录路径，默认为 ${MNT_DIR}/output/serverless_api
-            history_dir: 历史目录路径，默认为 ${MNT_DIR}/output/serverless_api_archived
+            archived_dir: 归档目录路径，默认为 ${MNT_DIR}/output/serverless_api_archived
             source_keep_count: 源目录最多保留的文件数量
-            source_keep_minutes: 源目录保留时间（分钟），超过此时间的文件会被移动到历史目录
-            history_keep_days: 历史目录保留时间（天），超过此时间的文件会被删除
+            source_keep_days: 源目录保留时间（天），超过此时间的文件会被移动到归档目录
+            archived_keep_days: 归档目录保留时间（天），超过此时间的文件会被删除
         """
         from constants import MNT_DIR
         
         self.mnt_dir = MNT_DIR
         self.source_dir = Path(source_dir) if source_dir else Path(MNT_DIR) / "output" / "serverless_api"
-        self.history_dir = Path(history_dir) if history_dir else Path(MNT_DIR) / "output" / "serverless_api_archived"
+        self.archived_dir = Path(archived_dir) if archived_dir else Path(MNT_DIR) / "output" / "serverless_api_archived"
         self.source_keep_count = source_keep_count
-        self.source_keep_minutes = source_keep_minutes
-        self.history_keep_days = history_keep_days
+        self.source_keep_days = source_keep_days
+        self.archived_keep_days = archived_keep_days
         
         # 确保目录存在
         self.source_dir.mkdir(parents=True, exist_ok=True)
-        self.history_dir.mkdir(parents=True, exist_ok=True)
+        self.archived_dir.mkdir(parents=True, exist_ok=True)
     
     def run(self) -> dict:
         """
@@ -56,98 +56,124 @@ class RollingBackup:
         import time as time_module
         start_time = time_module.time()
         
-        log("INFO", f"Starting rolling backup: source={self.source_dir}, history={self.history_dir}")
+        log("INFO", f"Starting rolling backup: source={self.source_dir}, archived={self.archived_dir}")
         
         try:
-            # 优化：合并移动操作，只遍历一次文件列表
-            moved_by_time, moved_by_count = self._move_old_files_optimized()
+            # 1. 移除serverless_api目录下超过时间阈值的文件
+            step_start = time_module.time()
+            moved_by_time, moved_by_count, source_count = self._move_old_files_optimized()
+            step_elapsed = time_module.time() - step_start
+            log("INFO", f"Step 1 - Move old files: {step_elapsed:.2f}s (moved: {moved_by_time + moved_by_count})")
             
-            # 清理历史目录中的过期文件
-            deleted_count = self._clean_history()
-            
-            # 统计结果（只统计文件，不包括目录）
-            source_count = len([f for f in self.source_dir.iterdir() if f.is_file()])
-            history_count = len([f for f in self.history_dir.iterdir() if f.is_file()])
+            # 2. 清理archived目录中的过期文件（同时统计文件数，避免重复遍历）
+            step_start = time_module.time()
+            deleted_count, archived_count = self._clean_archived()
+            step_elapsed = time_module.time() - step_start
+            log("INFO", f"Step 2 - Clean archived: {step_elapsed:.2f}s (deleted: {deleted_count}, remaining: {archived_count})")
             
             elapsed = time_module.time() - start_time
             result = {
                 "moved_by_time": moved_by_time,
                 "moved_by_count": moved_by_count,
-                "deleted_from_history": deleted_count,
+                "deleted_from_archived": deleted_count,
                 "source_file_count": source_count,
-                "history_file_count": history_count,
+                "archived_file_count": archived_count,
                 "elapsed_seconds": round(elapsed, 2)
             }
             
-            log("INFO", f"Lifecycle management complete in {elapsed:.2f}s. "
-                f"Source: {source_count} files, History: {history_count} files")
+            log("INFO", f"Rolling backup complete in {elapsed:.2f}s. "
+                f"Source: {source_count} files, Archived: {archived_count} files")
             
             return result
             
         except Exception as e:
             log("ERROR", f"Error during rolling backup: {str(e)}")
-            raise
     
-    def _move_old_files_optimized(self) -> Tuple[int, int]:
-        """
-        优化版本：合并时间阈值和数量限制的移动操作，只遍历一次文件列表
+    def _move_old_files_optimized(self) -> Tuple[int, int, int]:
+        """        
+        移除serverless_api目录下超过时间阈值的文件
         
+        Args:
+            self: 滚动备份管理器实例
+            
         Returns:
-            tuple[int, int]: (按时间移动的数量, 按数量移动的数量)
+            tuple[int, int, int]: (按时间移动的数量, 按数量移动的数量, 源目录剩余文件数)
         """
         moved_by_time = 0
         moved_by_count = 0
-        cutoff_time = time.time() - (self.source_keep_minutes * 60)
+        # retention_threshold: 保留时间阈值，更新时间早于此时间的文件需要移动到归档目录
+        # 例如：如果 source_keep_days=1，则 retention_threshold = 当前时间 - 1天
+        # 文件的 mtime < retention_threshold 表示文件已经超过保留时间
+        retention_threshold = time.time() - (self.source_keep_days * 24 * 60 * 60)
         
         try:
-            # 一次性获取所有文件及其修改时间
-            files_with_mtime = []
-            files_to_move_by_time = []
-            files_to_move_by_time_set = set()  # 用于快速查找
+            import time as time_module
             
-            for file_path in self.source_dir.iterdir():
-                if file_path.is_file():
-                    try:
-                        mtime = file_path.stat().st_mtime
-                        files_with_mtime.append((mtime, file_path))
+            # 一次性获取所有文件及其修改时间 - 使用高性能的scandir
+            step_start = time_module.time()
+            files_to_move_by_time = []
+            remaining_files_with_mtime = []  # 不超过时间阈值的文件（需要检查数量）
+            
+            for entry in os.scandir(self.source_dir):
+                if entry.is_file():
+                    try: 
+                        stat_info = entry.stat()
+                        mtime = stat_info.st_mtime
+                        entry_path = entry.path
+                        file_path = Path(entry_path)
                         
-                        # 检查是否超过时间阈值
-                        if mtime < cutoff_time:
+                        if mtime < retention_threshold:
+                            # 超过保留时间阈值，需要移动
                             files_to_move_by_time.append(file_path)
-                            files_to_move_by_time_set.add(file_path)
-                    except (OSError, PermissionError) as e:
-                        log("WARNING", f"Failed to stat file {file_path.name}: {str(e)}")
+                        else:
+                            # 不超过时间阈值，需要检查数量
+                            remaining_files_with_mtime.append((mtime, file_path))
+                    except (OSError, PermissionError):
+                        # 文件可能已被删除或权限不足，跳过该文件
                         continue
+            
+            scan_elapsed = time_module.time() - step_start
+            total_files = len(files_to_move_by_time) + len(remaining_files_with_mtime)
+            log("INFO", f"  - Scan directory: {scan_elapsed:.2f}s ({total_files} files)")
             
             # 批量移动超过时间阈值的文件
             if files_to_move_by_time:
+                step_start = time_module.time()
                 moved_by_time = self._batch_move_files(files_to_move_by_time)
-                if moved_by_time > 0:
-                    log("INFO", f"Moved {moved_by_time} file(s) older than {self.source_keep_minutes} minutes to history")
+                move_elapsed = time_module.time() - step_start
+                log("INFO", f"  - Move by time: {move_elapsed:.2f}s ({moved_by_time} files, {moved_by_time/move_elapsed:.0f} files/s, older than {self.source_keep_days} days)")
             
             # 检查剩余文件数量，如果仍然超过限制，按时间排序移动
-            # 使用 set 查找，避免重复 stat
-            remaining_files_with_mtime = [(mtime, f) for mtime, f in files_with_mtime if f not in files_to_move_by_time_set]
+            # 计算剩余文件数（移动前）
+            source_count = len(remaining_files_with_mtime)
             
             if len(remaining_files_with_mtime) > self.source_keep_count:
                 # 按修改时间排序（最新的在前）
                 remaining_files_with_mtime.sort(key=lambda x: x[0], reverse=True)
+                sort_elapsed = time_module.time() - step_start
+                log("INFO", f"  - Sort files: {sort_elapsed:.2f}s")
                 
                 # 移动超出的文件
+                step_start = time_module.time()
                 files_to_move_by_count = [f for _, f in remaining_files_with_mtime[self.source_keep_count:]]
                 moved_by_count = self._batch_move_files(files_to_move_by_count)
+                move_elapsed = time_module.time() - step_start
+                log("INFO", f"  - Move by count: {move_elapsed:.2f}s ({moved_by_count} files, {moved_by_count/move_elapsed:.0f} files/s)")
                 
-                if moved_by_count > 0:
-                    log("INFO", f"Moved {moved_by_count} file(s) to history (keeping {self.source_keep_count} newest)")
+                # 更新剩余文件数
+                source_count = self.source_keep_count
+            else:
+                log("INFO", f"  - No files to move by count (remaining: {source_count} <= limit: {self.source_keep_count})")
             
         except Exception as e:
             log("ERROR", f"Error moving old files: {str(e)}")
+            source_count = 0
         
-        return moved_by_time, moved_by_count
+        return moved_by_time, moved_by_count, source_count
     
     def _batch_move_files(self, files: list) -> int:
         """
-        批量移动文件（优化性能）
+        批量移动文件
         
         Args:
             files: 要移动的文件路径列表
@@ -155,46 +181,64 @@ class RollingBackup:
         Returns:
             int: 成功移动的文件数量
         """
-        moved_count = 0
+        if not files:
+            return 0
         
-        # 使用 os.rename 代替 shutil.move，在同一文件系统上更快
-        # 如果跨文件系统，fallback 到 shutil.move
+        moved_count = 0
+        failed_count = 0
+        
         for file_path in files:
             try:
-                dest_path = self.history_dir / file_path.name
-                # 尝试使用 os.rename（更快，但要求同一文件系统）
+                dest_path = self.archived_dir / file_path.name
+                # 先尝试 os.rename（同一文件系统，更快）
+                # 如果失败（跨文件系统），fallback 到 shutil.move
                 try:
                     os.rename(str(file_path), str(dest_path))
+                    moved_count += 1
                 except OSError:
                     # 跨文件系统，使用 shutil.move
-                    shutil.move(str(file_path), str(dest_path))
-                moved_count += 1
-            except Exception as e:
-                log("WARNING", f"Failed to move file {file_path.name}: {str(e)}")
+                    try:
+                        shutil.move(str(file_path), str(dest_path))
+                        moved_count += 1
+                    except Exception:
+                        failed_count += 1
+            except Exception:
+                failed_count += 1
+        
+        # 只在有失败时记录警告
+        if failed_count > 0:
+            log("WARNING", f"Failed to move {failed_count} file(s)")
         
         return moved_count
     
-    def _clean_history(self) -> int:
+    def _clean_archived(self) -> Tuple[int, int]:
         """
-        清理历史目录中超过保留时间的文件（优化版本）
+        清理归档目录中超过保留时间的文件
+        同时统计剩余文件数，避免重复遍历
         
         Returns:
-            int: 删除的文件数量
+            tuple[int, int]: (删除的文件数量, 剩余文件数量)
         """
         deleted_count = 0
-        cutoff_time = time.time() - (self.history_keep_days * 24 * 60 * 60)
+        total_files = 0
+        # retention_threshold: 保留时间阈值，修改时间早于此时间的归档文件需要删除
+        # 例如：如果 archived_keep_days=5，则 retention_threshold = 当前时间 - 5天
+        # 文件的 mtime < retention_threshold 表示文件已经超过归档保留时间
+        retention_threshold = time.time() - (self.archived_keep_days * 24 * 60 * 60)
         files_to_delete = []
         
         try:
-            # 先收集需要删除的文件
-            for file_path in self.history_dir.iterdir():
-                if file_path.is_file():
+            # 遍历归档目录，同时收集需要删除的文件和统计文件总数
+            for entry in os.scandir(self.archived_dir):
+                if entry.is_file():
+                    total_files += 1
                     try:
-                        mtime = file_path.stat().st_mtime
-                        if mtime < cutoff_time:
-                            files_to_delete.append(file_path)
+                        stat_info = entry.stat()
+                        mtime = stat_info.st_mtime
+                        if mtime < retention_threshold:
+                            files_to_delete.append(Path(entry.path))
                     except (OSError, PermissionError) as e:
-                        log("WARNING", f"Failed to stat file {file_path.name}: {str(e)}")
+                        log("DEBUG", f"Failed to stat file {entry.name}: {str(e)}")
                         continue
             
             # 批量删除
@@ -203,15 +247,19 @@ class RollingBackup:
                     file_path.unlink()
                     deleted_count += 1
                 except Exception as e:
-                    log("WARNING", f"Failed to delete file {file_path.name}: {str(e)}")
+                    log("DEBUG", f"Failed to delete file {file_path.name}: {str(e)}")
+            
+            # 计算剩余文件数
+            remaining_count = total_files - deleted_count
             
             if deleted_count > 0:
-                log("INFO", f"Deleted {deleted_count} file(s) older than {self.history_keep_days} days from history")
+                log("INFO", f"Deleted {deleted_count} file(s) older than {self.archived_keep_days} days from archived")
             
         except Exception as e:
-            log("ERROR", f"Error cleaning history: {str(e)}")
+            log("ERROR", f"Error cleaning archived: {str(e)}")
+            remaining_count = 0
         
-        return deleted_count
+        return deleted_count, remaining_count
 
 
 def main():
@@ -220,13 +268,13 @@ def main():
     
     # 支持从环境变量读取配置
     source_keep_count = int(os.getenv("SOURCE_KEEP_COUNT", "1000"))
-    source_keep_minutes = int(os.getenv("SOURCE_KEEP_MINUTES", "1440"))
-    history_keep_days = int(os.getenv("HISTORY_KEEP_DAYS", "5"))
+    source_keep_days = int(os.getenv("SOURCE_KEEP_DAYS", "1"))
+    archived_keep_days = int(os.getenv("ARCHIVED_KEEP_DAYS", "5"))
     
     backup = RollingBackup(
         source_keep_count=source_keep_count,
-        source_keep_minutes=source_keep_minutes,
-        history_keep_days=history_keep_days
+        source_keep_days=source_keep_days,
+        archived_keep_days=archived_keep_days
     )
     
     try:

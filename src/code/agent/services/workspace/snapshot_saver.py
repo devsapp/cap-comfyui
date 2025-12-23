@@ -58,6 +58,13 @@ class ComfyUISnapshotSaver(SnapshotSaver):
         from utils.logger import log
         log("INFO", "Starting compression: venv")
         file_ops.compress_with_zstd(f"{constants.WORK_DIR}/venv.tar.zst", constants.WORK_DIR, ["venv"], level=10)
+        
+        # 删除 comfyui/models 目录
+        models_dir = os.path.join(constants.COMFYUI_DIR, "models")
+        if os.path.exists(models_dir):
+            file_ops.remove(models_dir)
+            log("INFO", f"Models directory removed successfully")
+        
         log("INFO", "Starting compression: comfyui")
         file_ops.compress_with_zstd(f"{constants.WORK_DIR}/comfyui.tar.zst", constants.WORK_DIR, ["comfyui"], level=10)
         log("INFO", "Compression completed for all components")

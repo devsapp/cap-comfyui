@@ -503,7 +503,7 @@ class UserModelDirPoller:
                     # 更新软链接
                     os.unlink(comfyui_path)
                     os.symlink(source_path, comfyui_path)
-                    log("INFO", f"User model updated: {rel_path}")
+                    log("DEBUG", f"User model updated: {rel_path}")
                 else:
                     # 实体文件，不覆盖
                     log("DEBUG", f"Real file exists in ComfyUI directory, skipping: {rel_path}")

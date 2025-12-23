@@ -1,8 +1,8 @@
 # 定义变量
 REGION ?= cn-hangzhou
-COMFYUI_IMAGE = comfyui:deepgpu_1013
+COMFYUI_IMAGE = comfyui:v0.3.75
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.75-beta-deepgpu
+OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.75-beta
 
 .PHONY: upgrade
 upgrade: build upload-base

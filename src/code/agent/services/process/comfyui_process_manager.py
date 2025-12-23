@@ -13,8 +13,13 @@ from utils.logger import log
 class ComfyUIProcessManager(ProcessManager):
     """ComfyUI 进程管理器"""
     
-    HEALTH_CHECK_TIMEOUT = 2  # 健康检查超时时间（秒）
+    HEALTH_CHECK_TIMEOUT = 10  # 健康检查超时时间（秒）
     SOCKET_TIMEOUT = 1  # Socket 连接超时时间（秒）
+    MAX_CONSECUTIVE_FAILURES = 3  # 连续失败次数阈值，达到后触发重启
+    
+    def __init__(self):
+        super().__init__()
+        self._consecutive_http_failures = 0  # HTTP 健康检查连续失败计数
 
     def _is_ready(self) -> bool:
         """
@@ -35,27 +40,26 @@ class ComfyUIProcessManager(ProcessManager):
             log("DEBUG", f"Socket error during readiness check: {e}")
             return False
 
-    def _is_alive(self) -> bool:
+    def _is_process_running(self) -> bool:
         """
-        通过发送 HTTP GET 请求到后端服务来检查进程是否存活
+        检查 ComfyUI 子进程是否仍在运行（未被 OOM Killed 或其他原因终止）
+        
+        Returns:
+            bool: 如果进程仍在运行返回 True，否则返回 False
+        """
+        if self.process is None:
+            return False
+        
+        # poll() 返回 None 表示进程仍在运行，返回退出码表示进程已结束
+        return self.process.poll() is None
 
-        健康检查策略：
-        - 主动重启期间：跳过健康检查，避免误判为崩溃
-        - CPU 模式：跳过健康检查，直接返回 True
-        - 其他模式（GPU 等）：进行健康检查
-
+    def _check_http_health(self) -> bool:
+        """
+        通过发送 HTTP GET 请求检查后端服务是否响应正常
+        
         Returns:
             bool: 如果在超时时间内收到正常响应返回 True，否则返回 False
         """
-        # CPU 模式无需进行健康检查
-        if constants.COMFYUI_MODE == 'cpu':
-            return True
-
-        # 主动重启期间跳过健康检查，避免误判为崩溃
-        from services.management_service import ManagementService, BackendStatus
-        if ManagementService().status == BackendStatus.REBOOTING:
-            return True
-
         try:
             response = requests.get(
                 f'http://127.0.0.1:{constants.BACKEND_PROCESS_PORT}',
@@ -71,6 +75,56 @@ class ComfyUIProcessManager(ProcessManager):
         except requests.RequestException as e:
             log("DEBUG", f"Health check failed: {e}")
             return False
+
+    def _is_alive(self) -> bool:
+        """
+        检查 ComfyUI 进程是否存活
+
+        健康检查策略（两级判断机制）：
+        1. 进程存在性检查：如果进程不存在（如被 OOM Killed），直接判定为不存活
+        2. HTTP 健康检查：如果进程存在但 HTTP 检查连续失败 3 次，判定为不存活
+
+        特殊情况：
+        - 主动重启期间：跳过健康检查，避免误判为崩溃
+        - CPU 模式：跳过健康检查，直接返回 True
+
+        Returns:
+            bool: 如果进程存活返回 True，否则返回 False
+        """
+        # CPU 模式无需进行健康检查
+        if constants.COMFYUI_MODE == 'cpu':
+            return True
+
+        # 主动重启期间跳过健康检查，避免误判为崩溃
+        from services.management_service import ManagementService, BackendStatus
+        if ManagementService().status == BackendStatus.REBOOTING:
+            return True
+
+        # 第一级检查：进程是否存在
+        if not self._is_process_running():
+            exit_code = self.process.returncode if self.process else "unknown"
+            log("WARNING", f"ComfyUI process is not running (exit code: {exit_code}), will trigger restart")
+            self._consecutive_http_failures = 0  # 重置计数器
+            return False
+
+        # 第二级检查：HTTP 健康检查
+        if self._check_http_health():
+            # 健康检查通过，重置连续失败计数
+            if self._consecutive_http_failures > 0:
+                log("DEBUG", f"Health check recovered after {self._consecutive_http_failures} failures")
+            self._consecutive_http_failures = 0
+            return True
+        else:
+            # 健康检查失败，累计连续失败次数
+            self._consecutive_http_failures += 1
+            
+            if self._consecutive_http_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                log("WARNING", f"HTTP health check failed {self.MAX_CONSECUTIVE_FAILURES} consecutive times, will trigger restart")
+                self._consecutive_http_failures = 0  # 重置计数器，避免重启后立即再次触发
+                return False
+            
+            # 未达到阈值，暂时认为存活，等待下次检查
+            return True
 
     def _on_process_died(self):
         """

@@ -6,19 +6,13 @@ ENV COMFYUI_DIR="/root/comfyui"
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
-    git checkout "v0.3.10"
+    git checkout "v0.3.75"
 
 # add built-in custom-nodes
 RUN cd ${COMFYUI_DIR}/custom_nodes && \
     git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
     cd ComfyUI-Manager && \
-    git checkout "3.31.8"
-
-FROM python:3.10.16-slim AS models
-
-RUN apt update && apt install -y aria2
-
-COPY --from=registry.cn-hangzhou.aliyuncs.com/ohyee/fc-demo:fc-comfyui-sd1.5-v1 "/built-in/models/checkpoints/sd-v1-5-inpainting.ckpt" "/models/checkpoints/sd-v1-5-inpainting.ckpt"
+    git checkout "3.39"
 
 FROM python:3.10.16-slim AS dependencies
 
@@ -29,44 +23,17 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
     python3 -m venv venv
 
-# 安装cu124最新PyTorch及相关包
+# 安装cu128最新PyTorch及相关包
 RUN --mount=type=cache,target=/root/.cache/pip \
     venv/bin/pip install --no-cache-dir torch torchvision torchaudio \
-    --extra-index-url https://download.pytorch.org/whl/cu124
-
-# issue: 历史原因，被某插件使用 @ohyee
-RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir onnxruntime-gpu \
-    --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+    --extra-index-url https://download.pytorch.org/whl/cu128
 
 # 安装 ComfyUI源码 所使用的依赖
-## 方式一: pip install动态拉取comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致镜像层重新构建
-#ENV COMFYUI_DIR="/root/comfyui"
-#COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
-#RUN --mount=type=cache,target=/root/.cache/pip \
-#    find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir \
-
-# 方式二: pip install使用comfyui源码中requirements.txt, 缺点：每次ComfyUI版本升级都需要手动维护依赖列表
+# 方式一: pip install动态拉取comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致镜像层重新构建
+ENV COMFYUI_DIR="/root/comfyui"
+COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir \
-    torch \
-    torchsde \
-    torchvision \
-    torchaudio \
-    einops \
-    transformers>=4.28.1 \
-    tokenizers>=0.13.3 \
-    sentencepiece \
-    safetensors>=0.4.2 \
-    aiohttp \
-    pyyaml \
-    Pillow \
-    scipy \
-    tqdm \
-    psutil \
-    kornia>=0.7.1 \
-    spandrel \
-    soundfile
+   find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir 
 
 # 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
 ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
@@ -91,8 +58,6 @@ ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
-ENV BUILT_IN_DIR="/built-in"
-COPY --from=models /models ${BUILT_IN_DIR}/models
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}

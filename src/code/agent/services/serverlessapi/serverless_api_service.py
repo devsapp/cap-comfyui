@@ -634,7 +634,7 @@ class ServerlessApiService:
                     except (json.JSONDecodeError, ValueError) as json_err:
                         # 非 JSON 消息，记录日志但不中断连接
                         # 可能是心跳、ping/pong 或其他非 JSON 消息
-                        log("WARNING", f"websocket: non-JSON message received (ignored): {message}")
+                        log("WARNING", f"websocket: non-JSON message received (ignored): {message[:100]}")
                         
                         return  # 继续等待下一条消息
 
@@ -643,7 +643,7 @@ class ServerlessApiService:
                     current_prompt_id = msg.get("data", {}).get("prompt_id", "")
 
                     # 记录收到的消息类型（DEBUG 级别）
-                    log("DEBUG", f"websocket message: type={msg_type}, node={node_id}, prompt_id={current_prompt_id}, message={message}")
+                    log("DEBUG", f"websocket message: type={msg_type}, node={node_id}, prompt_id={current_prompt_id}, message={message[:100]}")
 
                     if msg_type == "status":
                         nonlocal client_id

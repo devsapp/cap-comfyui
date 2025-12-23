@@ -68,9 +68,6 @@ class ServerlessApiRoutes:
                     "error_message": "task_id is required",
                 }, 400
 
-            # 刷新磁盘缓存，确保能获取到最新状态（解决实例冻结导致的缓存问题）
-            self.service.refresh_storage_cache()
-
             return self.service.get_status_from_store(task_id)
 
         if constants.COMFYUI_MODE != "cpu":

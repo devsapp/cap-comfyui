@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 import traceback
 
 from flask import Flask, jsonify, request, Response
@@ -18,6 +19,27 @@ from .gateway_routes import GatewayRoutes
 from services.serverlessapi.serverless_api_service import ServerlessApiService
 
 
+def _start_cleanup_thread(clean_archived: bool, timeout: int = 300):
+    if constants.COMFYUI_MODE != "cpu":
+        return None
+    from services.cleanup import OutputFileCleanupService
+    cleanup_service = OutputFileCleanupService()
+
+    cleanup_thread = threading.Thread(
+        target=cleanup_service.cleanup,
+        args=(clean_archived, timeout),
+        daemon=True
+    )
+
+    cleanup_thread.start()
+    return cleanup_thread
+
+
+def _wait_cleanup_thread(cleanup_thread, timeout: int = 300):
+    if cleanup_thread:
+        cleanup_thread.join(timeout=timeout + 10)  # 等待最多timeout+10秒
+
+
 class Routes:
     def __init__(self):
         self.app = Flask(__name__)
@@ -25,7 +47,6 @@ class Routes:
         self.setup_routes()
         # 设置 Werkzeug 日志级别为 ERROR，只显示错误日志，不输出每个请求
         logging.getLogger('werkzeug').setLevel(logging.ERROR)
-    
 
     def setup_routes(self):
         # 管控API
@@ -52,6 +73,9 @@ class Routes:
             # access_key_secret = request.headers['x-fc-access-key-secret']
             # access_security_token = request.headers['x-fc-security-token']
 
+            # 执行文件清理：只清理 serverless_api（在返回前等待完成，超时5分钟）
+            cleanup_thread = _start_cleanup_thread(clean_archived=False, timeout=300)
+
             # API模式需要自动启动comfyui进程
             # TODO 防止抛出5xx导致函数计算一直重试产生大量费用
             service = ManagementService()
@@ -76,31 +100,38 @@ class Routes:
                 except Exception as e:
                     log("ERROR", f"prewarm models got exception:\n{e}")
 
+            # 等待清理线程完成
+            _wait_cleanup_thread(cleanup_thread, timeout=300)
+
             log("INFO", f"FC Initialize End RequestId: {request_id}")
             return "Function is initialized, request_id: " + request_id + "\n"
 
         @self.app.route("/pre-stop", methods=["GET"])
-        def pre_stop():            
+        def pre_stop():
             request_id = request.headers.get("x-fc-request-id", "")
             log("INFO", f"FC PreStop Start RequestId: {request_id}")
+
+            # 执行文件清理：清理 serverless_api 和 serverless_api_archived（在返回前等待完成，超时5分钟）
+            cleanup_thread = _start_cleanup_thread(clean_archived=True, timeout=300)
+
             service = ManagementService()  # singleton
-            
+
             # 若最近一次管控操作为Start或Reboot，且实例非预期销毁时，需要在pre-stop中保存工作空间从而兜底;
             # 其他情况：例如按量实例并未启动服务子进程、例如已经使用SaveAndStop保存了工作空间再销毁实例，均不需要在pre-stop中再次保存
             if not service.latest_action or service.latest_action not in (Action.START, Action.REBOOT):
                 log("INFO", "Do nothing in pre-stop")
                 log("INFO", f"FC PreStop End RequestId: {request_id}")
                 return "OK"
-            
+
             def do_save(result_queue, target_snapshot_name):
                 """在子进程中执行 save 操作"""
                 try:
                     from services.workspace.snapshot_manager import SnapshotManager
-                    
+
                     mgr = SnapshotManager()
                     # 使用主进程预生成的 snapshot_name
                     result_map = mgr.save(SnapshotManager.TYPE_DEV, snapshot_name=target_snapshot_name)
-                    
+
                     result_queue.put({"success": True, "result": result_map})
                 except Exception as e:
                     import traceback
@@ -115,20 +146,20 @@ class Routes:
             snapshot_name = f"{SnapshotManager.TYPE_DEV}-{snapshot_name_suffix}"
             result_queue = multiprocessing.Queue()
             save_process = multiprocessing.Process(target=do_save, args=(result_queue, snapshot_name))
-            
+
             try:
                 save_process.start()
                 log("INFO", f"Started save process with PID: {save_process.pid}, snapshot: {snapshot_name}")
-                
+
                 # 等待进程完成或超时
                 save_process.join(timeout=constants.PRESTOP_TIMEOUT)
-                
+
                 if save_process.is_alive():
                     # 超时：强制终止进程（子进程没有 SIGTERM 处理逻辑，直接 SIGKILL）
                     log("WARNING", f"preStop save timeout after {constants.PRESTOP_TIMEOUT}s, killing process {save_process.pid}...")
                     save_process.kill()
                     save_process.join(timeout=5)
-                    
+
                     log("INFO", f"Save process killed, cleaning up incomplete save...")
                     # 进程终止后清理未完成的保存，传入预生成的 snapshot_name
                     snapshot_mgr.cleanup_incomplete_save(snapshot_name)
@@ -156,7 +187,14 @@ class Routes:
                     snapshot_mgr.cleanup_incomplete_save(snapshot_name)
                 except Exception as cleanup_error:
                     log("ERROR", f"error during cleanup: {str(cleanup_error)}")
-            
+
+                    log("ERROR", f"error occur when preStop: {str(e)}")
+            else:
+                log("INFO", "Do nothing in pre-stop")
+
+            # 等待清理线程完成
+            _wait_cleanup_thread(cleanup_thread, timeout=300)
+
             log("INFO", f"FC PreStop End RequestId: {request_id}")
             return "OK"
 

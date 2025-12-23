@@ -67,6 +67,53 @@ setup_network() {
   fi
 }
 
+# 设置 ComfyUI Manager 配置（仅国内区域 && 非 API 模式）
+setup_comfyui_manager_config() {
+  # 仅在国内环境 && 非 API_MODE 才执行
+  if ! is_domestic_region; then
+    echo "[INFO] Non-domestic region, skipping ComfyUI Manager config setup"
+    return 0
+  fi
+  
+  if [ -n "${AUTO_LAUNCH_SNAPSHOT_NAME:-}" ]; then
+    echo "[INFO] API Mode detected, skipping ComfyUI Manager config setup"
+    return 0
+  fi
+  
+  echo "[INFO] Setting up ComfyUI Manager configuration..."
+  
+  local target_dir="${MNT_DIR}/output/default/ComfyUI-Manager"
+  local channels_file="${target_dir}/channels.list"
+  local config_file="${target_dir}/config.ini"
+  local channels_backup="${channels_file}.backup"
+  local config_backup="${config_file}.backup"
+  
+  # 确保目标目录存在
+  mkdir -p "${target_dir}"
+  
+  # 如果备份文件存在，说明已经拷贝过了，直接返回
+  if [ -f "${channels_backup}" ] && [ -f "${config_backup}" ]; then
+    echo "[INFO] Backup files already exist, skipping ComfyUI Manager config setup"
+    return 0
+  fi
+  
+  # 备份 channels.list（如果备份不存在且原文件存在）
+  if [ -f "${channels_file}" ] && [ ! -f "${channels_backup}" ]; then
+    echo "[INFO] Backing up original channels.list"
+    cp "${channels_file}" "${channels_backup}"
+  fi
+  
+  # 备份 config.ini（如果备份不存在且原文件存在）
+  if [ -f "${config_file}" ] && [ ! -f "${config_backup}" ]; then
+    echo "[INFO] Backing up original config.ini"
+    cp "${config_file}" "${config_backup}"
+  fi
+  
+  cp "${AGENT_DIR}/services/proxy/comfyui_manager_config/channels.list" "${channels_file}"
+  cp "${AGENT_DIR}/services/proxy/comfyui_manager_config/config.ini" "${config_file}"
+
+  echo "[INFO] ComfyUI Manager configuration completed"
+}
 
 MNT_DIR=${MODEL_ASSET_DIR:="/mnt/auto"}
 SKIP_SNAPSHOT_LOADING_LOWER=$(echo "${SKIP_SNAPSHOT_LOADING:-false}" | tr '[:upper:]' '[:lower:]')
@@ -89,6 +136,9 @@ echo "Using python venv, python path '$(which python)', pip path '$(which pip)'.
 
 # ==================== 网络配置 ====================
 setup_network
+
+# ==================== ComfyUI Manager 配置 ====================
+setup_comfyui_manager_config
 
 # 使用 exec 让 Python 替换 bash 成为 init 进程，方便健康检查失败时直接退出触发实例轮转
 exec python ${AGENT_DIR}/main.py

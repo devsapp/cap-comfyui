@@ -90,4 +90,5 @@ echo "Using python venv, python path '$(which python)', pip path '$(which pip)'.
 # ==================== 网络配置 ====================
 setup_network
 
-python ${AGENT_DIR}/main.py
+# 使用 exec 让 Python 替换 bash 成为 init 进程，方便健康检查失败时直接退出触发实例轮转
+exec python ${AGENT_DIR}/main.py

@@ -4,6 +4,7 @@ from typing import Optional, Dict
 
 import constants
 from utils.timer import timer
+from utils.logger import log
 
 
 class SnapshotManager:
@@ -69,19 +70,22 @@ class SnapshotManager:
         result_map["snapshot"] = target_snapshot_name
         return result_map
 
-    def save(self, snapshot_type: str) -> Dict:
+    def save(self, snapshot_type: str, snapshot_name: Optional[str] = None) -> Dict:
         """
         保存快照。
 
         Args:
             snapshot_type (str): 目标快照类型。可选值"dev"和"prod"
+            snapshot_name (str, optional): 指定快照名称。如果不提供，则自动生成。
+                                           用于 preStop 场景下主进程预先生成名称。
 
         Returns:
             Dict: 已保存的快照名称及各阶段耗时信息。
         """
 
-        snapshot_name_suffix = datetime.utcnow().strftime(constants.SNAPSHOT_PATTERN)
-        snapshot_name = f"{snapshot_type}-{snapshot_name_suffix}"
+        if snapshot_name is None:
+            snapshot_name_suffix = datetime.utcnow().strftime(constants.SNAPSHOT_PATTERN)
+            snapshot_name = f"{snapshot_type}-{snapshot_name_suffix}"
 
         from services.workspace.snapshot_saver import ComfyUISnapshotSaver
         from services.workspace.snapshot_saver import SDSnapshotSaver
@@ -100,6 +104,42 @@ class SnapshotManager:
         self.cur_snapshot_name = snapshot_name
         result_map["snapshot"] = snapshot_name
         return result_map
+
+    def cleanup_incomplete_save(self, snapshot_name: str) -> None:
+        """
+        清理未完成的快照保存。
+        在 preStop 超时时调用，清理临时压缩文件和未完成的快照目录。
+        
+        Args:
+            snapshot_name: 要清理的快照名称。
+        """
+        from utils import file_ops
+        
+        log("INFO", f"Starting cleanup of incomplete save: {snapshot_name}")
+        
+        # 清理工作目录中的临时压缩文件
+        temp_files = [
+            f"{constants.WORK_DIR}/venv.tar.zst",
+            f"{constants.WORK_DIR}/comfyui.tar.zst",
+        ]
+        
+        for temp_file in temp_files:
+            if os.path.exists(temp_file):
+                try:
+                    file_ops.remove(temp_file)
+                except Exception as e:
+                    log("WARNING", f"Failed to clean up temp file {temp_file}: {e}")
+        
+        # 清理未完成的快照目录
+        incomplete_snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
+        if os.path.exists(incomplete_snapshot_path):
+            try:
+                file_ops.remove(incomplete_snapshot_path)
+                log("INFO", f"Cleaned up incomplete snapshot directory: {incomplete_snapshot_path}")
+            except Exception as e:
+                log("ERROR", f"Failed to clean up incomplete snapshot {incomplete_snapshot_path}: {e}")
+        
+        log("INFO", "Cleanup of incomplete save completed")
 
     def prepare_link(self):
         """

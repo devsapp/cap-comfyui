@@ -1,32 +1,28 @@
+"""
+Mock ComfyUI 进程，用于测试 ProcessManager
+使用 Python 标准库实现简单的 HTTP 服务器，不依赖 flask
+"""
 import signal
 import time
 import sys
 import os
-from flask import Flask
 import threading
-from werkzeug.serving import make_server
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-app = Flask(__name__)
+
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"Mock ComfyUI server is running!")
+    
+    def log_message(self, format, *args):
+        # 静默日志，避免干扰测试输出
+        pass
+
+
 server = None
-
-
-class ServerThread(threading.Thread):
-    def __init__(self, app):
-        threading.Thread.__init__(self)
-        self.server = make_server('127.0.0.1', 8188, app)
-        self.ctx = app.app_context()
-        self.ctx.push()
-
-    def run(self):
-        self.server.serve_forever()
-
-    def shutdown(self):
-        self.server.shutdown()
-
-
-@app.route('/', methods=['GET'])
-def hello():
-    return "Flask server is running!"
 
 
 def signal_handler(signum, frame):
@@ -37,13 +33,14 @@ def signal_handler(signum, frame):
             server.shutdown()
         sys.exit(0)
     elif signum == signal.SIGHUP:
-        print("Restarting server...")
+        print("Received SIGHUP, simulating crash...")
         if server:
             server.shutdown()
-        os.execv(sys.executable, ['python3'] + sys.argv)
+        sys.exit(1)
 
 
 def main():
+    global server
     current_pid = os.getpid()
     print(f"Current process PID: {current_pid}")
 
@@ -51,32 +48,30 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGHUP, signal_handler)
 
-    # 模拟启动过程
-    print("Flask server starting...")
-    counter = 0
-    while counter < 3:
-        print(f"Flask server boot log message #{counter}")
-        counter += 1
-        time.sleep(1)
+    # 模拟启动过程（缩短启动时间以加快测试）
+    print("Mock server starting...")
+    time.sleep(0.5)
 
     try:
-        # 创建并启动服务器线程
-        global server
-        server = ServerThread(app)
-        server.start()
+        # 创建并启动服务器
+        server = HTTPServer(('127.0.0.1', 8188), SimpleHandler)
+        
+        # 在单独线程中运行服务器
+        server_thread = threading.Thread(target=server.serve_forever)
+        server_thread.daemon = True
+        server_thread.start()
+        
         print("Server is listening on port 8188")
 
         # 主线程继续输出日志
         counter = 0
         while True:
-            print(f"Flask server log message #{counter}")
+            print(f"Mock server log message #{counter}")
             counter += 1
             time.sleep(1)
 
     except Exception as e:
         print(f"Failed to start server: {e}")
-        if server:
-            server.shutdown()
         sys.exit(1)
 
 

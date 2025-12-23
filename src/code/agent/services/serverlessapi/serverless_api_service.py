@@ -165,7 +165,7 @@ class ServerlessApiService:
 
         return res.json()
 
-    def api_websocket(self, client_id: str, on_message):
+    def api_websocket(self, client_id: str, on_message, on_error=None, on_close=None):
         """
         创建 WebSocket 连接到 ComfyUI
         
@@ -174,6 +174,8 @@ class ServerlessApiService:
         Args:
             client_id: 客户端 ID，用于标识此连接
             on_message: 消息回调函数，接收 (ws, message) 参数
+            on_error: 错误回调函数，接收 (ws, error) 参数
+            on_close: 关闭回调函数，接收 (ws, close_status_code, close_msg) 参数
             
         Returns:
             WebSocketApp: WebSocket 应用实例
@@ -183,7 +185,8 @@ class ServerlessApiService:
         ws = websocket.WebSocketApp(
             f'{os.path.join(endpoint, "ws")}?clientId={client_id}',
             on_message=on_message,
-            keep_running=True,
+            on_error=on_error,
+            on_close=on_close,
         )
 
         return ws
@@ -572,6 +575,38 @@ class ServerlessApiService:
 
         return results
 
+    def _wait_for_ready(self, timeout: float = 600, poll_interval: float = 1, log_interval: float = 5):
+        """
+        等待服务状态变为 RUNNING
+        
+        当服务处于 REBOOTING 状态时，阻塞等待直到变为 RUNNING
+        
+        Args:
+            timeout: 超时时间（秒），默认 10 分钟
+            poll_interval: 轮询间隔（秒）
+            log_interval: 日志打印间隔（秒）
+            
+        Raises:
+            Exception: 等待超时时抛出异常
+        """
+        from services.management_service import ManagementService, BackendStatus
+        
+        service = ManagementService()
+        start_time = time.time()
+        last_log_time = 0
+        
+        while service.status == BackendStatus.REBOOTING:
+            elapsed = time.time() - start_time
+            if elapsed > timeout:
+                raise Exception("ComfyUI service is rebooting, timeout waiting for ready")
+            
+            # 每隔 log_interval 秒打印一次日志
+            if elapsed - last_log_time >= log_interval:
+                log("INFO", f"ComfyUI service is rebooting, waiting... ({elapsed:.1f}s)")
+                last_log_time = elapsed
+            
+            time.sleep(poll_interval)
+
     def run(
         self,
         prompt: map,
@@ -607,6 +642,9 @@ class ServerlessApiService:
         """
 
         try:
+            # 等待服务就绪（如果正在重启中）
+            self._wait_for_ready()
+            
             # 解析请求中是否存在 base64、http url 形式的图片
             prompt = self.parse_prompt(prompt)
 
@@ -617,6 +655,21 @@ class ServerlessApiService:
             prompt_id = ""
 
             ws_err = None
+            ws_closed = threading.Event()  # 用于检测 WebSocket 连接是否已关闭
+
+            def on_ws_error(ws, error):
+                """WebSocket 错误回调"""
+                nonlocal ws_err
+                log("ERROR", f"WebSocket error with ComfyUI process: {error}")
+                ws_err = error
+                ws_closed.set()
+
+            def on_ws_close(ws, close_status_code, close_msg):
+                """WebSocket 关闭回调"""
+                # 正常关闭：状态码为 None（客户端主动关闭）或 1000（正常关闭）
+                if close_status_code is not None and close_status_code != 1000:
+                    log("WARNING", f"WebSocket closed abnormally with ComfyUI process: status={close_status_code}, msg={close_msg}")
+                ws_closed.set()
 
             def on_message(ws: websocket.WebSocket, message: str):
                 try:
@@ -708,14 +761,20 @@ class ServerlessApiService:
                     ws.close()
 
             log("DEBUG", "creating websocket connection to ComfyUI")
-            ws = self.api_websocket(client_id, on_message)
+            ws = self.api_websocket(client_id, on_message, on_error=on_ws_error, on_close=on_ws_close)
             ws_threading = threading.Thread(target=ws.run_forever)
             ws_threading.start()
             log("DEBUG", "websocket thread started")
 
             # 提交出图任务
             log("DEBUG", "waiting for client_id from websocket status message")
+            client_id_timeout = 30  # 等待 client_id 的超时时间（秒）
+            client_id_start = time.time()
             while client_id == "":
+                if ws_closed.is_set():
+                    raise Exception("WebSocket connection closed before receiving client_id from ComfyUI process")
+                if time.time() - client_id_start > client_id_timeout:
+                    raise Exception(f"Timeout waiting for WebSocket client_id from ComfyUI process after {client_id_timeout}s")
                 time.sleep(0.1)
             log("DEBUG", f"got client_id: {client_id}")
 
@@ -764,6 +823,7 @@ class ServerlessApiService:
             execution_time = time.time() - execution_start_time
             log("INFO", f"workflow completed (prompt_id={prompt_id}, execution_time={execution_time:.2f}s, task_id={task_id})")
 
+            # WebSocket 连接异常断开（如 ComfyUI 进程崩溃）
             if ws_err:
                 log("ERROR", f"websocket error occurred: {ws_err}")
                 raise ws_err

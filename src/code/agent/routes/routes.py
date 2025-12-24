@@ -112,7 +112,7 @@ class Routes:
             log("INFO", f"FC PreStop Start RequestId: {request_id}")
 
             # 执行文件清理：清理 serverless_api 和 serverless_api_archived（在返回前等待完成，超时5分钟）
-            cleanup_thread = _start_cleanup_thread(clean_archived=True, timeout=300)
+            # cleanup_thread = _start_cleanup_thread(clean_archived=True, timeout=300)
 
             service = ManagementService()  # singleton
 
@@ -191,13 +191,11 @@ class Routes:
                     snapshot_mgr.cleanup_incomplete_save(snapshot_name)
                 except Exception as cleanup_error:
                     log("ERROR", f"error during cleanup: {str(cleanup_error)}")
-
-                    log("ERROR", f"error occur when preStop: {str(e)}")
             else:
-                log("INFO", "Do nothing in pre-stop")
+                log("INFO", "save completed successfully")
 
             # 等待清理线程完成
-            _wait_cleanup_thread(cleanup_thread, timeout=300)
+            # _wait_cleanup_thread(cleanup_thread, timeout=300)
 
             log("INFO", f"FC PreStop End RequestId: {request_id}")
             return "OK"

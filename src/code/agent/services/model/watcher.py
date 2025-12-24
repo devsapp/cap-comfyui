@@ -224,9 +224,20 @@ class ComfyUIModelDirWatcher:
             # 确保目标目录存在
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             
+            # 检查目标文件是否已存在
+            if os.path.exists(target_path):
+                # 目标文件已存在，说明之前已经 sync 过了，直接跳过
+                log("DEBUG", f"Target file already exists, skipping sync: {rel_path}")
+                return
+            
             # 移动文件到用户目录
             import shutil
-            shutil.move(source_path, target_path)
+            try:
+                shutil.move(source_path, target_path)
+            except FileExistsError:
+                # 在检查和移动之间，文件可能已经被其他线程创建（竞态条件）
+                log("DEBUG", f"Target file already exists (race condition), skipping sync: {rel_path}")
+                return
             
             # 创建软链接
             os.symlink(target_path, source_path)
@@ -500,10 +511,16 @@ class UserModelDirPoller:
             # 如果目标已存在
             if os.path.exists(comfyui_path) or os.path.islink(comfyui_path):
                 if os.path.islink(comfyui_path):
-                    # 更新软链接
-                    os.unlink(comfyui_path)
-                    os.symlink(source_path, comfyui_path)
-                    log("DEBUG", f"User model updated: {rel_path}")
+                    # 检查软链接是否已指向正确的目标
+                    current_target = os.readlink(comfyui_path)
+                    if current_target == source_path:
+                        # 软链接已经指向正确的目标，跳过
+                        log("DEBUG", f"User model symlink already correct, skipping: {rel_path}")
+                    else:
+                        # 软链接指向错误的目标，需要更新
+                        os.unlink(comfyui_path)
+                        os.symlink(source_path, comfyui_path)
+                        log("DEBUG", f"User model symlink updated: {rel_path}")
                 else:
                     # 实体文件，不覆盖
                     log("DEBUG", f"Real file exists in ComfyUI directory, skipping: {rel_path}")

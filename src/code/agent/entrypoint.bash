@@ -82,33 +82,56 @@ setup_comfyui_manager_config() {
   
   echo "[INFO] Setting up ComfyUI Manager configuration..."
   
-  local target_dir="${MNT_DIR}/output/default/ComfyUI-Manager"
+  local target_dir=""
+
+  # manager_dir - 新版本 ComfyUI Manager 配置目录（output/__manager）
+  local manager_dir="${MNT_DIR}/output/__manager"
+  
+  # legacy_manager_dir - 旧版本 ComfyUI Manager 配置目录
+  local legacy_manager_dir="${MNT_DIR}/output/default/ComfyUI-Manager"
+  
+  # 优先检查 manager_dir（新版本）
+  if [ -f "${manager_dir}/channels.list" ] || [ -f "${manager_dir}/config.ini" ]; then
+    echo "[INFO] Found ComfyUI Manager config in ${manager_dir}"
+    target_dir="${manager_dir}"
+  # 其次检查 legacy_manager_dir（旧版本）
+  elif [ -f "${legacy_manager_dir}/channels.list" ] || [ -f "${legacy_manager_dir}/config.ini" ]; then
+    echo "[INFO] Found ComfyUI Manager config in ${legacy_manager_dir}"
+    target_dir="${legacy_manager_dir}"
+  else
+    # 两个目录都没有配置文件，默认使用 manager_dir
+    echo "[INFO] No existing ComfyUI Manager config found, using default location ${manager_dir}"
+    target_dir="${manager_dir}"
+  fi
+  
   local channels_file="${target_dir}/channels.list"
   local config_file="${target_dir}/config.ini"
   local channels_backup="${channels_file}.backup"
   local config_backup="${config_file}.backup"
   
-  # 确保目标目录存在
-  mkdir -p "${target_dir}"
-  
-  # 如果备份文件存在，说明已经拷贝过了，直接返回
-  if [ -f "${channels_backup}" ] && [ -f "${config_backup}" ]; then
+  # 如果备份文件已存在，说明已经设置过了，直接返回
+  if [ -f "${channels_backup}" ] || [ -f "${config_backup}" ]; then
     echo "[INFO] Backup files already exist, skipping ComfyUI Manager config setup"
     return 0
   fi
   
+  # 确保目标目录存在
+  mkdir -p "${target_dir}"
+  
   # 备份 channels.list（如果备份不存在且原文件存在）
   if [ -f "${channels_file}" ] && [ ! -f "${channels_backup}" ]; then
-    echo "[INFO] Backing up original channels.list"
+    echo "[INFO] Backing up original channels.list to ${channels_backup}"
     cp "${channels_file}" "${channels_backup}"
   fi
   
   # 备份 config.ini（如果备份不存在且原文件存在）
   if [ -f "${config_file}" ] && [ ! -f "${config_backup}" ]; then
-    echo "[INFO] Backing up original config.ini"
+    echo "[INFO] Backing up original config.ini to ${config_backup}"
     cp "${config_file}" "${config_backup}"
   fi
   
+  # 拷贝我们的配置文件
+  echo "[INFO] Copying custom ComfyUI Manager configuration to ${target_dir}"
   cp "${AGENT_DIR}/services/proxy/comfyui_manager_config/channels.list" "${channels_file}"
   cp "${AGENT_DIR}/services/proxy/comfyui_manager_config/config.ini" "${config_file}"
 

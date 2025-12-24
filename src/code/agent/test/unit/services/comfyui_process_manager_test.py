@@ -25,10 +25,8 @@ ComfyUI Process Manager 测试用例
    - test_wait_until_ready_timeout: 启动超时处理
 
 2. 健康检查测试：
-   - test_http_health_check_consecutive_failures: HTTP 连续失败检测
-   - test_http_health_check_recovery: HTTP 健康检查恢复
-   - test_http_health_check_timeout: HTTP 响应超时
-   - test_check_http_health_method: HTTP 健康检查方法
+   - test_port_check_consecutive_failures: 端口检查连续失败检测
+   - test_port_check_recovery: 端口检查恢复
 
 3. 进程状态测试：
    - test_process_crash_detection: 进程崩溃检测
@@ -46,9 +44,7 @@ ComfyUI Process Manager 测试用例
 4. 确保端口 8188 未被占用：lsof -i :8188
 
 Mock 进程说明：
-- mock_comfyui_process.py: 健康的 HTTP 服务器（返回 200）
-- mock_unhealthy_process.py: 不健康的服务器（返回 500）
-- mock_slow_response_process.py: 响应缓慢的服务器（超时测试）
+- mock_comfyui_process.py: 健康的 HTTP 服务器（监听端口 8188）
 - mock_crash_process.py: 启动后立即崩溃的进程（OOM 模拟）
 
 故障排查：
@@ -217,20 +213,18 @@ def test_wait_until_ready_timeout(process_manager):
     script_path.unlink()
 
 
-def test_http_health_check_consecutive_failures():
+def test_port_check_consecutive_failures():
     """
-    测试 HTTP 健康检查连续失败达到阈值（MAX_CONSECUTIVE_FAILURES = 3）
+    测试端口检查连续失败达到阈值（MAX_CONSECUTIVE_FAILURES = 3）
     
-    场景：进程运行正常（端口监听），但 HTTP 返回非 200 状态码
+    场景：进程运行正常，但端口不可连接（模拟服务挂起）
     预期：连续失败 3 次后，_is_alive() 返回 False
     """
-    script_path = Path(__file__).parent / "mock_unhealthy_process.py"
-    
-    # 不使用 fixture，避免 mock _is_alive
     mgr = ComfyUIProcessManager()
+    script_path = Path(__file__).parent / "mock_comfyui_process.py"
     
     try:
-        # 启动不健康的进程（返回 500）
+        # 启动进程
         command = ['python3', str(script_path)]
         mgr.start(command)
         
@@ -243,20 +237,22 @@ def test_http_health_check_consecutive_failures():
         
         assert mgr._is_ready() is True
         
-        # 第一次检查：HTTP 失败，但未达到阈值，仍然存活
-        result1 = mgr._is_alive()
-        assert result1 is True
-        assert mgr._consecutive_http_failures == 1
-        
-        # 第二次检查：HTTP 失败，但未达到阈值，仍然存活
-        result2 = mgr._is_alive()
-        assert result2 is True
-        assert mgr._consecutive_http_failures == 2
-        
-        # 第三次检查：HTTP 失败，达到阈值，判定为不存活
-        result3 = mgr._is_alive()
-        assert result3 is False
-        assert mgr._consecutive_http_failures == 0  # 计数器被重置
+        # 模拟端口检查失败（通过 mock _is_ready）
+        with patch.object(mgr, '_is_ready', return_value=False):
+            # 第一次检查：端口失败，但未达到阈值，仍然存活
+            result1 = mgr._is_alive()
+            assert result1 is True
+            assert mgr._consecutive_failures == 1
+            
+            # 第二次检查：端口失败，但未达到阈值，仍然存活
+            result2 = mgr._is_alive()
+            assert result2 is True
+            assert mgr._consecutive_failures == 2
+            
+            # 第三次检查：端口失败，达到阈值，判定为不存活
+            result3 = mgr._is_alive()
+            assert result3 is False
+            assert mgr._consecutive_failures == 0  # 计数器被重置
         
     finally:
         if mgr.process:
@@ -264,71 +260,18 @@ def test_http_health_check_consecutive_failures():
             time.sleep(1)
 
 
-def test_http_health_check_recovery():
+def test_port_check_recovery():
     """
-    测试 HTTP 健康检查失败后恢复
+    测试端口检查失败后恢复
     
-    场景：HTTP 健康检查失败 2 次（未达到阈值），然后恢复正常
+    场景：端口检查失败 2 次（未达到阈值），然后恢复正常
     预期：恢复后计数器被重置为 0
     """
     mgr = ComfyUIProcessManager()
-    script_unhealthy = Path(__file__).parent / "mock_unhealthy_process.py"
-    script_healthy = Path(__file__).parent / "mock_comfyui_process.py"
+    script_path = Path(__file__).parent / "mock_comfyui_process.py"
     
     try:
-        # 启动不健康的进程
-        command = ['python3', str(script_unhealthy)]
-        mgr.start(command)
-        
-        # 手动等待端口就绪，不启动健康检查线程
-        start_time = time.time()
-        while time.time() - start_time < 10:
-            if mgr._is_ready():
-                break
-            time.sleep(1)
-        
-        # 模拟 2 次失败
-        assert mgr._is_alive() is True
-        assert mgr._consecutive_http_failures == 1
-        assert mgr._is_alive() is True
-        assert mgr._consecutive_http_failures == 2
-        
-        # 停止不健康的进程，启动健康的进程
-        mgr.stop()
-        time.sleep(1)
-        
-        command = ['python3', str(script_healthy)]
-        mgr.start(command)
-        
-        # 手动等待端口就绪
-        start_time = time.time()
-        while time.time() - start_time < 10:
-            if mgr._is_ready():
-                break
-            time.sleep(1)
-        
-        # 健康检查应该通过，计数器重置
-        assert mgr._is_alive() is True
-        assert mgr._consecutive_http_failures == 0
-        
-    finally:
-        if mgr.process:
-            mgr.stop()
-            time.sleep(1)
-
-
-def test_http_health_check_timeout():
-    """
-    测试 HTTP 健康检查超时
-    
-    场景：进程响应缓慢，超过健康检查超时时间（10秒）
-    预期：健康检查失败，连续失败计数增加
-    """
-    mgr = ComfyUIProcessManager()
-    script_path = Path(__file__).parent / "mock_slow_response_process.py"
-    
-    try:
-        # 启动响应缓慢的进程
+        # 启动进程
         command = ['python3', str(script_path)]
         mgr.start(command)
         
@@ -339,9 +282,16 @@ def test_http_health_check_timeout():
                 break
             time.sleep(1)
         
-        # 健康检查会超时，但进程仍在运行
-        assert mgr._is_alive() is True  # 第一次失败，未达到阈值
-        assert mgr._consecutive_http_failures == 1
+        # 模拟 2 次端口检查失败
+        with patch.object(mgr, '_is_ready', return_value=False):
+            assert mgr._is_alive() is True
+            assert mgr._consecutive_failures == 1
+            assert mgr._is_alive() is True
+            assert mgr._consecutive_failures == 2
+        
+        # 端口恢复正常（移除 mock）
+        assert mgr._is_alive() is True
+        assert mgr._consecutive_failures == 0  # 计数器重置
         
     finally:
         if mgr.process:
@@ -409,52 +359,6 @@ def test_is_ready_port_check(process_manager):
     
     # 进程停止后，端口不再监听
     assert process_manager._is_ready() is False
-
-
-def test_check_http_health_method():
-    """
-    测试 _check_http_health() 方法
-    
-    验证该方法能够正确判断 HTTP 服务是否健康
-    """
-    mgr = ComfyUIProcessManager()
-    script_healthy = Path(__file__).parent / "mock_comfyui_process.py"
-    script_unhealthy = Path(__file__).parent / "mock_unhealthy_process.py"
-    
-    try:
-        # 测试健康的服务器
-        command = ['python3', str(script_healthy)]
-        mgr.start(command)
-        
-        # 手动等待端口就绪
-        start_time = time.time()
-        while time.time() - start_time < 10:
-            if mgr._is_ready():
-                break
-            time.sleep(1)
-        
-        assert mgr._check_http_health() is True
-        
-        mgr.stop()
-        time.sleep(1)
-        
-        # 测试不健康的服务器
-        command = ['python3', str(script_unhealthy)]
-        mgr.start(command)
-        
-        # 手动等待端口就绪
-        start_time = time.time()
-        while time.time() - start_time < 10:
-            if mgr._is_ready():
-                break
-            time.sleep(1)
-        
-        assert mgr._check_http_health() is False
-        
-    finally:
-        if mgr.process:
-            mgr.stop()
-            time.sleep(1)
 
 
 @patch('constants.COMFYUI_MODE', 'cpu')

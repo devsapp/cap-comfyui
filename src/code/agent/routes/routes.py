@@ -116,10 +116,14 @@ class Routes:
 
             service = ManagementService()  # singleton
 
-            # 若最近一次管控操作为Start或Reboot，且实例非预期销毁时，需要在pre-stop中保存工作空间从而兜底;
-            # 其他情况：例如按量实例并未启动服务子进程、例如已经使用SaveAndStop保存了工作空间再销毁实例，均不需要在pre-stop中再次保存
-            if not service.latest_action or service.latest_action not in (Action.START, Action.REBOOT):
-                log("INFO", "Do nothing in pre-stop")
+            # 只有在 RUNNING 或 REBOOTING 状态下才需要在 pre-stop 中保存工作空间，因为这种状态下实例直接销毁只有在实例非预期轮转时才会出现
+            # 其他状态（STOPPED、STARTING、SAVING、STOPPING）不需要保存：
+            # - STOPPED: 服务未启动，无需保存
+            # - STARTING: 服务启动中，尚未就绪，无需保存
+            # - SAVING: 已经在保存中，无需重复保存
+            # - STOPPING: 已经在停止中，通常是 SaveAndStop 触发，已保存过
+            if service.status not in (BackendStatus.RUNNING, BackendStatus.REBOOTING):
+                log("INFO", f"Do nothing in pre-stop, current status: {service.status.value}")
                 log("INFO", f"FC PreStop End RequestId: {request_id}")
                 return "OK"
 

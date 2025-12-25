@@ -23,6 +23,7 @@
 import os
 import time
 import threading
+import shutil
 import constants
 
 from typing import Optional, Dict
@@ -30,6 +31,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 from utils.logger import log
+from services.model.linker import _is_atomic_item, _get_item_depth
 
 
 # 配置常量
@@ -43,8 +45,8 @@ IGNORE_PATTERNS = {
 IGNORE_DIRS = {'.locks', '.cache', '.git', '__pycache__'}
 
 # 文件稳定性检查配置
-STABILITY_TIMEOUT = 5  # 文件必须5秒内无变化才处理（秒）
-STABILITY_CHECK_INTERVAL = 2  # 每2秒检查一次稳定性（秒）
+STABILITY_TIMEOUT = 10  # 文件必须5秒内无变化才处理（秒）
+STABILITY_CHECK_INTERVAL = 5  # 每10秒检查一次稳定性（秒）
 
 # 用户目录轮询配置
 USER_DIR_POLL_INTERVAL = 30  # 扫描间隔（秒）
@@ -183,7 +185,7 @@ class ComfyUIModelDirWatcher:
         # 检查文件大小是否稳定
         try:
             size1 = os.path.getsize(file_path)
-            time.sleep(0.5)
+            time.sleep(STABILITY_TIMEOUT)
             size2 = os.path.getsize(file_path)
             
             if size1 != size2:
@@ -206,11 +208,22 @@ class ComfyUIModelDirWatcher:
             return True
     
     def _sync_to_user_dir(self, source_path: str) -> None:
-        """将 ComfyUI 模型目录中的文件同步到用户目录"""
+        """将 ComfyUI 模型目录中的实体文件/目录同步到用户目录
+        
+        目标：持久化保存用户在 ComfyUI 中下载的模型
+        
+        处理逻辑：
+        1. 模型类型目录（深度=1的目录，如 checkpoints/）：
+           - 在 user_dir 创建对应目录（不移动，保持 ComfyUI 的目录结构）
+        
+        2. 原子 item（深度=1的文件 或 深度=2的文件/目录）：
+           - 移动到 user_dir（持久化保存）
+           - 在 comfyui_dir 原位置创建软链接（ComfyUI 继续可用）
+        """
         try:
             # 如果已经是软链接，跳过（可能已经被处理过）
             if os.path.islink(source_path):
-                log("DEBUG", f"File is already a symlink, skipping: {source_path}")
+                log("DEBUG", f"Item is already a symlink, skipping: {source_path}")
                 return
             
             # 规范化路径（解析符号链接），避免 macOS 上 /var -> /private/var 导致的路径问题
@@ -221,7 +234,16 @@ class ComfyUIModelDirWatcher:
             rel_path = os.path.relpath(normalized_source, normalized_base)
             target_path = os.path.join(self.user_models_dir, rel_path)
             
-            # 确保目标目录存在
+            # 深度=1的目录特殊处理：只在 user_dir 创建目录，不移动
+            if os.path.isdir(source_path) and _get_item_depth(self.comfyui_models_dir, source_path) == 1:
+                os.makedirs(target_path, exist_ok=True)
+                log("INFO", f"Type directory synced to user directory: {rel_path}")
+                return
+            
+            # 其他所有原子 item：移动到 user_dir 并创建软链接
+            is_directory = os.path.isdir(source_path)
+            
+            # 确保目标父目录存在
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             
             # 检查目标文件是否已存在
@@ -231,7 +253,6 @@ class ComfyUIModelDirWatcher:
                 return
             
             # 移动文件到用户目录
-            import shutil
             try:
                 shutil.move(source_path, target_path)
             except FileExistsError:
@@ -239,13 +260,14 @@ class ComfyUIModelDirWatcher:
                 log("DEBUG", f"Target file already exists (race condition), skipping sync: {rel_path}")
                 return
             
-            # 创建软链接
+            # 在 comfyui_dir 创建软链接
             os.symlink(target_path, source_path)
             
-            log("INFO", f"File synced to user directory: {rel_path}")
+            item_type = "directory" if is_directory else "file"
+            log("INFO", f"Model {item_type} synced to user directory: {rel_path}")
             
         except Exception as e:
-            log("ERROR", f"Failed to sync file to user directory: {e}")
+            log("ERROR", f"Failed to sync item to user directory: {e}")
             raise
     
     class _ComfyUIEventHandler(FileSystemEventHandler):
@@ -263,57 +285,55 @@ class ComfyUIModelDirWatcher:
             self.pending_lock = pending_lock
         
         def on_created(self, event: FileSystemEvent) -> None:
-            """文件创建事件"""
-            if event.is_directory:
-                return
-            
-            file_path = event.src_path
+            """文件/目录创建事件"""
+            item_path = event.src_path
             
             # 过滤：忽略临时文件和不关心的文件
-            if self._should_ignore(file_path):
-                log("DEBUG", f"Ignoring file: {os.path.basename(file_path)}")
+            if self._should_ignore(item_path):
+                log("DEBUG", f"Ignoring item: {os.path.basename(item_path)}")
                 return
             
-            # 检查是否是实体文件（不是软链接）
-            if not os.path.islink(file_path):
-                # 实体文件 → 加入待处理队列
+            # 只处理原子 item（深度=1的文件 或 深度=2的文件/目录）
+            if not _is_atomic_item(self.comfyui_models_dir, item_path):
+                log("DEBUG", f"Ignoring non-atomic item: {os.path.basename(item_path)}")
+                return
+            
+            # 检查是否是实体（不是软链接）
+            if not os.path.islink(item_path):
+                # 实体文件或目录 → 加入待处理队列
                 with self.pending_lock:
-                    self.pending_files[file_path] = time.time()
-                log("DEBUG", f"New real file detected, adding to pending queue: {os.path.basename(file_path)}")
+                    if item_path not in self.pending_files:
+                        self.pending_files[item_path] = time.time()
+                        item_type = "directory" if os.path.isdir(item_path) else "file"
+                        log("DEBUG", f"New real {item_type} detected, adding to pending queue: {os.path.basename(item_path)}")
+                    else:
+                        log("DEBUG", f"Item already in queue, skipping: {os.path.basename(item_path)}")
         
         def on_deleted(self, event: FileSystemEvent) -> None:
-            """文件删除事件"""
-            if event.is_directory:
-                return
+            """文件/目录删除事件"""
+            item_path = event.src_path
             
-            file_path = event.src_path
-            
-            # 如果文件在待处理队列中，移除
+            # 如果在待处理队列中，移除
             with self.pending_lock:
-                if file_path in self.pending_files:
-                    del self.pending_files[file_path]
-                    log("DEBUG", f"File deleted, removing from queue: {os.path.basename(file_path)}")
+                if item_path in self.pending_files:
+                    del self.pending_files[item_path]
+                    log("DEBUG", f"Item deleted, removing from queue: {os.path.basename(item_path)}")
         
         def on_modified(self, event: FileSystemEvent) -> None:
-            """文件修改事件"""
-            if event.is_directory:
-                return
+            """文件/目录修改事件"""
+            item_path = event.src_path
             
-            file_path = event.src_path
-            
-            # 如果文件在待处理队列中，更新最后修改时间
+            # 如果在待处理队列中，更新最后修改时间
             with self.pending_lock:
-                if file_path in self.pending_files:
-                    self.pending_files[file_path] = time.time()
+                if item_path in self.pending_files:
+                    self.pending_files[item_path] = time.time()
         
         def on_moved(self, event: FileSystemEvent) -> None:
-            """文件移动事件
+            """文件/目录移动事件
             
-            处理文件从 .cache 或其他被忽略的目录移动到正常目录的情况
+            处理从 .cache 或其他被忽略的目录移动到正常目录的情况
             （例如 huggingface_cli 下载时会先下载到 .cache 再 move 到目标目录）
             """
-            if event.is_directory:
-                return
             
             dest_path = event.dest_path
             src_path = event.src_path
@@ -325,11 +345,14 @@ class ComfyUIModelDirWatcher:
             # 如果文件从被忽略的位置移动到不被忽略的位置，视为新文件创建
             if src_should_ignore and not dest_should_ignore:
                 log("DEBUG", f"File moved from ignored location to target, treating as new file: {os.path.basename(dest_path)}")
-                # 检查是否是实体文件（不是软链接）
-                if not os.path.islink(dest_path):
-                    with self.pending_lock:
-                        self.pending_files[dest_path] = time.time()
-                    log("DEBUG", f"New real file detected (moved), adding to pending queue: {os.path.basename(dest_path)}")
+                # 只处理原子 item
+                if _is_atomic_item(self.comfyui_models_dir, dest_path):
+                    # 检查是否是实体文件（不是软链接）
+                    if not os.path.islink(dest_path):
+                        with self.pending_lock:
+                            if dest_path not in self.pending_files:
+                                self.pending_files[dest_path] = time.time()
+                                log("DEBUG", f"New real file detected (moved), adding to pending queue: {os.path.basename(dest_path)}")
             # 如果在正常位置之间移动，更新队列中的路径
             elif not src_should_ignore and not dest_should_ignore:
                 with self.pending_lock:
@@ -447,68 +470,97 @@ class UserModelDirPoller:
         log("DEBUG", "User directory poller loop stopped")
     
     def _initial_scan(self) -> None:
-        """初始扫描：记录所有已存在的文件"""
+        """初始扫描：记录所有原子模型 item（深度=1和深度=2的文件和目录）"""
         try:
             for root, dirs, files in os.walk(self.user_models_dir):
+                # 记录原子模型文件（深度=2）
                 for filename in files:
                     filepath = os.path.join(root, filename)
-                    try:
-                        mtime = os.path.getmtime(filepath)
-                        self.known_files[filepath] = mtime
-                    except OSError:
-                        pass
-            log("DEBUG", f"Initial scan completed: {len(self.known_files)} files found")
+                    if _is_atomic_item(self.user_models_dir, filepath):
+                        try:
+                            mtime = os.path.getmtime(filepath)
+                            self.known_files[filepath] = mtime
+                        except OSError:
+                            pass
+                
+                # 记录原子模型目录（深度=2）
+                for dirname in dirs:
+                    dirpath = os.path.join(root, dirname)
+                    if _is_atomic_item(self.user_models_dir, dirpath):
+                        try:
+                            mtime = os.path.getmtime(dirpath)
+                            self.known_files[dirpath] = mtime
+                        except OSError:
+                            pass
+            log("DEBUG", f"Initial scan completed: {len(self.known_files)} atomic items found")
         except Exception as e:
             log("ERROR", f"Initial scan failed: {e}")
     
     def _check_changes(self) -> None:
-        """检查文件变化"""
-        current_files = {}
+        """检查原子模型 item 的变化（深度=1和深度=2的文件和目录）
         
-        # 扫描当前所有文件
+        只检测新增和删除，不检测内容变化（软链接会自动反映内容变化）
+        """
+        current_items = {}
+        
+        # 扫描当前所有原子模型 item
         try:
             for root, dirs, files in os.walk(self.user_models_dir):
+                # 扫描原子模型文件（深度=2）
                 for filename in files:
                     filepath = os.path.join(root, filename)
-                    try:
-                        mtime = os.path.getmtime(filepath)
-                        current_files[filepath] = mtime
-                    except OSError:
-                        pass
+                    if _is_atomic_item(self.user_models_dir, filepath):
+                        try:
+                            mtime = os.path.getmtime(filepath)
+                            current_items[filepath] = mtime
+                        except OSError:
+                            pass
+                
+                # 扫描原子模型目录（深度=2）
+                for dirname in dirs:
+                    dirpath = os.path.join(root, dirname)
+                    if _is_atomic_item(self.user_models_dir, dirpath):
+                        try:
+                            mtime = os.path.getmtime(dirpath)
+                            current_items[dirpath] = mtime
+                        except OSError:
+                            pass
         except Exception as e:
             log("ERROR", f"Directory scan failed: {e}")
             return
         
-        # 检测新增或修改的文件
-        for filepath, mtime in current_files.items():
-            if filepath not in self.known_files:
-                # 新增文件
-                log("DEBUG", f"New file detected in user directory: {os.path.basename(filepath)}")
-                self._sync_to_comfyui(filepath)
-            elif mtime > self.known_files[filepath]:
-                # 文件被修改（重新创建软链接）
-                log("DEBUG", f"Modified file detected in user directory: {os.path.basename(filepath)}")
-                self._sync_to_comfyui(filepath)
+        # 检测新增的项
+        for itempath in current_items.keys():
+            if itempath not in self.known_files:
+                # 新增项：需要创建软链接
+                item_name = os.path.basename(itempath)
+                item_type = "directory" if os.path.isdir(itempath) else "file"
+                log("DEBUG", f"New {item_type} detected in user directory: {item_name}")
+                self._sync_to_comfyui(itempath)
+            # 注意：已存在的项不处理
+            # 文件内容变化不需要更新软链接（软链接会自动反映内容变化）
         
-        # 检测删除的文件
-        removed_files = set(self.known_files.keys()) - set(current_files.keys())
-        for filepath in removed_files:
-            log("DEBUG", f"Deleted file detected in user directory: {os.path.basename(filepath)}")
-            self._remove_from_comfyui(filepath)
+        # 检测删除的项
+        removed_items = set(self.known_files.keys()) - set(current_items.keys())
+        for itempath in removed_items:
+            item_name = os.path.basename(itempath)
+            log("DEBUG", f"Deleted item detected in user directory: {item_name}")
+            self._remove_from_comfyui(itempath)
         
-        # 更新已知文件列表
-        self.known_files = current_files
+        # 更新已知项列表
+        self.known_files = current_items
     
     def _sync_to_comfyui(self, source_path: str) -> None:
-        """将用户目录中的文件同步到 ComfyUI 目录（创建软链接）"""
+        """将用户目录中的原子 item 同步到 ComfyUI 目录（创建软链接）"""
         try:
             rel_path = os.path.relpath(source_path, self.user_models_dir)
             comfyui_path = os.path.join(self.comfyui_models_dir, rel_path)
+            item_type = "directory" if os.path.isdir(source_path) else "file"
             
-            # 确保目标目录存在
+            # 确保目标父目录存在
             os.makedirs(os.path.dirname(comfyui_path), exist_ok=True)
             
-            # 如果目标已存在
+            # 检查目标是否已存在
             if os.path.exists(comfyui_path) or os.path.islink(comfyui_path):
                 if os.path.islink(comfyui_path):
                     # 检查软链接是否已指向正确的目标
@@ -527,7 +579,7 @@ class UserModelDirPoller:
             else:
                 # 创建新软链接
                 os.symlink(source_path, comfyui_path)
-                log("INFO", f"User model linked: {rel_path}")
+                log("INFO", f"User model {item_type} linked: {rel_path}")
                 
         except Exception as e:
             log("ERROR", f"Failed to sync user model to ComfyUI directory: {e}")

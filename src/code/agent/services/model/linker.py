@@ -4,6 +4,7 @@
 """
 
 import os
+import shutil
 from typing import Optional
 from utils.logger import log
 from utils import file_ops
@@ -69,7 +70,7 @@ def prepare_models(
     else:
         log("DEBUG", f"Shared model directory not found, skipping")
     
-    # 步骤2: 再链接用户模型（覆盖重名文件）
+    # 步骤2: 再链接用户模型（覆盖重名 item）
     if user_models_exists:
         _link_directory(user_models_dir, target_dir, "user", override=True)
     else:
@@ -94,67 +95,180 @@ def prepare_models(
             log("ERROR", f"Failed to start model watcher: {e}")
 
 
-def _link_directory(source_dir: str, target_dir: str, description: str, override: bool = False) -> None:
+def _link_directory(
+    source_dir: str, 
+    target_dir: str, 
+    description: str, 
+    override: bool = False
+) -> None:
     """
-    递归链接目录中的所有内容
+    链接模型目录的两层结构
+    
+    第一层：处理 models 根目录下的文件和目录
+    - 一级文件：创建软链接
+    - 一级目录（模型类型目录）：创建目录，然后处理其内容
+    
+    第二层：对每个类型目录内的 item（文件或目录）创建软链接（原子单元）
     
     Args:
-        source_dir: 源目录
-        target_dir: 目标目录
+        source_dir: 源模型目录（如 /mnt/auto/models）
+        target_dir: 目标模型目录（如 /root/comfyui/models）
         description: 描述（用于日志）
         override: 是否覆盖已存在的链接
     """
     log("DEBUG", f"Linking {description} models from {source_dir}")
     
-    for item_name in os.listdir(source_dir):
+    # 第一层：遍历 models 根目录下的所有 item
+    for item in os.listdir(source_dir):
         try:
-            source_path = os.path.join(source_dir, item_name)
-            target_path = os.path.join(target_dir, item_name)
+            source_path = os.path.join(source_dir, item)
+            target_path = os.path.join(target_dir, item)
             
             if os.path.isdir(source_path):
-                # 目录：确保存在，然后递归处理
+                # 一级目录（模型类型目录）：创建对应目录，然后处理其内容
                 os.makedirs(target_path, exist_ok=True)
-                _link_directory(source_path, target_path, description, override)
+                
+                # 第二层：遍历类型目录内的所有原子 item
+                for sub_item in os.listdir(source_path):
+                    try:
+                        source_sub_path = os.path.join(source_path, sub_item)
+                        target_sub_path = os.path.join(target_path, sub_item)
+                        
+                        # 二级 item：文件或目录，都整体软链接
+                        _create_link(source_sub_path, target_sub_path, f"{item}/{sub_item}", override)
+                    except Exception as e:
+                        log("ERROR", f"Failed to link {description} item '{item}/{sub_item}': {e}")
+                        continue
             else:
-                # 文件：创建软链接
-                _create_link(source_path, target_path, item_name, override)
+                # 一级文件：直接创建软链接
+                _create_link(source_path, target_path, item, override)
+                    
         except Exception as e:
-            # 单个文件/目录失败不影响其他文件，记录错误并继续
-            log("ERROR", f"Failed to link {description} item '{item_name}': {e}")
+            log("ERROR", f"Failed to process {description} item '{item}': {e}")
             continue
 
 
-def _create_link(source_path: str, target_path: str, item_name: str, override: bool = False) -> None:
+def _create_link(
+    source_path: str, 
+    target_path: str, 
+    item_name: str, 
+    override: bool = False
+) -> None:
     """
-    创建单个文件的软链接
+    创建原子item（文件或目录）的软链接
     
     Args:
-        source_path: 源文件路径
+        source_path: 源路径（文件或目录）
         target_path: 目标链接路径
-        item_name: 文件名（用于日志）
+        item_name: item 名称（用于日志）
         override: 是否覆盖已存在的链接
     
     Raises:
         Exception: 如果链接创建/覆盖失败
     """
     try:
+        # 判断源是否是目录
+        is_directory = os.path.isdir(source_path)
+        item_type = "directory" if is_directory else "file"
+        
         if os.path.exists(target_path) or os.path.islink(target_path):
             if os.path.islink(target_path):
                 if override:
                     # 覆盖旧链接
                     os.unlink(target_path)
                     os.symlink(source_path, target_path)
-                    log("DEBUG", f"Overridden: {item_name}")
+                    log("DEBUG", f"{item_type.capitalize()} link overridden: {item_name}")
                 else:
-                    log("DEBUG", f"Skipped existing: {item_name}")
+                    log("DEBUG", f"Skipped existing {item_type} link: {item_name}")
+            elif os.path.isdir(target_path):
+                if override:
+                    # 如果目标是实体目录，删除后创建软链接
+                    shutil.rmtree(target_path)
+                    os.symlink(source_path, target_path)
+                    log("DEBUG", f"Real directory replaced with link: {item_name}")
+                else:
+                    log("DEBUG", f"Skipped real directory: {item_name}")
             else:
-                # 实体文件不覆盖
-                log("DEBUG", f"Skipped real file: {item_name}")
+                # 目标是实体文件
+                if override and is_directory:
+                    # 如果源是目录，目标是文件，删除文件后创建目录链接
+                    os.remove(target_path)
+                    os.symlink(source_path, target_path)
+                    log("DEBUG", f"Real file replaced with directory link: {item_name}")
+                else:
+                    log("DEBUG", f"Skipped real file: {item_name}")
         else:
             # 创建新链接
             os.symlink(source_path, target_path)
-            log("DEBUG", f"Linked: {item_name}")
+            log("DEBUG", f"{item_type.capitalize()} linked: {item_name}")
     except Exception as e:
-        log("ERROR", f"Unexpected error when linking '{item_name}': {e}")
+        log("ERROR", f"Unexpected error when linking {item_type} '{item_name}': {e}")
         raise
+
+
+def _is_atomic_item(base_dir: str, item_path: str) -> bool:
+    """
+    判断 item_path 是否是原子模型 item
+    
+    原子模型 item 包括：
+    1. 深度=1 的文件（models/config.yaml）
+    2. 深度=2 的文件或目录（models/checkpoints/model.ckpt 或 models/checkpoints/flux/）
+    
+    注意：深度=1 的目录（模型类型目录）不是原子 item
+    
+    Args:
+        base_dir: 模型根目录（如 /root/comfyui/models）
+        item_path: 要判断的路径
+    
+    Returns:
+        bool: 如果是原子模型 item 返回 True
+        
+    Examples:
+        models/checkpoints/ -> False (深度1的目录，不是原子item)
+        models/config.yaml -> True (深度1的文件)
+        models/checkpoints/model.ckpt -> True (深度2的文件)
+        models/checkpoints/flux/ -> True (深度2的目录)
+        models/checkpoints/sdxl/base/model.ckpt -> False (深度3+)
+    """
+    try:
+        rel_path = os.path.relpath(item_path, base_dir)
+        parts = [p for p in rel_path.split(os.sep) if p]  # 过滤空字符串
+        depth = len(parts)
+        
+        if depth == 1:
+            # 深度=1：只有文件是原子 item，目录不是
+            return os.path.isfile(item_path)
+        elif depth == 2:
+            # 深度=2：文件和目录都是原子 item
+            return True
+        else:
+            # 深度>2 或 depth=0：不是原子 item
+            return False
+    except ValueError:
+        # 如果路径不在 base_dir 下，返回 False
+        return False
+
+
+def _get_item_depth(base_dir: str, item_path: str) -> int:
+    """
+    获取 item 相对于 base_dir 的深度
+    
+    Args:
+        base_dir: 基础目录
+        item_path: item 路径
+    
+    Returns:
+        int: 深度级别（1, 2, 3...），如果不在 base_dir 下返回 0
+    
+    Examples:
+        models/checkpoints/ -> 1
+        models/checkpoints/model.ckpt -> 2
+        models/checkpoints/flux/model.ckpt -> 3
+    """
+    try:
+        rel_path = os.path.relpath(item_path, base_dir)
+        parts = [p for p in rel_path.split(os.sep) if p]
+        return len(parts)
+    except ValueError:
+        return 0
 

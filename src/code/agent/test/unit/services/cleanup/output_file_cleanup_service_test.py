@@ -389,3 +389,55 @@ class TestOutputFileCleanupService:
         
         # 验证归档目录中的过期文件被删除
         assert not archived_expired.exists()
+
+    def test_cancel_cleanup(self, cleanup_service, temp_dirs):
+        """测试取消清理操作"""
+        import threading
+        serverless_api, archived_dir = temp_dirs
+        
+        # 创建大量文件以确保清理需要一定时间
+        for i in range(100):
+            file_path = serverless_api / f"file_{i}.txt"
+            file_path.write_text(f"content {i}")
+            # 设置为过期文件
+            old_time = time.time() - (2 * 3600)
+            os.utime(file_path, (old_time, old_time))
+        
+        # 在另一个线程中启动清理
+        cleanup_thread = threading.Thread(target=cleanup_service.cleanup)
+        cleanup_thread.start()
+        
+        # 立即取消清理
+        time.sleep(0.01)  # 短暂等待确保清理已开始
+        cleanup_service.cancel()
+        
+        # 等待清理线程结束
+        cleanup_thread.join(timeout=5)
+        
+        # 验证取消标志已设置
+        assert cleanup_service._cancel_event.is_set()
+        
+        # 验证不是所有文件都被移动（因为被取消了）
+        remaining_files = list(serverless_api.iterdir())
+        # 如果取消生效，应该还有一些文件未被移动
+        # 注意：具体数量取决于取消时机，所以只验证不是全部移动完成
+        assert len(remaining_files) > 0 or len(list(archived_dir.iterdir())) < 100
+
+    def test_cleanup_resets_cancel_flag(self, cleanup_service, temp_dirs):
+        """测试cleanup方法重置取消标志"""
+        serverless_api, archived_dir = temp_dirs
+        
+        # 先设置取消标志
+        cleanup_service.cancel()
+        assert cleanup_service._cancel_event.is_set()
+        
+        # 创建一个测试文件
+        test_file = serverless_api / "test.txt"
+        test_file.write_text("test")
+        
+        # 再次调用cleanup应该重置标志并正常执行
+        cleanup_service.cleanup()
+        
+        # 验证取消标志已被清除（cleanup结束后）
+        # 注意：cleanup执行后标志不应该被设置
+        assert not cleanup_service._cancel_event.is_set()

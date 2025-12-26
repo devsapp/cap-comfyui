@@ -41,53 +41,48 @@ class OutputFileCleanupService:
         self.max_files = max_files
         self.ttl_seconds = ttl_seconds
         self.archived_ttl_seconds = archived_ttl_seconds
+        self._cancel_event = threading.Event()
         
         # 确保目录存在
         self.source_dir.mkdir(parents=True, exist_ok=True)
         self.archived_dir.mkdir(parents=True, exist_ok=True)
     
-    def cleanup(self, clean_archived: bool = True, timeout: int = 300):
+    def cleanup(self, clean_archived: bool = True):
         """
-        执行文件清理，如果超过超时时间则终止
+        执行文件清理
 
         Args:
             clean_archived: 是否清理归档目录，默认为 True
-            timeout: 超时时间（秒），默认300秒（5分钟），超过此时间会终止执行
         """
-        start_time = time.time()
-        timeout_event = threading.Event()
+        # 重置取消标志
+        self._cancel_event.clear()
         
-        log("INFO", f"Start to clean up output files: source={self.source_dir}, archived={self.archived_dir}, clean_archived={clean_archived}, timeout={timeout}s")
-        
-        # 启动超时检查线程
-        def _timeout_checker():
-            time.sleep(timeout)
-            if not timeout_event.is_set():
-                timeout_event.set()
-                log("DEBUG", f"Cleanup timeout after {timeout}s, terminating cleanup")
-        
-        timeout_thread = threading.Thread(target=_timeout_checker, daemon=True)
-        timeout_thread.start()
+        log("INFO", f"Start to clean up output files: source={self.source_dir}, archived={self.archived_dir}, clean_archived={clean_archived}")
         
         try:
             # 1. 移除serverless_api目录下超过时间阈值的文件
-            self._archive(timeout_event)
+            self._archive(self._cancel_event)
             
             # 2. 清理archived目录中的过期文件（可选）
-            if clean_archived:
+            if clean_archived and not self._cancel_event.is_set():
                 self._cleanup_archived()
             
         except Exception as e:
             log("DEBUG", f"文件清理过程中出错: {str(e)}")
-        finally:
-            timeout_event.set()  # 标记完成，停止超时检查
     
-    def _archive(self, timeout_event: threading.Event = None):
+    def cancel(self):
+        """
+        取消正在执行的清理操作
+        """
+        log("INFO", "Canceling cleanup operation")
+        self._cancel_event.set()
+    
+    def _archive(self, cancel_event: threading.Event = None):
         """        
         将serverless_api目录下超过时间阈值的文件移动到归档目录
         
         Args:
-            timeout_event: 超时事件，传递给 _batch_move_files 用于检查超时
+            cancel_event: 取消事件，用于检查是否需要中止操作
         """
         # expire_time: 文件过期时间点，修改时间早于此时间的文件需要移动到归档目录
         # 例如：如果 ttl_seconds=86400（1天），则 expire_time = 当前时间 - 86400秒
@@ -124,7 +119,7 @@ class OutputFileCleanupService:
             
             # 批量移动过期文件
             if expired_files:
-                self._batch_move_files(expired_files, timeout_event)
+                self._batch_move_files(expired_files, cancel_event)
             
             # 检查剩余文件数量，如果仍然超过限制，按时间排序移动
             if len(remaining_files) > self.max_files:
@@ -133,24 +128,24 @@ class OutputFileCleanupService:
                 
                 # 移动超出的文件
                 files_to_move_by_count = [f for _, f in remaining_files[self.max_files:]]
-                self._batch_move_files(files_to_move_by_count, timeout_event)
+                self._batch_move_files(files_to_move_by_count, cancel_event)
             
         except Exception as e:
             log("DEBUG", f"Error moving old files: {type(e).__name__}: {str(e)}")
     
-    def _batch_move_files(self, files: list, timeout_event: threading.Event = None):
+    def _batch_move_files(self, files: list, cancel_event: threading.Event = None):
         """
         批量移动文件到归档目录
         
         Args:
             files: 要移动的文件路径列表
-            timeout_event: 超时事件，如果设置了则终止执行
+            cancel_event: 取消事件，如果设置了则终止执行
         """
         if not files:
             return
 
         for file_path in files:
-            if timeout_event and timeout_event.is_set():
+            if cancel_event and cancel_event.is_set():
                 return
                 
             dest_path = self.archived_dir / file_path.name

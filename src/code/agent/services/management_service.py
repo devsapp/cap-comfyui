@@ -158,16 +158,10 @@ class ManagementService:
             else:
                 result_map = self._snapshot_mgr.load(snapshot_name)
             
-            # 准备模型目录（只对 ComfyUI 生效，必须在快照加载后执行）
+            # 准备共享模型目录（只对 ComfyUI 生效，必须在快照加载后执行）
             if constants.BACKEND_TYPE == constants.TYPE_COMFYUI:
-                from services.model.linker import prepare_models
-                prepare_models(
-                    target_dir=f"{constants.COMFYUI_DIR}/models",
-                    user_models_dir=constants.MODEL_DIR,
-                    shared_models_dir=constants.SHARED_MODELS_DIR,
-                    watch_comfyui_dir=True,
-                    watch_user_dir=not constants.USE_API_MODE
-                )
+                from services.model.shared_models import setup_shared_models
+                setup_shared_models()
 
             # 安装缺失插件依赖
             if nodes_map is not self._SKIP_INSTALL_SENTINEL:
@@ -238,13 +232,6 @@ class ManagementService:
 
         try:
             result_map = {}
-            
-            # 停止模型目录监听
-            try:
-                from services.model.watcher import stop_model_watcher
-                stop_model_watcher()
-            except Exception as e:
-                print(f"Warning: Failed to stop model watcher: {e}")
             
             with timer("Stop process") as t_stop_process:
                 self._process_mgr.stop()

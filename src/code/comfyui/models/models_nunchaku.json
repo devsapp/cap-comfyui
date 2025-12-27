@@ -7,6 +7,19 @@
         "url": "https://huggingface.co/nunchaku-tech/nunchaku-flux.1-dev/resolve/main/svdq-fp4_r32-flux.1-dev.safetensors",
         "directory": "diffusion_models"
     },
+    "svdq-fp4_r32-flux.1-schnell.safetensors": {
+        "url": "https://huggingface.co/nunchaku-tech/nunchaku-flux.1-schnell/resolve/main/svdq-fp4_r32-flux.1-schnell.safetensors",
+        "directory": "diffusion_models"
+    },
+    "svdq-int4_r32-flux.1-schnell.safetensors": {
+        "url": "https://huggingface.co/nunchaku-tech/nunchaku-flux.1-schnell/resolve/main/svdq-int4_r32-flux.1-schnell.safetensors",
+        "directory": "diffusion_models"
+    },
+
+    "awq-int4-flux.1-t5xxl.safetensors": {
+        "url": "https://huggingface.co/nunchaku-tech/nunchaku-t5/resolve/main/awq-int4-flux.1-t5xxl.safetensors",
+        "directory": "text_encoders"
+    },
     "svdq-fp4_r128-qwen-image-edit-lightningv1.0-4steps.safetensors": {
         "url": "https://huggingface.co/nunchaku-tech/nunchaku-qwen-image-edit/resolve/main/svdq-fp4_r128-qwen-image-edit-lightningv1.0-4steps.safetensors",
         "directory": "diffusion_models"

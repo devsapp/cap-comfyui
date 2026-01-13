@@ -2,6 +2,9 @@ from enum import Enum
 import os
 import socket
 
+from utils.logger import log
+from utils.args import build_boot_command
+
 TYPE_COMFYUI = 'comfyui'
 TYPE_SD = 'sd'
 BACKEND_TYPE = os.getenv('BACKEND_TYPE', TYPE_COMFYUI)
@@ -27,14 +30,30 @@ SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
 COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
 COMFYUI_PROCESS_PORT = 8188
 
+# 自定义 ComfyUI 启动参数（空格分隔的命令行参数字符串）
+# 例如: CUSTOM_BOOT_ARGS='--preview-method auto --use-pytorch-cross-attention'
+CUSTOM_BOOT_ARGS = os.getenv('CUSTOM_BOOT_ARGS', '')
+
 # 共享存储中的输入目录（NAS 中的 input 目录），issue: https://aliyuque.antfin.com/lnpq52/cc8sut/slcnbzw0t7q9snbb
 MNT_INPUT_DIR = os.getenv('MNT_INPUT_DIR', f"{MNT_DIR}/input")
 
-# 根据 COMFYUI_MODE 配置输入目录和启动命令
+# 定义不允许被自定义覆盖的受保护参数（系统默认参数）
+_PROTECTED_ARGS = {
+    '--listen',
+    '--port',
+    '--input-directory',
+    '--output-directory',
+    '--temp-directory',
+    '--user-directory',
+    '--disable-metadata',
+    '--cpu',  # CPU 模式由 COMFYUI_MODE 控制
+}
+
+# 根据 COMFYUI_MODE 构建启动命令
 if COMFYUI_MODE == 'cpu':
     # CPU模式：输入目录默认使用 MNT_INPUT_DIR
     INPUT_DIR = os.getenv('INPUT_DIR', MNT_INPUT_DIR)
-    COMFYUI_BOOT_CMD = [
+    _base_boot_cmd = [
         f"{VENV_DIR}/bin/python",
         f"{COMFYUI_DIR}/main.py",
         "--cpu",
@@ -56,7 +75,7 @@ else:
         INPUT_DIR = os.getenv('INPUT_DIR', f"{COMFYUI_DIR}/input")
     else:
         INPUT_DIR = os.getenv('INPUT_DIR', MNT_INPUT_DIR)
-    COMFYUI_BOOT_CMD = [
+    _base_boot_cmd = [
         f"{VENV_DIR}/bin/python",
         f"{COMFYUI_DIR}/main.py",
         "--listen",
@@ -71,6 +90,14 @@ else:
         f"{MNT_DIR}/output",
         "--disable-metadata"
     ]
+
+# 构建最终的启动命令
+COMFYUI_BOOT_CMD = build_boot_command(
+    base_cmd=_base_boot_cmd,
+    custom_boot_args=CUSTOM_BOOT_ARGS,
+    protected_args=_PROTECTED_ARGS
+)
+
 SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
 SD_PROCESS_PORT = 7860
 SD_BOOT_CMD = [

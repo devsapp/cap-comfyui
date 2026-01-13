@@ -26,6 +26,10 @@ class ProcessManager(ABC):
             command: 要执行的命令列表，例如 ['python', 'script.py']
         """
         try:
+            # 记录启动命令
+            log("INFO", f"Starting {BACKEND_TYPE.capitalize()} process with command:")
+            log("INFO", f"  Command: {' '.join(command)}")
+
             self.process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,

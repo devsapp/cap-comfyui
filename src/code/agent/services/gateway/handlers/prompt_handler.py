@@ -44,7 +44,7 @@ class PromptHandler:
         
         # 转发给GPU
         task_id, result = self.task_manager.forward_to_gpu_async(
-            prompt=prompt,
+            request_body=request_data,
             client_id=client_id
         )
         

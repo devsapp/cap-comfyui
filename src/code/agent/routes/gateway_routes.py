@@ -201,12 +201,15 @@ class GatewayRoutes:
         @handle_exceptions(error_type="serverless_run_error", log_prefix="ServerlessRun")
         def handle_serverless_run():
             """
-            处理 /api/serverless/run 请求（异步模式）
+            处理 /api/serverless/run 请求
             
-            异步模式:
-            - 将请求转发到GPU函数（异步调用）
-            - 返回任务ID，前端通过任务ID轮询获取结果
-            - 使用任务队列跟踪任务状态
+            支持两种模式：
+            - 同步模式（默认）：等待GPU处理完成，直接返回结果
+            - 异步模式（X-Fc-Invocation-Type: Async）：立即返回任务ID，前端通过任务ID轮询获取结果
+            
+            通过请求头 X-Fc-Invocation-Type 控制：
+            - 不传或传其他值：同步模式
+            - X-Fc-Invocation-Type: Async：异步模式
             """
             return self.serverless_handler.handle_post_request()
     

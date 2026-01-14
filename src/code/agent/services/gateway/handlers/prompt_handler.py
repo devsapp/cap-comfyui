@@ -2,9 +2,11 @@
 Prompt Handler
 处理 /prompt 请求逻辑
 """
+import traceback
 from flask import request, jsonify
 
 from utils.logger import log
+from exceptions.exceptions import TaskError, InternalError
 
 
 class PromptHandler:
@@ -42,26 +44,44 @@ class PromptHandler:
                 }
             }), 400
         
-        # 转发给GPU
-        task_id, result = self.task_manager.forward_to_gpu_async(
-            request_body=request_data,
-            client_id=client_id
-        )
-        
-        # 处理结果
-        if task_id:
+        try:
+            # 转发给GPU
+            task_id, result = self.task_manager.forward_to_gpu_async(
+                request_body=request_data,
+                client_id=client_id
+            )
+            
             # 成功：返回ComfyUI格式
             return jsonify({
                 "prompt_id": task_id,
                 "number": 1,
                 "node_errors": {}
             })
-        else:
-            # 失败：result 是 (status_code, error_type, error_message)
-            status_code, error_type, error_message = result
+            
+        except TaskError as e:
+            log("ERROR", f"[PromptHandler] Task error: {e.message}")
+            # 返回ComfyUI格式的错误
             return jsonify({
                 "error": {
-                    "type": error_type,
-                    "message": error_message
+                    "type": e.error_code,
+                    "message": e.message
                 }
-            }), status_code
+            }), e.code
+        
+        except InternalError as e:
+            log("ERROR", f"[PromptHandler] Internal error: {e.message}")
+            return jsonify({
+                "error": {
+                    "type": "internal_error",
+                    "message": e.message
+                }
+            }), e.code
+            
+        except Exception as e:
+            log("ERROR", f"[PromptHandler] Unexpected error: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({
+                "error": {
+                    "type": "internal_error",
+                    "message": str(e)
+                }
+            }), 500

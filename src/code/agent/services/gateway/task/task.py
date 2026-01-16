@@ -29,7 +29,7 @@ class Task:
     """任务数据模型"""
     task_id: str
     client_id: str
-    prompt: dict
+    prompt_body: dict
     callback: Optional[Callable] = None
     status: TaskStatus = TaskStatus.PENDING
     

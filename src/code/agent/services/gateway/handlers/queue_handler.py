@@ -41,14 +41,27 @@ class QueueHandler:
         # 构造任务信息的辅助函数
         def _build_task_info(task):
             """构造ComfyUI兼容的任务信息格式"""
+            # 安全地提取 prompt 和 extra_data
+            prompt_body = task.prompt_body or {}
+            
+            # 兼容两种格式：
+            # 1. 新格式: {"prompt": {...}, "extra_data": {...}}
+            # 2. 旧格式: 直接是 prompt 工作流定义
+            if isinstance(prompt_body, dict) and "prompt" in prompt_body:
+                prompt = prompt_body.get("prompt", {})
+                extra_data = prompt_body.get("extra_data", {})
+            else:
+                prompt = prompt_body
+                extra_data = {}
+            
             return [
                 1,  # number - 任务优先级
                 task.task_id,  # prompt_id
-                task.prompt or {},  # prompt - 避免None导致序列化失败
-                {"client_id": task.client_id} if task.client_id else {},  # extra_data
-                []  # outputs_to_execute
+                prompt or {},  # prompt - 避免None导致序列化失败
+                extra_data or {},  # extra_data
+                []  # outputs_to_execute    
             ]
-        
+
         for task in all_tasks:
             # 根据任务状态分类
             if task.status == TaskStatus.RUNNING:

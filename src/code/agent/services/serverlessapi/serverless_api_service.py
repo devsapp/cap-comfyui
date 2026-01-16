@@ -122,16 +122,17 @@ class ServerlessApiService:
             constants.OSS_EXPIRES_IN_SECOND,
         )
 
-    def api_prompt(self, client_id: str, prompt: Any, task_id: Optional[str] = None):
+    def api_prompt(self, client_id: str, request_body: dict, task_id: Optional[str] = None):
         """
         提交 ComfyUI 工作流任务
         
-        将处理后的 prompt（工作流定义）提交给 ComfyUI 后端执行。
-        
         Args:
-            task_id: requestId, cpu/gpu/comfyui promptId 一致
             client_id: WebSocket 客户端 ID，用于关联 WebSocket 连接
-            prompt: ComfyUI 工作流定义（节点图）
+            request_body: 完整的请求体，通常包含：
+                         - prompt: ComfyUI 工作流定义（必需）
+                         - extra_data: 额外的元数据（可选）
+                         - 其他 ComfyUI 支持的参数
+            task_id: requestId, cpu/gpu/comfyui promptId 一致（可选）
             
         Returns:
             dict: 包含 prompt_id 等信息的响应
@@ -139,9 +140,10 @@ class ServerlessApiService:
         Raises:
             ComfyUIException: 当 ComfyUI API 调用失败时抛出
         """
-        req = {"client_id": client_id, "prompt": prompt}
+        req = {**request_body, "client_id": client_id}
         if task_id:
             req["prompt_id"] = task_id
+        
         res = requests.post(
             os.path.join(self.endpoint, "prompt"),
             json=req,
@@ -598,7 +600,7 @@ class ServerlessApiService:
 
     def run(
         self,
-        prompt: map,
+        request_body: dict,
         output_base64=False,
         output_oss=False,
         callback=None,
@@ -616,7 +618,7 @@ class ServerlessApiService:
         6. 保存状态到持久化存储
         
         Args:
-            prompt: ComfyUI 工作流定义
+            request_body: ComfyUI API /prompt
             output_base64: 是否将输出转换为 Base64（适用于小文件）
             output_oss: 是否上传输出到 OSS（推荐用于生产环境）
             callback: WebSocket 消息回调函数，接收原始消息
@@ -631,11 +633,33 @@ class ServerlessApiService:
         """
 
         try:
+            # 验证请求体必须是 dict
+            if not isinstance(request_body, dict):
+                raise ComfyUIException(
+                    f"Invalid request body: expected dict, got {type(request_body).__name__}",
+                    constants.ERROR_CODE.INVALID_PARAMS.value,
+                    str(request_body) if request_body else ""
+                )
+            
+            if "prompt" not in request_body:
+                request_body = {"prompt": request_body}
+            
+            # 提取 prompt
+            prompt = request_body.get("prompt")
+            if not prompt:
+                raise ComfyUIException(
+                    "Missing or empty 'prompt' in request body",
+                    constants.ERROR_CODE.INVALID_PARAMS.value,
+                    json.dumps(request_body)
+                )
+            
             # 等待服务就绪（如果正在重启中）
             self._wait_for_ready()
             
             # 解析请求中是否存在 base64、http url 形式的图片
             prompt = self.parse_prompt(prompt)
+            # 更新 request_body 中的 prompt（已经过预处理）
+            request_body["prompt"] = prompt
 
             # 唤醒 input 目录清理线程（在 parse_prompt 之后，确保上传的文件 mtime 已更新，防止清理ttl到期的同名文件）
             wake_input_cleaner()
@@ -768,7 +792,7 @@ class ServerlessApiService:
             log("DEBUG", f"got client_id: {client_id}")
 
             log("DEBUG", "submitting workflow to ComfyUI")
-            prompt_result = self.api_prompt(client_id, prompt, task_id)
+            prompt_result = self.api_prompt(client_id, request_body, task_id)
             prompt_id = prompt_result.get("prompt_id", "")
             log("DEBUG", f"workflow submitted, prompt_id: {prompt_id}")
 

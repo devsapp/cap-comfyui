@@ -101,18 +101,11 @@ class HistoryHandler:
         
         优先级：
         1. task.final_status_data.data.prompt_id
-        2. task.prompt.prompt_id
-        3. task.task_id (fallback)
+        2. task.task_id (fallback)
         """
         # 优先从 final_status_data 获取
         if task.final_status_data:
             prompt_id = (task.final_status_data.get("data", {}) or {}).get("prompt_id")
-            if prompt_id:
-                return prompt_id
-        
-        # 其次从 prompt 获取
-        if isinstance(task.prompt, dict):
-            prompt_id = task.prompt.get("prompt_id")
             if prompt_id:
                 return prompt_id
         
@@ -167,11 +160,24 @@ class HistoryHandler:
             task.completed_at or task.create_at or 1.0
         )
         
+        # 安全地提取 prompt 和 extra_data
+        prompt_body = task.prompt_body or {}
+        
+        # 兼容两种格式：
+        # 1. 新格式: {"prompt": {...}, "extra_data": {...}}
+        # 2. 旧格式: 直接是 prompt 工作流定义
+        if isinstance(prompt_body, dict) and "prompt" in prompt_body:
+            prompt = prompt_body.get("prompt", {})
+            extra_data = prompt_body.get("extra_data", {})
+        else:
+            prompt = prompt_body
+            extra_data = {}
+        
         return [
             number,
             prompt_id,
-            task.prompt or {},
-            {"client_id": task.client_id} if task.client_id else {},
+            prompt or {},
+            extra_data or {},
             []
         ]
     

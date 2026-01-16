@@ -54,7 +54,7 @@ class TaskManager:
         log("INFO", "[TaskManager] TaskManager stopped")
     
     def submit_task(self, 
-                    prompt: dict,
+                    prompt_body: dict,
                     client_id: str,
                     task_id: Optional[str] = None,
                     callback: Optional[Callable] = None) -> str:
@@ -64,7 +64,7 @@ class TaskManager:
         task_request = Task(
             task_id=task_id,
             client_id=client_id,
-            prompt=prompt,
+            prompt_body=prompt_body,
             callback=callback
         )
         
@@ -387,13 +387,13 @@ class TaskManager:
     # ==================== GPU 转发方法 ====================
     
     def forward_to_gpu_async(self, 
-                             prompt: dict, 
+                             request_body: dict, 
                              client_id: str) -> Tuple[Optional[str], Union[object, Tuple[int, str, str]]]:
         """
         GPU异步转发逻辑
         
         Args:
-            prompt: 工作流定义
+            request_body: comfyui prompt请求
             client_id: 客户端ID(用于WebSocket广播)
             
         Returns:
@@ -416,9 +416,10 @@ class TaskManager:
             return None, (500, "missing_task_id", str(e))
 
         # 将任务添加到管理器(用于跟踪和状态管理)
+        # 保存完整的 request_body 作为 prompt_body
         try:
             self.submit_task(
-                prompt=prompt,
+                prompt_body=request_body,
                 client_id=client_id,
                 task_id=task_id
             )
@@ -442,11 +443,13 @@ class TaskManager:
             k_lower = k.lower()
             if k_lower not in excluded_headers_lower:
                 forward_headers[k] = v
+        
+        # 直接转发完整的请求体（保持原有结构，包括可能的 extra_data）
         # 转发请求到GPU
         try:
             resp = requests.post(
                 gpu_url,
-                json=prompt,
+                json=request_body,
                 headers=forward_headers,
                 params=request.args,
                 timeout=30

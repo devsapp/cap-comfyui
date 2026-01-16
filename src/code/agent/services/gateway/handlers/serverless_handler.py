@@ -6,7 +6,6 @@ from flask import request, jsonify
 
 from utils.logger import log
 
-
 class ServerlessHandler:
     """处理 /serverless/run 请求"""
     
@@ -20,29 +19,14 @@ class ServerlessHandler:
         Returns:
             tuple: (response_data, status_code)
         """
-        # 获取请求数据 - /serverless/run 的请求体直接是 prompt
-        prompt = request.get_json(force=True, silent=True)
-        
-        # 验证请求
-        if prompt is None:
-            return jsonify({
-                "type": "error",
-                "error_code": "invalid_request_error",
-                "error_message": "Request body must be valid JSON containing ComfyUI workflow definition"
-            }), 400
-        
-        if not isinstance(prompt, dict) or len(prompt) == 0:
-            return jsonify({
-                "type": "error",
-                "error_code": "invalid_request_error",
-                "error_message": "Prompt (workflow definition) cannot be empty. Please provide a valid ComfyUI workflow."
-            }), 400
+        # 获取请求数据
+        body = request.get_json(force=True, silent=True)
 
         client_id = ""
         
-        # 转发给GPU
+        # 转发给GPU，直接传递完整的请求体
         task_id, result = self.task_manager.forward_to_gpu_async(
-            prompt=prompt,
+            request_body=body,
             client_id=client_id
         )
         

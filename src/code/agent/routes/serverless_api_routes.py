@@ -88,7 +88,7 @@ class ServerlessApiRoutes:
                   - `x-serverless-api-task-id`: 指定一个 task id，用于异步获取任务状态，不传输时不会持久化状态
 
                 Body:
-                  JSON body，内容可参考 ComfyUI 原生 prompt 接口
+                  JSON body, 内容可参考 ComfyUI 原生 prompt 接口
                   针对如下部分进行优化
                     - LoadImage 节点支持 base64 图片、http url 图片
                     - KSampler seed 为 -1 时，支持自动生成随机数
@@ -107,7 +107,7 @@ class ServerlessApiRoutes:
                 if not stream:
                     try:
                         return self.service.run(
-                            body,
+                            request_body=body,
                             output_base64=output_base64,
                             output_oss=output_oss,
                             task_id=task_id,
@@ -152,7 +152,7 @@ class ServerlessApiRoutes:
                         """
                         try:
                             result = self.service.run(
-                                body,
+                                request_body=body,
                                 output_base64=output_base64,
                                 output_oss=output_oss,
                                 callback=do_streaming,
@@ -215,13 +215,13 @@ class ServerlessApiRoutes:
 
                     # 获取第一个 message 作为输入的 prompt
                     data = ws.receive()
-                    prompt = json.loads(data)
+                    body = json.loads(data)
 
                     def callback(msg):
                         ws.send(msg)
 
                     results = self.service.run(
-                        prompt,
+                        request_body=body,
                         output_base64=output_base64,
                         output_oss=output_oss,
                         callback=callback,

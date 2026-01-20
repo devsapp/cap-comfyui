@@ -13,6 +13,13 @@ import constants
 import requests
 from flask import request
 from utils.logger import log
+from exceptions.exceptions import (
+    ConfigurationError,
+    InvalidRequestError,
+    TaskQueueFullError,
+    InternalError,
+    WorkerExecutionError
+)
 
 from .task import TaskStatus, Task
 from .utils.task_manager_util import TaskStatusBroadcaster
@@ -76,9 +83,10 @@ class TaskManager:
             )
             
             if active_tasks >= self._max_active_tasks:
-                raise RuntimeError(
-                    f"Task queue is full. Active tasks: {active_tasks}/{self._max_active_tasks}. "
-                    f"Please wait for some tasks to complete before submitting new ones."
+                raise TaskQueueFullError(
+                    "Task queue is full",
+                    active_tasks=active_tasks,
+                    max_tasks=self._max_active_tasks
                 )
             
             self._tasks[task_id] = task_request
@@ -388,7 +396,7 @@ class TaskManager:
     
     def forward_to_gpu_async(self, 
                              request_body: dict, 
-                             client_id: str) -> Tuple[Optional[str], Union[object, Tuple[int, str, str]]]:
+                             client_id: str) -> Tuple[str, object]:
         """
         GPU异步转发逻辑
         
@@ -397,54 +405,59 @@ class TaskManager:
             client_id: 客户端ID(用于WebSocket广播)
             
         Returns:
-            tuple: (task_id, response_or_error)
-                   - task_id: 成功时返回任务ID，失败时返回None
-                   - response_or_error: 成功时返回response对象，失败时返回(status_code, error_type, error_message)
+            tuple: (task_id, response) - 成功时返回任务ID和响应对象
+            
+        Raises:
+            ConfigurationError: GPU URL未配置
+            InvalidRequestError: 缺少任务ID
+            TaskQueueFullError: 队列已满
+            WorkerExecutionError: GPU转发失败或异步调用失败
         """
         request_id = request.headers.get('x-fc-request-id', 'unknown')
 
         # 检查GPU URL配置
         if not self._gpu_function_url:
             log("ERROR", f"[TaskManager][RequestId={request_id}] GPU_FUNCTION_URL not configured")
-            return None, (500, "configuration_error", "GPU_FUNCTION_URL not configured for CPU mode")
+            raise ConfigurationError("GPU_FUNCTION_URL not configured for CPU mode")
         
-        # 提取任务ID(如果找不到会抛出异常)
+        # 提取任务ID
         try:
             task_id = self._extract_task_id_from_request()
         except ValueError as e:
             log("ERROR", f"[TaskManager][RequestId={request_id}] {str(e)}")
-            return None, (500, "missing_task_id", str(e))
+            raise InvalidRequestError(str(e), error_code="missing_task_id")
 
-        # 将任务添加到管理器(用于跟踪和状态管理)
-        # 保存完整的 request_body 作为 prompt_body
+        # 将任务添加到管理器
         try:
             self.submit_task(
                 prompt_body=request_body,
                 client_id=client_id,
                 task_id=task_id
             )
+        except (InvalidRequestError, TaskQueueFullError):
+            raise
         except Exception as e:
+            # 其他未预期的内部错误
             error_msg = f"Failed to add task to queue: {e}"
             log("ERROR", f"[TaskManager][TaskId={task_id}][RequestId={request_id}] {error_msg}\n{traceback.format_exc()}")
-            return None, (500, "queue_error", error_msg)
+            raise InternalError(error_msg) from e
         
         # 构造GPU URL和headers
         gpu_url = f"{self._gpu_function_url.rstrip('/')}/api/serverless/run"
         
         forward_headers = {
-            'x-fc-async-task-id': task_id,  # 优先使用这个作为 task_id
-            'x-fc-trace-id': task_id,       # GPU的request-id与task-id一致
-            'x-fc-invocation-type': 'Async' # 异步调用
+            'x-fc-async-task-id': task_id,
+            'x-fc-trace-id': task_id,
+            'x-fc-invocation-type': 'Async'
         }
         
-        # 复制其他 headers
-        excluded_headers_lower = {'host', 'content-length', 'x-fc-async-task-id', 'x-fc-request-id'}
+        # 复制客户端的其他 headers
+        # 跳过我们已经设置的 headers，避免被覆盖
+        skip_headers = {'x-fc-async-task-id', 'x-fc-trace-id', 'x-fc-invocation-type'}
         for k, v in request.headers.items():
-            k_lower = k.lower()
-            if k_lower not in excluded_headers_lower:
+            if k.lower() not in skip_headers:
                 forward_headers[k] = v
         
-        # 直接转发完整的请求体（保持原有结构，包括可能的 extra_data）
         # 转发请求到GPU
         try:
             resp = requests.post(
@@ -469,7 +482,8 @@ class TaskManager:
             except Exception as status_error:
                 log("WARNING", f"[TaskManager][TaskId={task_id}] Failed to update task status to FAILED: {status_error}")
             
-            return None, (500, "gpu_forward_error", error_msg)
+            raise WorkerExecutionError(error_msg, error_code="worker_forward_error")
+            
         # 检查 GPU 响应状态
         if resp.status_code != 202:
             # GPU 拒绝了请求，更新为 FAILED
@@ -481,21 +495,105 @@ class TaskManager:
                 }, TaskStatus.FAILED)
             except Exception as e:
                 log("WARNING", f"[TaskId={task_id}] Failed to update task status to FAILED: {e}\n{traceback.format_exc()}")
+            
+            raise WorkerExecutionError(
+                f"Failed to invoke GPU function asynchronously: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                error_code="async_invocation_error"
+            )
 
-        # 返回response和task_id
-        if resp.status_code == 202:
-            return task_id, resp
+        # 返回task_id和response
+        return task_id, resp
+
+    def forward_to_gpu_sync(self, request_body: dict) -> Tuple[dict, int]:
+        """
+        GPU同步转发逻辑（等待GPU处理完成并返回结果）
+        
+        Args:
+            request_body: 完整的请求体
+            
+        Returns:
+            tuple: (response_dict, status_code) - GPU返回的原始响应
+            
+        Raises:
+            ConfigurationError: GPU URL未配置
+            InvalidRequestError: 缺少任务ID
+            WorkerExecutionError: GPU转发失败或返回非2xx状态码
+        """
+        request_id = request.headers.get('x-fc-request-id', 'unknown')
+
+        # 检查GPU URL配置
+        if not self._gpu_function_url:
+            log("ERROR", f"[TaskManager][RequestId={request_id}] GPU_FUNCTION_URL not configured")
+            raise ConfigurationError("GPU_FUNCTION_URL not configured for CPU mode")
+        
+        # 提取任务ID
+        try:
+            task_id = self._extract_task_id_from_request()
+        except ValueError as e:
+            log("ERROR", f"[TaskManager][RequestId={request_id}] {str(e)}")
+            raise InvalidRequestError(str(e), error_code="missing_task_id")
+
+        # 构造GPU URL和headers
+        gpu_url = f"{self._gpu_function_url.rstrip('/')}/api/serverless/run"
+        
+        forward_headers = {
+            'x-fc-request-id': task_id,  
+            'x-fc-trace-id': task_id,    
+        }
+        
+        # 复制客户端的其他 headers
+        # 跳过我们已经设置的 headers，避免被覆盖
+        skip_headers = {'x-fc-request-id', 'x-fc-trace-id'}
+        for k, v in request.headers.items():
+            if k.lower() not in skip_headers:
+                forward_headers[k] = v
+        
+        # 转发请求到GPU（同步调用，等待GPU处理完成）
+        try:
+            log("INFO", f"[TaskManager][TaskId={task_id}][RequestId={request_id}] Forwarding sync request to GPU")
+            resp = requests.post(
+                gpu_url,
+                json=request_body,
+                headers=forward_headers,
+                params=request.args,
+                timeout=600
+            )
+        except Exception as e:
+            # 处理网络错误、超时等
+            error_msg = f"Failed to send sync request to GPU: {str(e)}"
+            log("ERROR", f"[TaskManager][TaskId={task_id}][RequestId={request_id}] {error_msg}\nStacktrace:\n{traceback.format_exc()}")
+            raise WorkerExecutionError(error_msg, error_code="worker_forward_error")
+        
+        # 检查响应状态码
+        if resp.status_code == 200:
+            log("INFO", f"[TaskManager][TaskId={task_id}][RequestId={request_id}] Sync request completed successfully")
+            return resp.json(), 200
         else:
-            return None, (500, "async_invocation_error", f"Failed to invoke GPU function asynchronously: HTTP {resp.status_code}")
+            error_msg = f"Worker returned HTTP {resp.status_code}"
+            log("ERROR", f"[TaskManager][TaskId={task_id}][RequestId={request_id}] Sync request failed: {error_msg}")
+            
+            # 尝试获取 Worker 的错误响应
+            try:
+                original_response = resp.json()
+            except Exception:
+                # Worker 返回的不是 JSON（可能是 HTML 错误页等）
+                original_response = None
+            
+            raise WorkerExecutionError(
+                error_msg,
+                status_code=resp.status_code,
+                original_response=original_response
+            )
 
     @staticmethod
     def _extract_task_id_from_request() -> str:
         """
         从请求头中提取任务ID
-        
+
         Returns:
             str: task_id
-            
+
         Raises:
             ValueError: 如果所有header中都没有找到task_id
         """

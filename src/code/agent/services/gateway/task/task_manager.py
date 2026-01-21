@@ -453,7 +453,8 @@ class TaskManager:
         
         # 复制客户端的其他 headers
         # 跳过我们已经设置的 headers，避免被覆盖
-        skip_headers = {'x-fc-async-task-id', 'x-fc-trace-id', 'x-fc-invocation-type'}
+        # 透传host会导致请求在cpu函数上循环调用，透传content-length会导致下游读取payload截断
+        skip_headers = {'x-fc-async-task-id', 'x-fc-trace-id', 'x-fc-invocation-type', 'host', 'content-length'}
         for k, v in request.headers.items():
             if k.lower() not in skip_headers:
                 forward_headers[k] = v
@@ -544,7 +545,8 @@ class TaskManager:
         
         # 复制客户端的其他 headers
         # 跳过我们已经设置的 headers，避免被覆盖
-        skip_headers = {'x-fc-request-id', 'x-fc-trace-id'}
+        # 透传host会导致请求在cpu函数上循环调用，透传content-length会导致下游读取payload截断
+        skip_headers = {'x-fc-request-id', 'x-fc-trace-id', 'host', 'content-length'}
         for k, v in request.headers.items():
             if k.lower() not in skip_headers:
                 forward_headers[k] = v

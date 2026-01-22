@@ -92,11 +92,15 @@ else:
     ]
 
 # 构建最终的启动命令
-COMFYUI_BOOT_CMD = build_boot_command(
-    base_cmd=_base_boot_cmd,
-    custom_boot_args=CUSTOM_BOOT_ARGS,
-    protected_args=_PROTECTED_ARGS
-)
+# CPU 模式不使用 CUSTOM_BOOT_ARGS，GPU 模式才使用
+if COMFYUI_MODE == 'gpu':
+    COMFYUI_BOOT_CMD = build_boot_command(
+        base_cmd=_base_boot_cmd,
+        custom_boot_args=CUSTOM_BOOT_ARGS,
+        protected_args=_PROTECTED_ARGS
+    )
+else:
+    COMFYUI_BOOT_CMD = _base_boot_cmd
 
 SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
 SD_PROCESS_PORT = 7860

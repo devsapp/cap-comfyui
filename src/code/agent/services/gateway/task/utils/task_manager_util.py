@@ -12,7 +12,6 @@ from utils.logger import log
 class TaskStatusBroadcaster:
     """处理任务状态的WebSocket广播"""
     
-    # FIXME:@dehui.kdh, 不是广播，而是直接推送给客户端
     @staticmethod
     def broadcast_task_status(task_id: str, status_data: Union[dict, str]):
         """
@@ -37,10 +36,15 @@ class TaskStatusBroadcaster:
             
             # 通过 task_id 获取 Task，再获取 client_id
             task_manager = get_task_manager()
-            task = task_manager._tasks.get(task_id)
+            task = task_manager.get_task(task_id)
             
             if not task:
                 log("WARNING", f"Task {task_id} not found, cannot broadcast status")
+                return
+            
+            # 检查 client_id 是否存在
+            if not task.client_id:
+                log("WARNING", f"Task {task_id} has no client_id, cannot broadcast status")
                 return
 
             # 将消息发送给对应的客户端
@@ -54,11 +58,10 @@ class TaskStatusBroadcaster:
             log("ERROR", f"Error broadcasting task status via WebSocket: {e}")
     
     @staticmethod
-    def broadcast_queue_status(get_pending_task_count_fn: Callable[[], int]):
-        """广播当前队列状态给所有连接（类似 ComfyUI 的 queue_updated）
+    def broadcast_queue_status():
+        """向每个连接的客户端发送其各自的队列状态（类似 ComfyUI 的 queue_updated）
         
-        Args:
-            get_pending_task_count_fn: 获取运行中任务数量的函数
+        注意：此方法会向每个客户端发送其对应用户的队列状态，实现多租户隔离
         """
         try:
             # 只在CPU模式下广播
@@ -66,24 +69,36 @@ class TaskStatusBroadcaster:
                 return
             
             from services.process.websocket.websocket_manager import ws_manager
+            from services.gateway import get_task_manager
+            from services.gateway.task.task import TaskStatus
             
-            # 获取当前队列中的任务数
-            pending_count = get_pending_task_count_fn()
+            task_manager = get_task_manager()
             
-            # 构建 ComfyUI 格式的状态消息
-            queue_status_msg = {
-                "type": "status",
-                "data": {
-                    "status": {
-                        "exec_info": {
-                            "queue_remaining": pending_count
+            # 获取所有活跃的客户端连接及其用户ID
+            client_user_mapping = ws_manager.get_client_user_mapping()
+            
+            # 为每个客户端发送其对应用户的队列状态
+            for client_id, user_id in client_user_mapping.items():
+                try:
+                    pending_count = task_manager.get_running_task_count_by_user(user_id)
+                    
+                    # 构建 ComfyUI 格式的状态消息
+                    queue_status_msg = {
+                        "type": "status",
+                        "data": {
+                            "status": {
+                                "exec_info": {
+                                    "queue_remaining": pending_count
+                                }
+                            }
                         }
                     }
-                }
-            }
-            
-            # 将队列状态消息广播给所有连接
-            ws_manager.broadcast_to_all(queue_status_msg)
+                    
+                    # 向该客户端发送其专属的队列状态
+                    ws_manager.send_to_client(client_id, queue_status_msg)
+                    
+                except Exception as e:
+                    log("ERROR", f"[TaskStatusBroadcaster] Failed to send queue status to client {client_id}: {e}")
 
         except Exception as e:
             log("ERROR", f"[TaskStatusBroadcaster] Failed to broadcast queue status: {e}")

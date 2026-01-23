@@ -364,7 +364,7 @@ def test_run_with_none_values_in_extra_data(service, app):
     # 验证 None 值被正确传递给 ComfyUI
     assert captured_request['extra_data']['session_id'] is None
     assert captured_request['extra_data']['metadata'] is None
-    assert captured_request['extra_data']['user_id'] == "user123"
+    assert captured_request['extra_data']['x-art-comfy-user'] == "user123"
 
 
 def test_run_with_nested_extra_data(service, app):

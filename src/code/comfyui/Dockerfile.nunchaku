@@ -19,6 +19,8 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     cd ComfyUI-nunchaku && \
     git checkout "v1.0.2"
 
+COPY custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+
 FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root

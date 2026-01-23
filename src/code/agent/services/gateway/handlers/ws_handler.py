@@ -5,12 +5,13 @@ WebSocket Handler
 import time
 import traceback
 
-from flask import request
+from flask import request, g
 
 from services.gateway import get_task_manager
 from services.gateway.task.task import TaskStatus
 from services.process.websocket.websocket_manager import ws_manager
 from utils.logger import log
+from utils.user_identity import extract_user_from_header
 
 
 class WsHandler:
@@ -44,8 +45,14 @@ class WsHandler:
                 client_id = f"funart_client_{int(time.time() * 1000)}"
                 log("INFO", f"New ComfyUI WebSocket connection with client_id: {client_id}")
             
-            # 添加连接到管理器（同时关联 client_id，处理重连逻辑）
-            ws_manager.add_connection(ws, client_id)
+            user_id = extract_user_from_header()
+            g.user_id = user_id if user_id is not None else 'default'
+            
+            log("INFO", f"[WsHandler] WebSocket connection established: client_id={client_id}, user_id={g.user_id}")
+            
+            # 添加连接到管理器（同时关联 client_id 和 user_id，处理重连逻辑）
+            # 注意：这里传递 g.user_id 而不是原始的 user_id，确保在未认证时也能正确建立映射
+            ws_manager.add_connection(ws, client_id, g.user_id)
             
             # 通过消息队列发送初始状态消息，保证线程安全
             initial_status = {
@@ -54,7 +61,7 @@ class WsHandler:
                     "sid": client_id,
                     "status": {
                         "exec_info": {
-                            "queue_remaining": self.task_manager.get_running_task_count()
+                            "queue_remaining": self.task_manager.get_running_task_count_by_user(g.user_id)
                         }
                     }
                 }

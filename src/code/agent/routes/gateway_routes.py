@@ -5,7 +5,7 @@ import threading
 import time
 import traceback
 
-from flask import Blueprint, Flask, jsonify, request
+from flask import Blueprint, Flask, jsonify, request, g
 from flask_sock import Sock
 import websocket
 
@@ -22,6 +22,7 @@ from services.gateway.handlers.reboot_handler import RebootHandler
 from services.gateway.handlers.userdata_handler import UserdataHandler
 from services.gateway.handlers.ws_handler import WsHandler
 from services.gateway.handlers.serverless_ws_handler import ServerlessWsHandler
+from utils.user_identity import set_user_identity_or_default
 
 
 class GatewayRoutes:
@@ -58,6 +59,7 @@ class GatewayRoutes:
     def setup_routes(self):
         """设置所有路由"""
         self._register_backend_status_middleware()
+        self._register_user_identity_middleware()
         self._register_reboot_handler()
         
         # 只在 CPU 模式下注册这些路由
@@ -91,6 +93,12 @@ class GatewayRoutes:
                     message="Please start your comfyui/sd service first",
                     status_code=500
                 )
+    
+    def _register_user_identity_middleware(self):
+        """注册用户身份识别中间件，在每个请求前识别用户"""
+        @self.bp.before_request
+        def identify_user():
+            set_user_identity_or_default()
     
     def _register_websocket(self):
         @self.sock.route("/ws")

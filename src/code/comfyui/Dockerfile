@@ -14,6 +14,8 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     cd ComfyUI-Manager && \
     git checkout "3.39"
 
+COPY custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+
 FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root

@@ -16,6 +16,9 @@ class WebSocketManager:
         # 客户端ID映射
         self._client_id_mapping: Dict[str, Any] = {}  # client_id -> websocket
         
+        # 客户端用户ID映射（用于多租户隔离）
+        self._client_user_mapping: Dict[str, str] = {}  # client_id -> user_id
+        
         # 使用消息队列序列化所有发送操作
         self._message_queue = Queue()  # 线程安全的消息队列
         self._send_thread: Optional[threading.Thread] = None
@@ -48,13 +51,14 @@ class WebSocketManager:
                 'port': None
             }
     
-    def add_connection(self, ws, client_id: Optional[str] = None):
+    def add_connection(self, ws, client_id: Optional[str] = None, user_id: Optional[str] = None):
         """
         添加WebSocket连接到管理器
         
         Args:
             ws: WebSocket连接
             client_id: 可选的客户端ID，如果提供则建立映射并处理重连
+            user_id: 可选的用户ID，用于多租户隔离
         """
         with self._lock:
             # 如果有 client_id，先处理重连逻辑（移除旧连接）
@@ -73,9 +77,12 @@ class WebSocketManager:
             # 如果有 client_id，建立映射（一个客户端只有一个连接）
             if client_id:
                 self._client_id_mapping[client_id] = ws
+                # 存储用户ID映射
+                if user_id:
+                    self._client_user_mapping[client_id] = user_id
             
             conn_info = self.get_connection_info(ws)
-            log("DEBUG", f"[WebSocketManager] Connection added: {json.dumps(conn_info, indent=2)}" + (f" (client_id: {client_id})" if client_id else ""))
+            log("DEBUG", f"[WebSocketManager] Connection added: {json.dumps(conn_info, indent=2)}" + (f" (client_id: {client_id}, user_id: {user_id})" if client_id else ""))
         
         if self._send_thread is None or not self._send_thread.is_alive():
             log("WARNING", "[WebSocketManager] Send thread not running, restarting...")
@@ -94,9 +101,12 @@ class WebSocketManager:
             conn_id = id(ws)
             start_time = self._connection_times.pop(conn_id, None)
             
-            # 清理客户端ID映射
-            if client_id and self._client_id_mapping.get(client_id) == ws:
-                del self._client_id_mapping[client_id]
+            # 清理客户端ID映射和用户ID映射
+            if client_id:
+                if self._client_id_mapping.get(client_id) == ws:
+                    del self._client_id_mapping[client_id]
+                # 同时清理用户ID映射
+                self._client_user_mapping.pop(client_id, None)
             
             conn_info = self.get_connection_info(ws)
             if start_time:
@@ -116,6 +126,16 @@ class WebSocketManager:
         """
         with self._lock:
             return self._client_id_mapping.get(client_id)
+    
+    def get_client_user_mapping(self) -> Dict[str, str]:
+        """
+        获取客户端ID到用户ID的映射副本
+        
+        Returns:
+            Dict[str, str]: 客户端ID到用户ID的映射字典副本
+        """
+        with self._lock:
+            return self._client_user_mapping.copy()
     
     
     def send_to_client(self, client_id: str, message: Union[dict, str]) -> bool:
@@ -167,6 +187,7 @@ class WebSocketManager:
                 # 清理连接和映射记录
                 self.active_connections.clear()
                 self._client_id_mapping.clear()
+                self._client_user_mapping.clear()
             
             for ws in connections_to_close:
                 try:

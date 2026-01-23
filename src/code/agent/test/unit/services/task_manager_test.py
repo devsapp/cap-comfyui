@@ -1,9 +1,12 @@
 import pytest
+import time
 from unittest.mock import Mock, patch
-from flask import Flask
+from flask import Flask, g
+from collections import defaultdict
 import requests
 
 from services.gateway.task.task_manager import TaskManager
+from services.gateway.task.task import Task, TaskStatus
 from exceptions.exceptions import ConfigurationError, InvalidRequestError, WorkerExecutionError
 
 
@@ -19,7 +22,11 @@ def app():
 def task_manager():
     with patch('services.serverlessapi.serverless_api_service.ServerlessApiService') as mock_service:
         mock_service.return_value = Mock()
-        manager = TaskManager(gpu_function_url="http://gpu-service")
+        manager = TaskManager(
+            max_active_tasks=100,
+            max_completed_tasks=50,
+            gpu_function_url="http://gpu-service"
+        )
         yield manager
 
 
@@ -223,3 +230,261 @@ class TestForwardToGpuSync:
                 
                 assert exc_info.value.code == 500
                 assert 'Failed to send sync request to GPU' in str(exc_info.value)
+class TestRunningTaskCount:
+    """测试任务计数"""
+    
+    def test_running_count_by_user_initialization(self, task_manager):
+        """_running_count_by_user 初始化"""
+        assert hasattr(task_manager, '_running_count_by_user')
+        assert isinstance(task_manager._running_count_by_user, defaultdict)
+    
+    def test_get_running_task_count_by_user_empty(self, task_manager, app):
+        """空队列的运行计数"""
+        with app.test_request_context():
+            g.user_id = 'user-test'
+            count = task_manager.get_running_task_count_by_user(g.user_id)
+            assert count == 0
+    
+    def test_submit_task_increases_running_count(self, task_manager, app):
+        """提交任务增加运行计数"""
+        with app.test_request_context():
+            g.user_id = 'user-test'
+            
+            with patch.object(task_manager, '_start_polling'), \
+                 patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster'):
+                
+                prompt_body = {
+                    "prompt": {"1": {"class_type": "Test"}},
+                    "extra_data": {"client_id": "test-client"}
+                }
+                
+                task_manager.submit_task(prompt_body, "client-123")
+                
+                count = task_manager.get_running_task_count_by_user(g.user_id)
+                assert count == 1
+
+
+class TestUserAuthentication:
+    """测试用户认证相关功能（问题 1.1 修复验证）"""
+    
+    def test_multi_user_isolation_with_auth(self, task_manager, app):
+        """验证多用户隔离（修复后不再使用 'default'）"""
+        with patch.object(task_manager, '_start_polling'), \
+             patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster'):
+            
+            prompt_body = {
+                "prompt": {"1": {"class_type": "Test"}},
+                "extra_data": {"client_id": "test-client"}
+            }
+            
+            # 用户1提交任务
+            with app.test_request_context():
+                g.user_id = 'user-alice'
+                task_id_1 = task_manager.submit_task(prompt_body, "client-1")
+                count_alice = task_manager.get_running_task_count_by_user(g.user_id)
+            
+            # 用户2提交任务
+            with app.test_request_context():
+                g.user_id = 'user-bob'
+                task_id_2 = task_manager.submit_task(prompt_body, "client-2")
+                count_bob = task_manager.get_running_task_count_by_user(g.user_id)
+            
+            # 验证每个用户只能看到自己的任务
+            assert count_alice == 1
+            assert count_bob == 1
+            
+            # 用户1再次查询，应该还是1
+            with app.test_request_context():
+                g.user_id = 'user-alice'
+                count_alice_again = task_manager.get_running_task_count_by_user(g.user_id)
+                assert count_alice_again == 1
+
+
+class TestCancelTaskRaceCondition:
+    """测试取消任务的竞态条件修复（问题 1.2）"""
+    
+    def test_cancel_task_updates_count_correctly(self, task_manager, app):
+        """取消任务时正确更新计数器"""
+        with app.test_request_context():
+            g.user_id = 'user-test'
+            
+            with patch.object(task_manager, '_start_polling'), \
+                 patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster'):
+                
+                prompt_body = {
+                    "prompt": {"1": {"class_type": "Test"}},
+                    "extra_data": {"client_id": "test-client"}
+                }
+                
+                # 提交任务
+                task_id = task_manager.submit_task(prompt_body, "client-123")
+                
+                # 验证计数增加
+                count_before = task_manager.get_running_task_count_by_user(g.user_id)
+                assert count_before == 1
+                
+                # 取消任务
+                with patch.object(task_manager, '_stop_polling'):
+                    cancelled = task_manager.cancel_task(task_id)
+                
+                assert cancelled is True
+                
+                # 验证计数减少
+                count_after = task_manager.get_running_task_count_by_user(g.user_id)
+                assert count_after == 0
+    
+    def test_cancel_completed_task_fails(self, task_manager, app):
+        """无法取消已完成的任务"""
+        with app.test_request_context():
+            g.user_id = 'user-test'
+            
+            with patch.object(task_manager, '_start_polling'), \
+                 patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster'):
+                
+                prompt_body = {
+                    "prompt": {"1": {"class_type": "Test"}},
+                    "extra_data": {"client_id": "test-client"}
+                }
+                
+                # 提交任务
+                task_id = task_manager.submit_task(prompt_body, "client-123")
+                
+                # 模拟任务完成
+                task = task_manager.get_task(task_id)
+                task.update_status(TaskStatus.RUNNING)
+                task.update_status(TaskStatus.COMPLETED)
+                
+                # 尝试取消已完成的任务
+                with patch.object(task_manager, '_stop_polling'):
+                    cancelled = task_manager.cancel_task(task_id)
+                
+                # 应该失败
+                assert cancelled is False
+    
+    def test_cancel_nonexistent_task(self, task_manager, app):
+        """取消不存在的任务应返回 False"""
+        with app.test_request_context():
+            g.user_id = 'user-test'
+            
+            with patch.object(task_manager, '_stop_polling'):
+                cancelled = task_manager.cancel_task("nonexistent-task-id")
+            
+            assert cancelled is False
+    
+    def test_cancel_task_stops_polling(self, task_manager, app):
+        """取消任务时应停止轮询"""
+        with app.test_request_context():
+            g.user_id = 'user-test'
+            
+            with patch.object(task_manager, '_start_polling'), \
+                 patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster'):
+                
+                prompt_body = {
+                    "prompt": {"1": {"class_type": "Test"}},
+                    "extra_data": {"client_id": "test-client"}
+                }
+                
+                # 提交任务
+                task_id = task_manager.submit_task(prompt_body, "client-123")
+                
+                # 取消任务，验证 _stop_polling 被调用
+                with patch.object(task_manager, '_stop_polling') as mock_stop_polling:
+                    task_manager.cancel_task(task_id)
+                    
+                    # 验证停止轮询被调用
+                    mock_stop_polling.assert_called_once_with(task_id)
+    
+    def test_concurrent_cancel_and_complete(self, task_manager, app):
+        """模拟并发场景：取消和完成同时发生"""
+        with app.test_request_context():
+            g.user_id = 'user-test'
+            
+            with patch.object(task_manager, '_start_polling'), \
+                 patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster'):
+                
+                prompt_body = {
+                    "prompt": {"1": {"class_type": "Test"}},
+                    "extra_data": {"client_id": "test-client"}
+                }
+                
+                # 提交任务
+                task_id = task_manager.submit_task(prompt_body, "client-123")
+                
+                initial_count = task_manager.get_running_task_count_by_user(g.user_id)
+                assert initial_count == 1
+                
+                # 模拟任务开始运行
+                task = task_manager.get_task(task_id)
+                task.update_status(TaskStatus.RUNNING)
+                
+                # 尝试取消（在锁内完成所有操作）
+                with patch.object(task_manager, '_stop_polling'):
+                    cancelled = task_manager.cancel_task(task_id)
+                
+                # 验证取消成功
+                assert cancelled is True
+                
+                # 验证计数正确
+                final_count = task_manager.get_running_task_count_by_user(g.user_id)
+                assert final_count == 0
+                
+                # 验证任务已被删除
+                task_after = task_manager.get_task(task_id)
+                assert task_after is None
+class TestPerformance:
+    """测试性能"""
+    
+    def test_get_history_with_many_users(self, task_manager, app):
+        """多用户场景性能测试"""
+        with task_manager._lock:
+            for user_idx in range(100):
+                user_id = f"user-{user_idx}"
+                for i in range(10):
+                    prompt_id = f"prompt-{user_id}-{i}"
+                    history_item = {
+                        "prompt": [i, prompt_id, {}, {}, []],
+                        "outputs": {},
+                        "status": {"completed": True, "status_str": "success", "messages": []},
+                        "meta": {},
+                        "user_id": user_id
+                    }
+                    task_manager._history_manager.history[prompt_id] = history_item
+                    task_manager._history_manager._history_by_user[user_id][prompt_id] = history_item
+        
+        assert len(task_manager._history_manager.history) == 1000
+        
+        with app.test_request_context():
+            g.user_id = 'user-50'
+            
+            start_time = time.time()
+            result = task_manager.get_history()
+            elapsed = time.time() - start_time
+            
+            assert len(result) == 10
+            assert elapsed < 0.05
+
+
+class TestDataConsistency:
+    """测试数据一致性"""
+    
+    def test_history_and_index_stay_in_sync(self, task_manager, app):
+        """history 和索引保持同步"""
+        with app.test_request_context():
+            g.user_id = 'user-test'
+            
+            with task_manager._lock:
+                for i in range(5):
+                    prompt_id = f"prompt-{i}"
+                    history_item = {
+                        "prompt": [i, prompt_id, {}, {}, []],
+                        "outputs": {},
+                        "status": {"completed": True, "status_str": "success", "messages": []},
+                        "meta": {},
+                        "user_id": "user-test"
+                    }
+                    task_manager._history_manager.history[prompt_id] = history_item
+                    task_manager._history_manager._history_by_user["user-test"][prompt_id] = history_item
+            
+            assert len(task_manager._history_manager.history) == 5
+            assert len(task_manager._history_manager._history_by_user["user-test"]) == 5
+            assert set(task_manager._history_manager.history.keys()) == set(task_manager._history_manager._history_by_user["user-test"].keys())

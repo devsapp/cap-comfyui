@@ -1,8 +1,8 @@
 # 定义变量
 REGION ?= cn-hangzhou
-COMFYUI_IMAGE = comfyui:v0.3.77-nunchaku
+COMFYUI_IMAGE = comfyui:v0.3.77-beta
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.77-alpha-nunchaku
+OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.77-beta
 
 .PHONY: upgrade
 upgrade: build upload-base

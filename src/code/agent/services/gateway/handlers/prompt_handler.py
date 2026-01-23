@@ -3,8 +3,9 @@ Prompt Handler
 处理 /prompt 请求逻辑
 """
 import traceback
-from flask import request, jsonify
+from flask import request, jsonify, g
 
+import constants
 from utils.logger import log
 from exceptions.exceptions import TaskError, InternalError
 
@@ -44,6 +45,12 @@ class PromptHandler:
                 }
             }), 400
         
+        # 注入 user_id 到 extra_data
+        user_id = getattr(g, 'user_id', 'default')
+        if 'extra_data' not in request_data:
+            request_data['extra_data'] = {}
+        request_data['extra_data'][constants.HEADER_FUNART_COMFY_USERID.lower()] = user_id
+
         try:
             # 转发给GPU
             task_id, result = self.task_manager.forward_to_gpu_async(

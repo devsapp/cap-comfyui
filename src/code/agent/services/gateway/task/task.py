@@ -3,8 +3,8 @@ Task 模型定义
 定义任务的状态枚举和数据结构
 """
 import time
-from typing import Optional, Callable, Any
-from dataclasses import dataclass, field
+from typing import Optional
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -27,20 +27,12 @@ class TaskStatus(Enum):
 @dataclass
 class Task:
     """任务数据模型"""
-    task_id: str
+    task_id: str  # 任务ID，同时也作为 ComfyUI history 的 prompt_id
     client_id: str
     prompt_body: dict
-    callback: Optional[Callable] = None
+    user_id: str  # 任务所属用户ID
     status: TaskStatus = TaskStatus.PENDING
-    
-    # 时间戳
-    create_at: float = field(default_factory=time.time)
     completed_at: Optional[float] = None
-    
-    # 任务执行结果与状态历史（用于 history.json 构造）
-    results: Optional[list] = None                # serverless_api 最终结果 data.results
-    final_status_data: Optional[dict] = None      # 最终状态整包（serverless_api 或 error/execution_error）
-    status_history: list = field(default_factory=list)
     
     def update_status(self, new_status: TaskStatus) -> bool:
         """

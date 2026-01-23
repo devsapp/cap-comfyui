@@ -27,6 +27,8 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     wget https://aiacc-inference-public-v2.oss-cn-hangzhou.aliyuncs.com/deepgpu/comfyui/nodes/20251013/ComfyUI-deepgpu.tar.gz && \
     tar -zxf ComfyUI-deepgpu.tar.gz
 
+COPY custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+
 
 FROM python:3.10.16-slim AS dependencies
 

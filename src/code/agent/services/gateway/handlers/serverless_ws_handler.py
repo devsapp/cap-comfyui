@@ -7,15 +7,15 @@ import requests
 from flask import request
 from simple_websocket import Server
 
+import constants
 from utils.logger import log
 
 
 class ServerlessWsHandler:
     """处理 Serverless WebSocket 转发到 GPU (WS->/api/serverless/ws)"""
     
-    def __init__(self, gpu_function_url, task_manager=None):
+    def __init__(self, gpu_function_url):
         self.gpu_function_url = gpu_function_url
-        self.task_manager = task_manager
     
     def _extract_task_id(self) -> str:
         """
@@ -24,7 +24,7 @@ class ServerlessWsHandler:
         Returns:
             str: task_id
         """
-        return request.headers.get('x-fc-request-id')
+        return request.headers.get(constants.HEADER_FC_REQUEST_ID)
     
     def handle_connection(self, ws: Server):
         """
@@ -41,7 +41,7 @@ class ServerlessWsHandler:
             try:
                 ws.send(json.dumps({
                     "type": "error",
-                    "error_code": "configuration_error",
+                    "error_code": constants.ERROR_CODE.CONFIGURATION_ERROR.value,
                     "error_message": "GPU_FUNCTION_URL not configured for CPU mode"
                 }))
             except:
@@ -65,7 +65,7 @@ class ServerlessWsHandler:
                 log("ERROR", f"[ServerlessWS][{task_id}] {error_msg}")
                 ws.send(json.dumps({
                     "type": "error",
-                    "error_code": "invalid_json",
+                    "error_code": constants.ERROR_CODE.INVALID_JSON.value,
                     "error_message": error_msg
                 }))
                 return
@@ -81,8 +81,8 @@ class ServerlessWsHandler:
             
             # 准备 headers
             headers = {
-                "x-fc-async-task-id": task_id,
-                "x-fc-task-id": task_id,
+                constants.HEADER_FC_ASYNC_TASK_ID: task_id,
+                constants.HEADER_FC_TASK_ID: task_id,
                 "Content-Type": "application/json",
             }
             
@@ -100,11 +100,11 @@ class ServerlessWsHandler:
             )
             
             if resp.status_code != 200:
-                error_msg = f"GPU returned HTTP {resp.status_code}"
+                error_msg = f"Service returned HTTP {resp.status_code}"
                 log("ERROR", f"[ServerlessWS][{task_id}] {error_msg}")
                 ws.send(json.dumps({
                     "type": "error",
-                    "error_code": "gpu_http_error",
+                    "error_code": constants.ERROR_CODE.INTERNAL_ERROR.value,
                     "error_message": error_msg
                 }))
                 return
@@ -128,37 +128,13 @@ class ServerlessWsHandler:
             
             log("INFO", f"[ServerlessWS][{task_id}] Streaming completed")
         
-        except requests.exceptions.Timeout:
-            error_msg = "Request to GPU timed out"
-            log("ERROR", f"[ServerlessWS][{task_id}] {error_msg}")
-            try:
-                ws.send(json.dumps({
-                    "type": "error",
-                    "error_code": "gpu_timeout",
-                    "error_message": error_msg
-                }))
-            except:
-                pass
-        
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Request to GPU failed: {str(e)}"
-            log("ERROR", f"[ServerlessWS][{task_id}] {error_msg}")
-            try:
-                ws.send(json.dumps({
-                    "type": "error",
-                    "error_code": "gpu_request_error",
-                    "error_message": error_msg
-                }))
-            except:
-                pass
-        
         except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
+            error_msg = f"Internal error: {str(e)}"
             log("ERROR", f"[ServerlessWS][{task_id}] {error_msg}")
             try:
                 ws.send(json.dumps({
                     "type": "error",
-                    "error_code": "internal_error",
+                    "error_code": constants.ERROR_CODE.INTERNAL_ERROR.value,
                     "error_message": error_msg
                 }))
             except:

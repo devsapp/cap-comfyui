@@ -157,6 +157,9 @@ GPU_FUNCTION_URL = os.getenv("GPU_FUNCTION_URL", "")
 # HTTP Header 常量
 HEADER_SNAPSHOT_NAME = "X-FunArt-Snapshot"
 HEADER_FC_INVOCATION_TYPE = "X-FC-Invocation-Type"
+HEADER_FC_ASYNC_TASK_ID = "x-fc-async-task-id"
+HEADER_FC_REQUEST_ID = "x-fc-request-id"
+HEADER_FC_TASK_ID = "x-fc-task-id"
 
 # 是否禁用工作流保存,默认允许保存
 DISABLE_FLOW_SAVE = os.getenv('DISABLE_WORKFLOW_SAVE', '').lower() == 'true'
@@ -169,3 +172,8 @@ class ERROR_CODE(Enum):
     INVALID_PARAMS = "INVALID_PARAMS"
     PROMPT_ERROR = "PROMPT_ERROR"
     EXECUTION_FAILED = "EXECUTION_FAILED"
+    
+    # Gateway 错误码
+    CONFIGURATION_ERROR = "configuration_error"     # 配置错误
+    INTERNAL_ERROR = "internal_error"               # 内部错误
+    INVALID_JSON = "invalid_json"                   # JSON格式错误

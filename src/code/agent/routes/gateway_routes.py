@@ -43,11 +43,11 @@ class GatewayRoutes:
 
         self.queue_handler = QueueHandler(task_manager)
         self.prompt_handler = PromptHandler(task_manager)
-        self.serverless_handler = ServerlessHandler(task_manager)
+        self.serverless_handler = ServerlessHandler()
         self.history_handler = HistoryHandler()
         self.userdata_handler = UserdataHandler()
         self.ws_handler = WsHandler()
-        self.serverless_ws_handler = ServerlessWsHandler(constants.GPU_FUNCTION_URL, task_manager)
+        self.serverless_ws_handler = ServerlessWsHandler(constants.GPU_FUNCTION_URL)
         
         self.setup_routes()
     

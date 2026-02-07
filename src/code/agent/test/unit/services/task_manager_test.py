@@ -488,3 +488,213 @@ class TestDataConsistency:
             assert len(task_manager._history_manager.history) == 5
             assert len(task_manager._history_manager._history_by_user["user-test"]) == 5
             assert set(task_manager._history_manager.history.keys()) == set(task_manager._history_manager._history_by_user["user-test"].keys())
+
+
+class TestHandleMessage:
+    """测试 handle_message 方法"""
+    
+    @pytest.fixture
+    def sample_task(self, task_manager, app):
+        """创建一个示例任务"""
+        with app.test_request_context():
+            g.user_id = 'test-user'
+            
+            task = Task(
+                task_id='test-task-123',
+                client_id='test-client-456',
+                prompt_body={'prompt': {'1': {'class_type': 'TestNode'}}},
+                user_id='test-user',
+                status=TaskStatus.PENDING
+            )
+            
+            with task_manager._lock:
+                task_manager._tasks[task.task_id] = task
+                task_manager._running_count_by_user[task.user_id] = 1
+            
+            yield task
+            
+            # 清理
+            with task_manager._lock:
+                if task.task_id in task_manager._tasks:
+                    del task_manager._tasks[task.task_id]
+                task_manager._running_count_by_user[task.user_id] = 0
+    
+    def test_execution_start_updates_status_to_running(self, task_manager, sample_task, app):
+        """execution_start 应该将任务状态更新为 RUNNING"""
+        message = {
+            'type': 'execution_start',
+            'data': {
+                'prompt_id': sample_task.task_id,
+                'timestamp': int(time.time() * 1000)
+            }
+        }
+        
+        with app.test_request_context():
+            g.user_id = sample_task.user_id
+            
+            with patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster.broadcast_task_status'):
+                task_manager.handle_message(sample_task.task_id, message)
+        
+        # 验证状态更新
+        task = task_manager.get_task(sample_task.task_id)
+        assert task.status == TaskStatus.RUNNING
+    
+    def test_execution_success_updates_status_to_completed(self, task_manager, sample_task, app):
+        """execution_success 应该将任务状态更新为 COMPLETED"""
+        # 先设置为 RUNNING
+        sample_task.update_status(TaskStatus.RUNNING)
+        
+        message = {
+            'type': 'execution_success',
+            'data': {
+                'prompt_id': sample_task.task_id,
+                'timestamp': int(time.time() * 1000)
+            }
+        }
+        
+        with app.test_request_context():
+            g.user_id = sample_task.user_id
+            
+            with patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster.broadcast_task_status'):
+                task_manager.handle_message(sample_task.task_id, message)
+        
+        # 验证状态更新
+        task = task_manager.get_task(sample_task.task_id)
+        assert task.status == TaskStatus.COMPLETED
+        assert task.completed_at is not None
+    
+    def test_execution_error_updates_status_to_failed(self, task_manager, sample_task, app):
+        """execution_error 应该将任务状态更新为 FAILED"""
+        # 先设置为 RUNNING
+        sample_task.update_status(TaskStatus.RUNNING)
+        
+        message = {
+            'type': 'execution_error',
+            'data': {
+                'prompt_id': sample_task.task_id,
+                'node_id': '5',
+                'node_type': 'KSampler',
+                'exception_message': 'CUDA out of memory',
+                'timestamp': int(time.time() * 1000)
+            }
+        }
+        
+        with app.test_request_context():
+            g.user_id = sample_task.user_id
+            
+            with patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster.broadcast_task_status'):
+                task_manager.handle_message(sample_task.task_id, message)
+        
+        # 验证状态更新
+        task = task_manager.get_task(sample_task.task_id)
+        assert task.status == TaskStatus.FAILED
+        assert task.completed_at is not None
+    
+    def test_error_updates_status_to_failed(self, task_manager, sample_task, app):
+        """error 消息应该将任务状态更新为 FAILED"""
+        message = {
+            'type': 'error',
+            'error_code': 'PROMPT_ERROR',
+            'error_message': 'ComfyUI prompt api failed with 400: Prompt outputs failed validation',
+            'raw': {
+                'error': {
+                    'type': 'prompt_outputs_failed_validation',
+                    'message': 'Prompt outputs failed validation'
+                },
+                'node_errors': {}
+            }
+        }
+        
+        with app.test_request_context():
+            g.user_id = sample_task.user_id
+            
+            with patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster.broadcast_task_status'):
+                task_manager.handle_message(sample_task.task_id, message)
+        
+        # 验证状态更新
+        task = task_manager.get_task(sample_task.task_id)
+        assert task.status == TaskStatus.FAILED
+    
+    def test_error_without_node_errors_creates_generic_execution_error(self, task_manager, sample_task, app):
+        """没有 node_errors 的 error 消息应该创建通用的 execution_error"""
+        message = {
+            'type': 'error',
+            'error_code': 'INTERNAL_ERROR',
+            'error_message': 'GPU service unavailable'
+        }
+        
+        with app.test_request_context():
+            g.user_id = sample_task.user_id
+            
+            with patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster.broadcast_task_status') as mock_broadcast:
+                task_manager.handle_message(sample_task.task_id, message)
+                
+                # 验证广播了转换后的 execution_error
+                mock_broadcast.assert_called_once()
+                broadcast_message = mock_broadcast.call_args[0][1]
+                
+                assert broadcast_message['type'] == 'execution_error'
+                assert broadcast_message['data']['exception_message'] == 'GPU service unavailable'
+                assert broadcast_message['data']['node_id'] == '__validation__'
+                assert broadcast_message['data']['node_type'] == 'validation'
+    
+    def test_error_with_node_errors_extracts_real_node_info(self, task_manager, sample_task, app):
+        """有 node_errors 的 error 消息应该提取真实节点信息"""
+        message = {
+            'type': 'error',
+            'error_code': 'PROMPT_ERROR',
+            'error_message': 'ComfyUI prompt api failed with 400',
+            'raw': {
+                'error': {
+                    'type': 'prompt_outputs_failed_validation',
+                    'message': 'Prompt outputs failed validation'
+                },
+                'node_errors': {
+                    '8': {
+                        'errors': [{
+                            'message': 'Custom validation failed for node',
+                            'details': 'Invalid video file: test.mp4'
+                        }],
+                        'class_type': 'LoadVideo',
+                        'dependent_outputs': ['9']
+                    }
+                }
+            }
+        }
+        
+        with app.test_request_context():
+            g.user_id = sample_task.user_id
+            
+            with patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster.broadcast_task_status') as mock_broadcast:
+                task_manager.handle_message(sample_task.task_id, message)
+                
+                # 验证广播了正确的 execution_error
+                mock_broadcast.assert_called_once()
+                broadcast_message = mock_broadcast.call_args[0][1]
+                
+                assert broadcast_message['type'] == 'execution_error'
+                assert broadcast_message['data']['node_id'] == '8'  # 真实的节点ID
+                assert broadcast_message['data']['node_type'] == 'LoadVideo'  # 真实的节点类型
+                assert 'Invalid video file: test.mp4' in broadcast_message['data']['exception_message']
+    
+    def test_status_message_returns_early(self, task_manager, sample_task, app):
+        """status 消息应该直接返回，不做任何处理"""
+        message = {
+            'type': 'status',
+            'data': {
+                'status': {
+                    'exec_info': {
+                        'queue_remaining': 0
+                    }
+                }
+            }
+        }
+        
+        with app.test_request_context():
+            g.user_id = sample_task.user_id
+            
+            with patch('services.gateway.task.utils.task_manager_util.TaskStatusBroadcaster.broadcast_task_status') as mock_broadcast:
+                task_manager.handle_message(sample_task.task_id, message)
+                
+                # 验证没有广播（因为直接返回了）
+                mock_broadcast.assert_not_called()

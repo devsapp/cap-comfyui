@@ -401,10 +401,49 @@ class TaskManager:
                 # 更新 history outputs（HistoryManager 已经是线程安全的）
                 self._history_manager.update_history_outputs(message)
             elif status_type == 'execution_error':
-                # 任务失败
+                # 任务执行失败
                 self._update_task_status(task_id, message, TaskStatus.FAILED)
                 # 更新 history_item 的 status
                 self._update_history_status(message, "error")
+
+            elif status_type == 'error':
+                # 各类错误（包括validate prompt失败、ComfyUI异常等）
+                # 更新任务状态为FAILED
+                self._update_task_status(task_id, message, TaskStatus.FAILED)
+                
+                log("ERROR", f"[TaskManager] Task {task_id} failed with error: {message.get('error_message', 'unknown error')}")
+                
+                # 将error消息转换为ComfyUI前端能识别的格式
+                # 保存原始error信息
+                original_error_message = message.get('error_message', 'Unknown error')
+                original_error_code = message.get('error_code', 'ValidationError')
+                original_raw = message.get('raw', {})
+                
+                # 提取node_errors（如果是validate错误，GPU会返回node_errors）
+                node_errors = {}
+                if isinstance(original_raw, dict):
+                    node_errors = original_raw.get('node_errors', {})
+                
+                # 构造execution_error格式的消息，供WebSocket广播
+                # 对于validate错误，使用特殊的node_id: "__validation__"
+                message = {
+                    "type": "execution_error",
+                    "data": {
+                        "prompt_id": task_id,
+                        "node_id": "__validation__",  # 特殊节点ID表示这是验证错误
+                        "node_type": "validation",
+                        "executed": [],  # validate失败时没有节点被执行
+                        "exception_message": original_error_message,
+                        "exception_type": original_error_code,
+                        "traceback": [],
+                        "current_inputs": [],
+                        "current_outputs": []
+                    }
+                }
+                
+                # 如果有node_errors，添加到data中（前端可能会用）
+                if node_errors:
+                    message["data"]["node_errors"] = node_errors
 
             elif status_type == 'status':
                 # 忽略纯 status 消息, agent的队列代替comfyui自己的队列
@@ -881,9 +920,11 @@ class MessagesPoller:
         except Exception as e:
             return False
         
-        # 只有收到 serverless_api 时才认为任务完成
-        # execution_success 和 execution_error 只是中间状态，需要等待 serverless_api
-        return message_type == "serverless_api"
+        # 任务完成包括成功和失败两种终态：
+        # - serverless_api: 正常完成
+        # - error: 各类错误（包括validate prompt失败）
+        # - execution_error: ComfyUI执行过程中的错误
+        return message_type in ("serverless_api", "error", "execution_error")
 
 
 # 全局任务管理器实例 - 延迟初始化

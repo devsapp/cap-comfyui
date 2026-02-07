@@ -4,7 +4,7 @@ import os
 import threading
 import traceback
 
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, g
 from flask_sock import Sock
 import requests
 
@@ -13,6 +13,7 @@ from exceptions.exceptions import CustomError
 from services.management_service import ManagementService, Action, BackendStatus
 from utils.logger import log
 from utils.error_handler import ErrorResponse
+from utils.user_identity import identify_user_or_default
 from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
 from .gateway_routes import GatewayRoutes
@@ -202,6 +203,7 @@ class Routes:
 
         @self.app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
         @self.app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+        @identify_user_or_default
         def proxy(path=""):
             backend_status = self.management.service.status
             if backend_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
@@ -216,10 +218,18 @@ class Routes:
             target_url = f"http://{constants.APP_HOST}{original_uri}"
             # print(f"Forwarding http request to path: {target_url}")
 
+            # 准备转发的 headers（添加用户标识用于多租户支持）
+            forward_headers = dict(request.headers)  
+            forward_headers.pop(constants.HEADER_FUNART_COMFY_USERID, None)
+            
+            user_id = getattr(g, 'user_id', None)
+            if user_id:
+                forward_headers[constants.HEADER_FUNART_COMFY_USERID] = user_id
+
             resp = requests.request(
                 method=request.method,
                 url=target_url,
-                headers=dict(request.headers),
+                headers=forward_headers,
                 params=request.args,
                 data=request.get_data(),
                 cookies=request.cookies,

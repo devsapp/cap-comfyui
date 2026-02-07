@@ -167,6 +167,12 @@ DISABLE_FLOW_SAVE = os.getenv('DISABLE_WORKFLOW_SAVE', '').lower() == 'true'
 # 日志配置
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+# 多租户/多用户模式配置
+ENABLE_COMFYUI_MULTI_USER = os.getenv('ENABLE_COMFYUI_MULTI_USER', '').lower() == 'true'
+
+# 用户身份识别相关常量
+HEADER_FUNART_COMFY_USERID = 'X-FunArt-Comfy-UserId'
+
 class ERROR_CODE(Enum):
     UNCLASSIFY = "UNCLASSIFY"
     INVALID_PARAMS = "INVALID_PARAMS"

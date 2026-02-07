@@ -24,7 +24,7 @@ class QueueHandler:
         
         try:
             # 获取任务列表
-            all_tasks = self.task_manager.get_all_tasks()
+            all_tasks = self.task_manager.get_current_user_tasks()
         except Exception as e:
             log("ERROR", f"Error fetching tasks for queue request: {e}")
             return jsonify({
@@ -79,8 +79,6 @@ class QueueHandler:
         Returns:
             Flask response
         """
-        log("DEBUG", f"Handling POST /api/queue request")
-        
         request_data = request.get_json() or {}
         
         if "clear" in request_data and request_data["clear"]:

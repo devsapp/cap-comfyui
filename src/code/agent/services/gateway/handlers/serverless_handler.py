@@ -46,49 +46,53 @@ class ServerlessHandler:
         # 构造 GPU URL
         gpu_url = f"{constants.GPU_FUNCTION_URL.rstrip('/')}/api/serverless/run"
         
-        # 准备 headers（透传所有客户端 headers）
-        forward_headers = {}
-        skip_headers = {'host', 'content-length'}  # 这些 header 不能透传
-        
-        for k, v in request.headers.items():
-            if k.lower() not in skip_headers:
-                forward_headers[k] = v
+        # 提取 task_id（用于日志和 headers）
+        task_id = (request.headers.get(constants.HEADER_FC_ASYNC_TASK_ID) or 
+                   request.headers.get(constants.HEADER_FC_REQUEST_ID) or 
+                   'unknown')
         
         # 检测是否为异步调用
         invocation_type = request.headers.get(constants.HEADER_FC_INVOCATION_TYPE, '').lower()
         is_async = (invocation_type == 'async')
         
-        # 提取 task_id（用于日志）
-        task_id = (request.headers.get(constants.HEADER_FC_ASYNC_TASK_ID) or 
-                   request.headers.get(constants.HEADER_FC_REQUEST_ID) or 
-                   'unknown')
+        # 准备 headers
+        forward_headers = {
+            'x-fc-request-id': task_id,
+            'x-fc-trace-id': task_id,
+        }
+        
+        # 如果是异步调用，需要设置 x-fc-invocation-type 告诉 GPU 函数进行异步处理
+        if is_async:
+            forward_headers['x-fc-invocation-type'] = 'Async'
+        
+        # 复制客户端的其他 headers
+        # 跳过我们已经设置的 headers，避免被覆盖
+        # 透传host会导致请求在cpu函数上循环调用，透传content-length会导致下游读取payload截断
+        skip_headers = {'x-fc-request-id', 'x-fc-trace-id', 'x-fc-invocation-type', 'host', 'content-length'}
+        for k, v in request.headers.items():
+            if k.lower() not in skip_headers:
+                forward_headers[k] = v
         
         try:
-            if is_async:
-                log("INFO", f"[ServerlessHandler][{task_id}] Forwarding async request")
-                
-                resp = requests.post(
-                    gpu_url,
-                    json=body,
-                    headers=forward_headers,
-                    params=request.args,
-                    timeout=30
-                )
-                
-                return resp.json(), resp.status_code
+            # 根据调用类型设置超时时间
+            timeout = 30 if is_async else 600
             
-            else:
-                log("INFO", f"[ServerlessHandler][{task_id}] Forwarding sync request")
-                
-                resp = requests.post(
-                    gpu_url,
-                    json=body,
-                    headers=forward_headers,
-                    params=request.args,
-                    timeout=600
-                )
-                
+            log("INFO", f"[ServerlessHandler][{task_id}] Forwarding {'async' if is_async else 'sync'} request")
+            
+            resp = requests.post(
+                gpu_url,
+                json=body,
+                headers=forward_headers,
+                params=request.args,
+                timeout=timeout
+            )
+            
+            # 原样返回 GPU 的响应
+            try:
                 return resp.json(), resp.status_code
+            except Exception:
+                # GPU 返回非 JSON（如空响应体）
+                return {}, resp.status_code
         
         except Exception as e:
             log("ERROR", f"[ServerlessHandler][{task_id}] Internal error: {e}\n{traceback.format_exc()}")

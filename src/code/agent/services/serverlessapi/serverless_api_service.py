@@ -144,9 +144,16 @@ class ServerlessApiService:
         if task_id:
             req["prompt_id"] = task_id
         
+        # 从 extra_data 中提取 user_id，设置到 HTTP header
+        headers = {}
+        extra_data = request_body.get("extra_data", {})
+        user_id = extra_data.get(constants.HEADER_FUNART_COMFY_USERID.lower(), 'default')
+        headers[constants.HEADER_FUNART_COMFY_USERID] = user_id
+        
         res = requests.post(
             os.path.join(self.endpoint, "prompt"),
             json=req,
+            headers=headers,
         )
 
         if res.status_code != 200:
@@ -193,16 +200,18 @@ class ServerlessApiService:
 
         return ws
 
-    def api_upload_image(self, content: bytes):
+    def api_upload_image(self, content: bytes, user_id: str = 'default'):
         """
         上传图片到 ComfyUI 的 input 目录
         
         直接将图片写入 INPUT_DIR; 
         文件名基于内容 MD5 生成，相同内容产生相同文件名。
         如果文件已存在（内容相同），仅更新 mtime 而不重写内容。
+        支持多用户路径隔离。
         
         Args:
             content: 图片二进制内容
+            user_id: 用户ID，用于路径隔离（默认 'default'）
             
         Returns:
             dict: 包含上传后的文件信息，格式 {"name": "filename"}
@@ -210,7 +219,15 @@ class ServerlessApiService:
         # 基于内容生成确定性的文件名，相同内容产生相同文件名
         content_hash = hashlib.md5(content).hexdigest()
         filename = str(UUID(content_hash))
-        filepath = os.path.join(constants.INPUT_DIR, filename)
+        
+        # 构建用户隔离路径
+        input_dir = constants.INPUT_DIR
+        if user_id != 'default':
+            input_dir = os.path.join(input_dir, "users", user_id)
+            # 确保用户目录存在
+            os.makedirs(input_dir, exist_ok=True)
+        
+        filepath = os.path.join(input_dir, filename)
         
         if os.path.exists(filepath):
             # 文件已存在（内容相同），仅更新 mtime，防止被清理
@@ -264,7 +281,7 @@ class ServerlessApiService:
         """
         requests.post(os.path.join(self.endpoint, "history"), json={"clear": True})
 
-    def parse_prompt(self, prompt: map):
+    def parse_prompt(self, prompt: map, extra_data: dict = None):
         """
         预处理工作流定义
         
@@ -275,6 +292,7 @@ class ServerlessApiService:
         
         Args:
             prompt: ComfyUI 工作流定义（字典格式）
+            extra_data: 额外数据，包含 user_id 等信息（可选）
             
         Returns:
             map: 处理后的工作流定义
@@ -283,6 +301,10 @@ class ServerlessApiService:
             Exception: 当图片加载失败时抛出
         """
         ak, sk, sts = self.get_credentials()
+        
+        # 从 extra_data 中提取 user_id，用于多用户路径隔离
+        extra_data = extra_data or {}
+        user_id = extra_data.get(constants.HEADER_FUNART_COMFY_USERID.lower(), 'default')
 
         for key, value in prompt.items():
             class_type = value.get("class_type") if type(value) == dict else None
@@ -355,9 +377,16 @@ class ServerlessApiService:
                         # 文件来源于共享存储（NAS），利用api_upload_image拷贝到实例磁盘
                         # issue: https://aliyuque.antfin.com/lnpq52/cc8sut/slcnbzw0t7q9snbb
                         input_dir = constants.INPUT_DIR
-                        file_path = os.path.join(input_dir, file_url)
                         mnt_input_dir = constants.MNT_INPUT_DIR
+                        
+                        # 构建用户隔离路径
+                        if user_id != 'default':
+                            input_dir = os.path.join(input_dir, "users", user_id)
+                            mnt_input_dir = os.path.join(mnt_input_dir, "users", user_id)
+                        
+                        file_path = os.path.join(input_dir, file_url)
                         mnt_file_path = os.path.join(mnt_input_dir, file_url)
+                        
                         if input_dir != mnt_input_dir and not os.path.exists(file_path) and os.path.exists(mnt_file_path):
                             log("DEBUG", f"reading {file_type} from MNT: {mnt_file_path}")
                             start_time = time.perf_counter()
@@ -365,12 +394,11 @@ class ServerlessApiService:
                                 content = f.read()
                             elapsed = time.perf_counter() - start_time
                             log("DEBUG", f"successfully read {file_type}: {file_url} ({len(content)} bytes) in {elapsed:.2f}s")
-                            
                     if content:
                         # 上传文件并更新对应的输入字段
                         log("DEBUG", f"uploading {file_type} to ComfyUI")
                         start_time = time.perf_counter()
-                        res = self.api_upload_image(content)
+                        res = self.api_upload_image(content, user_id)
                         elapsed = time.perf_counter() - start_time
                         log("INFO", f"successfully uploaded {file_type} to ComfyUI as '{res['name']}' in {elapsed:.2f}s")
                         prompt[key]["inputs"][input_key] = res["name"]
@@ -656,8 +684,11 @@ class ServerlessApiService:
             # 等待服务就绪（如果正在重启中）
             self._wait_for_ready()
             
+            # 提取 extra_data（包含 user_id 等信息）
+            extra_data = request_body.get("extra_data", {})
+            
             # 解析请求中是否存在 base64、http url 形式的图片
-            prompt = self.parse_prompt(prompt)
+            prompt = self.parse_prompt(prompt, extra_data)
             # 更新 request_body 中的 prompt（已经过预处理）
             request_body["prompt"] = prompt
 

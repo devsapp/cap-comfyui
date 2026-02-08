@@ -55,8 +55,20 @@ def _patched_get_input_directory():
     """
     Patched version of get_input_directory.
     
+    Returns DynamicPathProxy to solve node instance caching issues.
+    
     Returns:
-        User-specific input directory
+        DynamicPathProxy that computes user-specific input directory on use
+    """
+    return DynamicPathProxy(_patched_get_input_directory_real)
+
+
+def _patched_get_input_directory_real():
+    """
+    Actual path computation function for input directory.
+    
+    Returns:
+        User-specific input directory path
     """
     base_dir = _original_functions['get_input_directory']()
     user_id = get_current_user()

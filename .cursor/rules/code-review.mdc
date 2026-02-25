@@ -1,0 +1,634 @@
+---
+description: 
+alwaysApply: false
+---
+
+# 代码审查规则
+
+本规则定义了代码审查的标准和检查清单，确保代码质量、安全性和可维护性。
+
+## 1. 逻辑正确性
+
+### 1.1 核心逻辑验证
+
+- **边界条件**：检查空值、空列表、零值等边界情况
+- **循环逻辑**：验证循环终止条件，防止死循环
+- **条件分支**：确保所有分支都有适当处理
+- **数据流**：追踪数据从输入到输出的完整流程
+
+```python
+# ❌ 错误 - 未处理空列表
+def get_first_item(items):
+    return items[0]  # 空列表会崩溃
+
+# ✅ 正确
+def get_first_item(items: list) -> Optional[Any]:
+    if not items:
+        return None
+    return items[0]
+```
+
+### 1.2 并发安全
+
+- **竞态条件**：检查共享状态的并发访问
+- **锁的使用**：确保锁的正确获取和释放
+- **死锁预防**：避免循环等待和嵌套锁
+
+```python
+# ❌ 错误 - 竞态条件
+def update_counter(self):
+    current = self._counter
+    self._counter = current + 1  # 不是原子操作
+
+# ✅ 正确
+def update_counter(self):
+    with self._lock:
+        self._counter += 1
+```
+
+---
+
+## 2. 安全性审查
+
+### 2.1 输入验证
+
+- **用户输入**：所有外部输入必须验证
+- **类型检查**：确保输入符合预期类型
+- **范围检查**：验证数值在合理范围内
+- **格式验证**：检查字符串格式（邮箱、URL等）
+
+```python
+# ❌ 错误 - 未验证输入
+def execute_command(cmd: str):
+    os.system(cmd)  # 命令注入风险
+
+# ✅ 正确
+def execute_command(cmd: str):
+    allowed_commands = ['status', 'info', 'help']
+    if cmd not in allowed_commands:
+        raise InvalidCommandError(f"Command not allowed: {cmd}")
+    os.system(cmd)
+```
+
+### 2.2 敏感信息处理
+
+- **凭证管理**：不在代码中硬编码密钥、密码
+- **日志安全**：不记录敏感信息
+- **错误消息**：不暴露系统内部信息
+
+```python
+# ❌ 错误 - 泄露敏感信息
+log("ERROR", f"Login failed for user {username} with password {password}")
+
+# ✅ 正确
+log("ERROR", f"Login failed for user {username}", user_id=user_id)
+```
+
+### 2.3 SQL注入防护
+
+```python
+# ❌ 错误 - SQL注入风险
+query = f"SELECT * FROM users WHERE id = {user_id}"
+
+# ✅ 正确
+query = "SELECT * FROM users WHERE id = ?"
+cursor.execute(query, (user_id,))
+```
+
+---
+
+## 3. 性能优化
+
+### 3.1 算法复杂度
+
+- **时间复杂度**：避免不必要的嵌套循环
+- **空间复杂度**：注意内存使用
+- **数据结构选择**：使用合适的数据结构
+
+```python
+# ❌ 错误 - O(n²) 复杂度
+def find_duplicates(items: list) -> list:
+    duplicates = []
+    for i in range(len(items)):
+        for j in range(i+1, len(items)):
+            if items[i] == items[j]:
+                duplicates.append(items[i])
+    return duplicates
+
+# ✅ 正确 - O(n) 复杂度
+def find_duplicates(items: list) -> list:
+    seen = set()
+    duplicates = set()
+    for item in items:
+        if item in seen:
+            duplicates.add(item)
+        seen.add(item)
+    return list(duplicates)
+```
+
+### 3.2 资源管理
+
+- **文件句柄**：使用上下文管理器确保关闭
+- **数据库连接**：及时释放连接
+- **内存泄漏**：检查长期持有的引用
+
+```python
+# ❌ 错误 - 文件未关闭
+def read_file(path: str) -> str:
+    f = open(path)
+    return f.read()
+
+# ✅ 正确
+def read_file(path: str) -> str:
+    with open(path, 'r') as f:
+        return f.read()
+```
+
+### 3.3 避免重复计算
+
+```python
+# ❌ 错误 - 重复计算
+def process_items(items: list):
+    for item in items:
+        if len(items) > 100:  # 每次都重新计算
+            do_something(item)
+
+# ✅ 正确
+def process_items(items: list):
+    items_count = len(items)
+    for item in items:
+        if items_count > 100:
+            do_something(item)
+```
+
+---
+
+## 4. 错误处理
+
+### 4.1 异常处理完整性
+
+- **捕获具体异常**：避免使用裸 `except`
+- **异常链**：保留原始异常上下文
+- **适当的错误级别**：区分可恢复和不可恢复错误
+
+```python
+# ❌ 错误 - 吞没所有异常
+try:
+    result = risky_operation()
+except:
+    pass
+
+# ✅ 正确
+try:
+    result = risky_operation()
+except SpecificError as e:
+    log("ERROR", "Operation failed", exc_info=e)
+    raise BusinessError("Unable to complete operation") from e
+```
+
+### 4.2 资源清理
+
+- **finally块**：确保清理代码执行
+- **上下文管理器**：优先使用 `with` 语句
+- **异常安全**：即使发生异常也要清理资源
+
+```python
+# ✅ 正确
+def process_with_cleanup(resource_id: str):
+    resource = acquire_resource(resource_id)
+    try:
+        process(resource)
+    finally:
+        release_resource(resource)
+```
+
+---
+
+## 5. 代码可维护性
+
+### 5.1 函数职责单一
+
+- **单一职责原则**：每个函数只做一件事
+- **函数长度**：建议不超过50行
+- **复杂度控制**：避免过深的嵌套（不超过3层）
+
+```python
+# ❌ 错误 - 职责过多
+def process_user_request(request):
+    # 验证请求
+    # 查询数据库
+    # 处理业务逻辑
+    # 发送通知
+    # 记录日志
+    pass
+
+# ✅ 正确 - 拆分职责
+def process_user_request(request):
+    validate_request(request)
+    data = query_database(request.id)
+    result = apply_business_logic(data)
+    send_notification(result)
+    log_operation(request, result)
+    return result
+```
+
+### 5.2 命名清晰度
+
+- **明确语义**：变量和类命名必须具有明确的业务或技术语义，能够直接反映其用途
+- **描述性命名**：名称应清楚表达意图，避免含糊不清
+- **避免缩写**：除非是广泛认可的缩写（如 HTTP、API、URL）
+- **一致性**：在整个代码库中保持命名风格一致
+- **类名语义**：类名应该是名词或名词短语，清晰表达实体概念
+
+```python
+# ❌ 错误 - 模糊命名，无明确语义
+def proc_usr_data(d):
+    temp = d['val']  # temp 没有语义
+    return temp * 2
+
+class Manager:  # 过于泛化，不知道管理什么
+    pass
+
+# ✅ 正确 - 命名具有明确语义
+def calculate_user_score(user_data: dict) -> float:
+    base_score = user_data['score']  # 清楚表达基础分数
+    return base_score * 2.0
+
+class TaskManager:  # 明确表示管理任务
+    pass
+
+class UserAuthenticationService:  # 清晰的业务语义
+    pass
+```
+
+### 5.3 代码重复
+
+- **DRY原则**：不要重复自己
+- **提取公共逻辑**：将重复代码提取为函数
+- **适当的抽象**：创建可复用的组件
+
+```python
+# ❌ 错误 - 重复代码
+def process_task_a(task):
+    log("INFO", f"Starting task {task.id}")
+    result = execute_task_a(task)
+    log("INFO", f"Completed task {task.id}")
+    return result
+
+def process_task_b(task):
+    log("INFO", f"Starting task {task.id}")
+    result = execute_task_b(task)
+    log("INFO", f"Completed task {task.id}")
+    return result
+
+# ✅ 正确 - 提取公共逻辑
+def process_task_with_logging(task, executor):
+    log("INFO", f"Starting task {task.id}")
+    result = executor(task)
+    log("INFO", f"Completed task {task.id}")
+    return result
+```
+
+---
+
+## 6. 测试覆盖
+
+### 6.1 测试完整性
+
+- **单元测试**：核心逻辑必须有单元测试
+- **边界测试**：测试边界条件和异常情况
+- **集成测试**：测试组件之间的交互
+- **Mock使用**：适当隔离外部依赖
+
+### 6.2 测试质量
+
+```python
+# ❌ 错误 - 测试过于简单
+def test_calculate():
+    result = calculate(2, 3)
+    assert result == 5
+
+# ✅ 正确 - 全面测试
+def test_calculate_various_inputs():
+    """测试计算函数的各种输入场景"""
+    # 正常情况
+    assert calculate(2, 3) == 5
+    # 边界条件
+    assert calculate(0, 0) == 0
+    assert calculate(-1, 1) == 0
+    # 异常情况
+    with pytest.raises(TypeError):
+        calculate("2", 3)
+```
+
+### 6.3 测试覆盖率要求
+
+- **最低覆盖率**：单元测试覆盖率必须达到 **95% 及以上**
+- **核心模块**：核心业务逻辑模块的覆盖率应达到 100%
+- **覆盖率报告**：使用 pytest-cov 生成覆盖率报告
+- **未覆盖代码审查**：对于未覆盖的代码，必须有明确的理由
+
+```bash
+# 运行测试并生成覆盖率报告
+pytest --cov=src --cov-report=html --cov-report=term-missing
+
+# 检查覆盖率是否达标
+pytest --cov=src --cov-fail-under=95
+```
+
+**覆盖率审查重点**：
+- [ ] 整体覆盖率 ≥ 95%
+- [ ] 核心业务逻辑覆盖率 = 100%
+- [ ] 异常分支有测试覆盖
+- [ ] 边界条件有测试覆盖
+- [ ] 未覆盖代码有合理解释
+
+---
+
+## 7. 文档完整性
+
+### 7.1 必要的文档
+
+- **模块级文档**：说明模块的目的和职责
+- **类文档**：描述类的功能和使用方法
+- **函数文档**：说明参数、返回值和异常
+- **复杂逻辑注释**：解释非显而易见的实现细节
+
+### 7.2 文档质量
+
+- **准确性**：文档与代码实现保持一致
+- **完整性**：覆盖所有重要参数和行为
+- **简洁性**：避免冗余和显而易见的描述
+
+### 7.3 注释格式规范
+
+- **中英文空格**：注释中的中文和英文之间必须有空格
+- **中文与数字空格**：中文和数字之间也需要空格
+- **标点符号**：使用中文标点符号
+
+```python
+# ❌ 错误 - 中英文之间没有空格
+# 使用Redis缓存提升性能
+# 最多重试3次
+class TaskManager:
+    pass
+
+# ✅ 正确 - 中英文之间有空格
+# 使用 Redis 缓存提升性能
+# 最多重试 3 次
+class TaskManager:
+    pass
+```
+
+```python
+# ❌ 错误 - 格式混乱
+def fetch_data(url: str):
+    """从API获取数据并返回JSON格式"""  # 没有空格
+    # 发送HTTP请求
+    pass
+
+# ✅ 正确 - 规范格式
+def fetch_data(url: str):
+    """从 API 获取数据并返回 JSON 格式"""
+    # 发送 HTTP 请求
+    pass
+```
+
+**注释格式检查**：
+- [ ] 中文与英文之间有空格
+- [ ] 中文与数字之间有空格
+- [ ] 使用中文标点符号
+- [ ] 代码术语（如变量名、类名）与中文之间有空格
+
+---
+
+## 8. 依赖管理
+
+### 8.1 依赖合理性
+
+- **必要性**：避免引入不必要的依赖
+- **版本固定**：在 requirements.txt 中固定版本
+- **安全性**：检查已知漏洞
+- **维护状态**：优先使用活跃维护的库
+
+### 8.2 导入优化
+
+```python
+# ❌ 错误 - 导入未使用的模块
+import json
+import requests
+import pandas  # 未使用
+
+# ✅ 正确 - 只导入需要的
+import json
+import requests
+```
+
+---
+
+## 9. 配置和环境
+
+### 9.1 配置外部化
+
+- **环境变量**：敏感配置使用环境变量
+- **配置文件**：使用配置文件管理设置
+- **默认值**：提供合理的默认值
+
+```python
+# ❌ 错误 - 硬编码配置
+API_KEY = "sk-1234567890abcdef"
+MAX_RETRIES = 3
+
+# ✅ 正确
+API_KEY = os.getenv("API_KEY")
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
+```
+
+---
+
+## 10. 审查检查清单
+
+在审查代码时，确保检查以下所有方面：
+
+### 逻辑与正确性
+- [ ] 边界条件处理正确
+- [ ] 循环和递归有正确的终止条件
+- [ ] 条件分支覆盖所有情况
+- [ ] 并发访问有适当保护
+
+### 安全性
+- [ ] 输入验证完整
+- [ ] 无SQL注入或命令注入风险
+- [ ] 敏感信息不泄露
+- [ ] 凭证不硬编码
+
+### 性能
+- [ ] 算法复杂度合理
+- [ ] 无不必要的重复计算
+- [ ] 资源及时释放
+- [ ] 数据结构选择恰当
+
+### 错误处理
+- [ ] 捕获具体异常
+- [ ] 错误信息清晰有用
+- [ ] 异常链保留上下文
+- [ ] 资源在异常时也能清理
+
+### 可维护性
+- [ ] 函数职责单一
+- [ ] 命名清晰描述性强
+- [ ] 变量和类命名具有明确语义
+- [ ] 代码结构清晰
+- [ ] 无重复代码
+
+### 测试
+- [ ] 核心逻辑有单元测试
+- [ ] 边界条件有测试覆盖
+- [ ] Mock使用合理
+- [ ] 测试描述清晰
+- [ ] 单元测试覆盖率 ≥ 95%
+
+### 文档
+- [ ] 公共API有完整文档
+- [ ] 复杂逻辑有注释说明
+- [ ] 文档与代码一致
+- [ ] 无冗余注释
+- [ ] 注释中中英文之间有空格
+
+### 类型安全
+- [ ] 函数有类型注解
+- [ ] 类型注解准确
+- [ ] 返回值类型明确
+- [ ] Optional和Union使用正确
+
+### 依赖管理
+- [ ] 依赖都是必要的
+- [ ] 版本已固定
+- [ ] 导入顺序正确
+- [ ] 无未使用的导入
+
+### 配置管理
+- [ ] 配置外部化
+- [ ] 有合理默认值
+- [ ] 敏感配置通过环境变量
+- [ ] 配置验证完整
+
+---
+
+## 11. 审查流程
+
+### 11.1 审查步骤
+
+1. **整体理解**：先理解代码的整体目的和上下文
+2. **逐行审查**：仔细检查每行代码的逻辑
+3. **架构评估**：评估设计是否合理，是否符合项目架构
+4. **测试验证**：确保有足够的测试覆盖
+5. **文档检查**：验证文档的完整性和准确性
+
+### 11.2 审查优先级
+
+**P0 - 必须修复（阻塞合并）**
+- 安全漏洞
+- 逻辑错误
+- 数据损坏风险
+- 性能严重问题
+
+**P1 - 应该修复（建议修复后合并）**
+- 错误处理不完整
+- 测试覆盖不足
+- 明显的性能问题
+- 代码可维护性问题
+
+**P2 - 可以改进（非阻塞）**
+- 代码风格优化
+- 命名改进
+- 注释增强
+- 小的重构建议
+
+### 11.3 反馈原则
+
+- **具体明确**：指出具体的问题和建议的改进
+- **建设性**：提供解决方案，不只是指出问题
+- **优先级清晰**：明确哪些是必须修复的
+- **代码示例**：提供正确的代码示例
+
+---
+
+## 12. 特定场景审查
+
+### 12.1 API端点审查
+
+- [ ] 请求验证完整
+- [ ] 响应格式一致
+- [ ] 错误响应规范
+- [ ] 认证和授权检查
+- [ ] 速率限制考虑
+
+### 12.2 数据库操作审查
+
+- [ ] 使用参数化查询
+- [ ] 事务管理正确
+- [ ] 连接池配置合理
+- [ ] 索引使用恰当
+- [ ] 批量操作优化
+
+### 12.3 异步代码审查
+
+- [ ] 正确使用 async/await
+- [ ] 避免阻塞操作
+- [ ] 超时设置合理
+- [ ] 错误传播正确
+- [ ] 资源清理完整
+
+```python
+# ❌ 错误 - 同步操作阻塞异步循环
+async def fetch_data():
+    time.sleep(5)  # 阻塞整个事件循环
+    return data
+
+# ✅ 正确
+async def fetch_data():
+    await asyncio.sleep(5)
+    return data
+```
+
+---
+
+## 13. 代码审查输出格式
+
+审查完成后，按以下格式提供反馈：
+
+```markdown
+## 代码审查结果
+
+### 总体评价
+[简要总结代码质量和主要发现]
+
+### P0 - 必须修复
+1. [问题描述]
+   - 位置：[文件:行号]
+   - 原因：[为什么这是问题]
+   - 建议：[如何修复]
+
+### P1 - 应该修复
+[同上格式]
+
+### P2 - 可以改进
+[同上格式]
+
+### 优点
+- [值得肯定的地方]
+
+### 总结
+[是否建议合并，需要哪些修复]
+```
+
+---
+
+## 14. 审查心态
+
+- **客观中立**：基于技术标准而非个人偏好
+- **完整彻底**：不放过任何潜在问题
+- **建设性**：帮助提升代码质量，而非批评
+- **教育性**：解释为什么某个做法更好
+- **实用性**：平衡理想与实际可行性

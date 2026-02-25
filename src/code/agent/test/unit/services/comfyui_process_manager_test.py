@@ -27,6 +27,8 @@ ComfyUI Process Manager 测试用例
 2. 健康检查测试：
    - test_port_check_consecutive_failures: 端口检查连续失败检测
    - test_port_check_recovery: 端口检查恢复
+   - test_health_check_only_in_running_status: 不同状态下健康检查行为（新增）
+   - test_running_status_health_check_with_process_dead: RUNNING 状态进程死亡检测（新增）
 
 3. 进程状态测试：
    - test_process_crash_detection: 进程崩溃检测
@@ -35,7 +37,11 @@ ComfyUI Process Manager 测试用例
 
 4. 特殊模式测试：
    - test_cpu_mode_skip_health_check: CPU 模式跳过健康检查
-   - test_rebooting_status_skip_health_check: 重启状态跳过健康检查
+
+5. 重启失败处理测试（新增）：
+   - test_restart_failure_online_service_mode: 线上服务模式重启失败处理
+   - test_restart_failure_dev_mode: 项目开发模式重启失败处理
+   - test_restart_success: 重启成功处理
 
 ⚠️ 重要说明：
 1. pytest 默认捕获所有输出，测试期间看不到任何输出是正常现象，不代表hang住
@@ -375,45 +381,56 @@ def test_cpu_mode_skip_health_check():
     assert mgr._is_alive() is True
 
 
-def test_rebooting_status_skip_health_check():
+def test_health_check_only_in_running_status():
     """
-    测试 REBOOTING 状态下跳过健康检查
+    测试只有在 RUNNING 状态下才进行健康检查
     
-    场景：ManagementService 状态为 REBOOTING
-    预期：_is_alive() 返回 True，跳过健康检查
+    场景：测试不同状态下 _is_alive() 的行为
+    预期：
+    - RUNNING 状态：执行健康检查（可能返回 True 或 False）
+    - SAVING 状态：跳过健康检查（返回 True）
+    - REBOOTING 状态：跳过健康检查（返回 True）
+    - REBOOT_FAILED 状态：跳过健康检查（返回 True）
     """
     from services.management_service import BackendStatus
     
-    # 不使用 fixture，创建新的 manager
     mgr = ComfyUIProcessManager()
     
-    script_path = Path(__file__).parent / "mock_comfyui_process.py"
+    # Mock 一个假的进程对象
+    mock_process = MagicMock()
+    mock_process.poll = MagicMock(return_value=None)  # 进程在运行
+    mgr.process = mock_process
     
-    try:
-        # 启动进程
-        command = ['python3', str(script_path)]
-        mgr.start(command)
+    # 使用 patch 模拟 ManagementService 的状态
+    with patch('services.management_service.ManagementService') as mock_service_class:
+        mock_service = mock_service_class.return_value
         
-        # 手动等待端口就绪
-        start_time = time.time()
-        while time.time() - start_time < 10:
-            if mgr._is_ready():
-                break
-            time.sleep(1)
+        # 测试 RUNNING 状态：执行健康检查
+        mock_service.status = BackendStatus.RUNNING
+        # Mock 进程运行和端口正常
+        with patch.object(mgr, '_is_process_running', return_value=True):
+            with patch.object(mgr, '_is_ready', return_value=True):
+                # 进程正常运行，端口也正常，应该返回 True
+                assert mgr._is_alive() is True
         
-        # 使用 patch 模拟 ManagementService 的状态
-        # ManagementService 是在 _is_alive() 内部导入的，所以需要 patch 正确的位置
-        with patch('services.management_service.ManagementService') as mock_service_class:
-            mock_service = mock_service_class.return_value
-            mock_service.status = BackendStatus.REBOOTING
-            
-            # REBOOTING 状态下，即使 HTTP 不健康，_is_alive() 也应该返回 True
-            assert mgr._is_alive() is True
-            
-    finally:
-        if mgr.process:
-            mgr.stop()
-            time.sleep(1)
+        # 测试 SAVING 状态：跳过健康检查，直接返回 True
+        mock_service.status = BackendStatus.SAVING
+        # 即使进程死亡、端口不可用，也应该返回 True（跳过检查）
+        with patch.object(mgr, '_is_process_running', return_value=False):
+            with patch.object(mgr, '_is_ready', return_value=False):
+                assert mgr._is_alive() is True
+        
+        # 测试 REBOOTING 状态：跳过健康检查，直接返回 True
+        mock_service.status = BackendStatus.REBOOTING
+        with patch.object(mgr, '_is_process_running', return_value=False):
+            with patch.object(mgr, '_is_ready', return_value=False):
+                assert mgr._is_alive() is True
+        
+        # 测试 REBOOT_FAILED 状态：跳过健康检查，直接返回 True
+        mock_service.status = BackendStatus.REBOOT_FAILED
+        with patch.object(mgr, '_is_process_running', return_value=False):
+            with patch.object(mgr, '_is_ready', return_value=False):
+                assert mgr._is_alive() is True
 
 
 def test_is_process_running_method():
@@ -453,6 +470,205 @@ def test_is_process_running_method():
         
     finally:
         mgr.process = None
+
+
+def test_restart_failure_online_service_mode():
+    """
+    测试线上服务模式下重启失败的处理
+    
+    场景：USE_API_MODE=True，进程重启失败
+    预期：状态转换到 RUNNING，允许健康检查继续重试
+    """
+    from services.management_service import ManagementService, BackendStatus
+    
+    mgr = ComfyUIProcessManager()
+    
+    with patch('constants.USE_API_MODE', True):
+        with patch('services.management_service.ManagementService') as mock_service_class:
+            mock_service = mock_service_class.return_value
+            mock_service.status = BackendStatus.RUNNING
+            
+            # Mock _transition_to 方法
+            mock_service._transition_to = MagicMock()
+            
+            # Mock start 方法使其抛出异常
+            with patch.object(mgr, 'start', side_effect=Exception("Start failed")):
+                # 调用 _do_restart，预期捕获异常
+                mgr._do_restart()
+                
+                # 验证状态转换：应该转到 RUNNING（线上服务模式）
+                # 第一次调用：转到 REBOOTING
+                # 第二次调用：失败后转到 RUNNING
+                assert mock_service._transition_to.call_count == 2
+                mock_service._transition_to.assert_any_call(BackendStatus.REBOOTING)
+                mock_service._transition_to.assert_any_call(BackendStatus.RUNNING)
+
+
+def test_restart_failure_dev_mode():
+    """
+    测试项目开发模式下重启失败的处理
+    
+    场景：USE_API_MODE=False，进程重启失败
+    预期：状态转换到 REBOOT_FAILED，停止自动重试
+    """
+    from services.management_service import ManagementService, BackendStatus
+    
+    mgr = ComfyUIProcessManager()
+    
+    with patch('constants.USE_API_MODE', False):
+        with patch('services.management_service.ManagementService') as mock_service_class:
+            mock_service = mock_service_class.return_value
+            mock_service.status = BackendStatus.RUNNING
+            
+            # Mock _transition_to 方法
+            mock_service._transition_to = MagicMock()
+            
+            # Mock start 方法使其抛出异常
+            with patch.object(mgr, 'start', side_effect=Exception("Start failed")):
+                # 调用 _do_restart，预期捕获异常
+                mgr._do_restart()
+                
+                # 验证状态转换：应该转到 REBOOT_FAILED（项目开发模式）
+                # 第一次调用：转到 REBOOTING
+                # 第二次调用：失败后转到 REBOOT_FAILED
+                assert mock_service._transition_to.call_count == 2
+                mock_service._transition_to.assert_any_call(BackendStatus.REBOOTING)
+                mock_service._transition_to.assert_any_call(BackendStatus.REBOOT_FAILED)
+
+
+def test_restart_success():
+    """
+    测试重启成功的处理（进程已死亡，走 _cleanup_dead_process 分支）
+    
+    场景：进程重启成功
+    预期：状态转换到 RUNNING
+    """
+    from services.management_service import ManagementService, BackendStatus
+    
+    mgr = ComfyUIProcessManager()
+    
+    with patch('services.management_service.ManagementService') as mock_service_class:
+        mock_service = mock_service_class.return_value
+        mock_service.status = BackendStatus.RUNNING
+        
+        # Mock _transition_to 方法
+        mock_service._transition_to = MagicMock()
+        
+        # Mock 相关方法使重启成功
+        with patch.object(mgr, '_is_process_running', return_value=False):
+            with patch.object(mgr, '_cleanup_dead_process'):
+                with patch.object(mgr, 'start'):
+                    with patch.object(mgr, 'wait_until_ready'):
+                        # 调用 _do_restart
+                        mgr._do_restart()
+                        
+                        # 验证状态转换：应该转到 REBOOTING，然后转到 RUNNING
+                        assert mock_service._transition_to.call_count == 2
+                        mock_service._transition_to.assert_any_call(BackendStatus.REBOOTING)
+                        # 最后一次调用应该是转到 RUNNING
+                        last_call = mock_service._transition_to.call_args_list[-1]
+                        assert last_call[0][0] == BackendStatus.RUNNING
+
+
+def test_restart_with_running_process_uses_kill_and_cleanup():
+    """
+    测试进程仍在运行时，_do_restart 调用 _kill_and_cleanup（而非 stop）来清理旧进程
+
+    场景：进程仍在运行（如端口检查连续失败触发重启，但进程还活着）
+    预期：
+    - 调用 _kill_and_cleanup() 杀死旧进程
+    - 不调用 stop()（因为 _do_restart 在健康检查线程中执行，stop 会尝试 join 自身线程）
+    """
+    from services.management_service import BackendStatus
+
+    mgr = ComfyUIProcessManager()
+
+    with patch('services.management_service.ManagementService') as mock_service_class:
+        mock_service = mock_service_class.return_value
+        mock_service.status = BackendStatus.RUNNING
+        mock_service._transition_to = MagicMock()
+
+        with patch.object(mgr, '_is_process_running', return_value=True):
+            with patch.object(mgr, '_kill_and_cleanup') as mock_kill:
+                with patch.object(mgr, 'stop') as mock_stop:
+                    with patch.object(mgr, 'start'):
+                        with patch.object(mgr, 'wait_until_ready'):
+                            mgr._do_restart()
+
+                            # 验证调用了 _kill_and_cleanup 而非 stop
+                            mock_kill.assert_called_once()
+                            mock_stop.assert_not_called()
+
+            # 验证重启成功的状态转换
+            assert mock_service._transition_to.call_count == 2
+            mock_service._transition_to.assert_any_call(BackendStatus.REBOOTING)
+            last_call = mock_service._transition_to.call_args_list[-1]
+            assert last_call[0][0] == BackendStatus.RUNNING
+
+
+def test_restart_does_not_close_websocket_connections():
+    """
+    测试 _do_restart 不会关闭 WebSocket 连接
+
+    场景：健康检查触发自动重启
+    预期：ws_manager.close_all_connections 不被调用（Agent 仍在运行，WS 连接应保持）
+    """
+    from services.management_service import BackendStatus
+
+    mgr = ComfyUIProcessManager()
+
+    with patch('services.management_service.ManagementService') as mock_service_class:
+        mock_service = mock_service_class.return_value
+        mock_service.status = BackendStatus.RUNNING
+        mock_service._transition_to = MagicMock()
+
+        with patch.object(mgr, '_is_process_running', return_value=False):
+            with patch.object(mgr, '_cleanup_dead_process'):
+                with patch.object(mgr, 'start'):
+                    with patch.object(mgr, 'wait_until_ready'):
+                        with patch('services.process.websocket.websocket_manager.ws_manager') as mock_ws:
+                            mgr._do_restart()
+
+                            # 验证未关闭 WebSocket 连接
+                            mock_ws.close_all_connections.assert_not_called()
+
+
+def test_stop_closes_websocket_connections():
+    """
+    测试 stop() 会关闭所有 WebSocket 连接并传入超时参数
+
+    场景：主动调用 stop() 停止服务
+    预期：ws_manager.close_all_connections(timeout=5) 被调用
+    """
+    mgr = ComfyUIProcessManager()
+
+    with patch.object(mgr, '_kill_and_cleanup'):
+        with patch('services.process.websocket.websocket_manager.ws_manager') as mock_ws:
+            mgr.stop()
+
+            # 验证调用了 close_all_connections 且传入了 timeout=5
+            mock_ws.close_all_connections.assert_called_once_with(timeout=5)
+
+
+def test_running_status_health_check_with_process_dead():
+    """
+    测试 RUNNING 状态下进程死亡时的健康检查
+    
+    场景：RUNNING 状态，进程意外退出
+    预期：_is_alive() 返回 False，触发重启
+    """
+    from services.management_service import BackendStatus
+    
+    mgr = ComfyUIProcessManager()
+    
+    with patch('services.management_service.ManagementService') as mock_service_class:
+        mock_service = mock_service_class.return_value
+        mock_service.status = BackendStatus.RUNNING
+        
+        # 模拟进程已死亡
+        with patch.object(mgr, '_is_process_running', return_value=False):
+            # RUNNING 状态下，进程死亡应该返回 False
+            assert mgr._is_alive() is False
 
 
 @pytest.fixture(autouse=True)

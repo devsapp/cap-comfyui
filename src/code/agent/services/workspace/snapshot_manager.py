@@ -95,9 +95,11 @@ class SnapshotManager:
         )
 
         if snapshot_type == self.TYPE_DEV:
-            result_map = saver.save(snapshot_name, remove_old=True, old_snapshot_name=self.cur_snapshot_name)
+            # dev 快照：启用自动清理，保留最新 3 个
+            result_map = saver.save(snapshot_name, auto_cleanup=True, cleanup_prefix=self.TYPE_DEV, max_snapshots=3)
         elif snapshot_type == self.TYPE_PROD:
-            result_map = saver.save(snapshot_name)
+            # prod 快照：不启用自动清理
+            result_map = saver.save(snapshot_name, auto_cleanup=False)
         else:
             raise RuntimeError("Unsupported snapshot type")
 
@@ -160,16 +162,57 @@ class SnapshotManager:
 
     def _select_latest_snapshot(self, snapshot_type: str):
         """
-        获取最近一次快照名称
+        获取最近一次可用的快照名称。
+
+        对于 dev 快照，会逐个检查压缩包完整性，跳过不完整的快照，返回最近一个可用的。
+        对于 prod 快照，直接返回最新的。
 
         Returns:
-            str or None: 所选快照目录的名称，如果不存在任何快照目录则返回None
+            str or None: 所选快照目录的名称，如果不存在任何可用快照目录则返回None
         """
         snapshots = self.find_valid_snapshots(snapshot_type)
         if not snapshots:
             return None
-        else:
-            return snapshots[0]
+
+        # dev 快照：需要验证压缩包完整性，跳过不完整的快照
+        if snapshot_type == self.TYPE_DEV:
+            for snapshot_name in snapshots:
+                if self._is_snapshot_loadable(snapshot_name):
+                    return snapshot_name
+                log("WARNING", f"Snapshot '{snapshot_name}' is incomplete "
+                               f"(missing required archives), skipping")
+            log("WARNING", f"No loadable {snapshot_type} snapshot found")
+            return None
+
+        return snapshots[0]
+
+    def _is_snapshot_loadable(self, snapshot_name: str) -> bool:
+        """
+        检查快照目录是否包含启动所需的压缩包。
+
+        根据 BACKEND_TYPE 检查对应的 venv 和应用压缩包是否存在（支持 zstd 和旧格式）。
+
+        Args:
+            snapshot_name: 快照目录名称。
+
+        Returns:
+            bool: 快照是否包含所有必要的压缩包。
+        """
+        snapshot_path = os.path.join(constants.SNAPSHOT_DIR, snapshot_name)
+        if not os.path.exists(snapshot_path):
+            return False
+
+        has_venv = (
+            os.path.exists(os.path.join(snapshot_path, "venv.tar.zst"))
+            or os.path.exists(os.path.join(snapshot_path, "venv.tar"))
+        )
+
+        has_app = (
+            os.path.exists(os.path.join(snapshot_path, "comfyui.tar.zst"))
+            or os.path.exists(os.path.join(snapshot_path, "comfyui.zip"))
+        )
+
+        return has_venv and has_app
 
     def find_valid_snapshots(self, snapshot_type: str):
         """

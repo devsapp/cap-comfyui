@@ -1,0 +1,25 @@
+edition: 3.0.0
+name: hello-world-app
+access: "quanxi-devs" # 1338********9062 devs_test
+
+vars:
+  region: ${env('REGION')}
+
+resources:
+  serverless_registry:
+    component: fc3
+    props:
+      region: ${vars.region}
+      functionName: ${env('WARMUP_FUNCTION_NAME')}
+      runtime: "custom-container"
+      description: 'warmup image-gen agent image'
+      timeout: 30
+      memorySize: 4096
+      cpu: 2.0
+      diskSize: 10240
+      code: ./code
+      customContainerConfig:
+        image: ${env('IMAGE')}
+        registryConfig:
+          certConfig:
+            insecure: false

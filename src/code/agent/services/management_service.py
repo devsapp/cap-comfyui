@@ -1,3 +1,4 @@
+import time
 from enum import Enum
 from threading import Lock
 from typing import Dict, Set, Optional
@@ -10,19 +11,10 @@ from utils.timer import timer
 
 
 class BackendStatus(Enum):
-    STOPPED = "Stopped"
-    STARTING = "Starting"
     RUNNING = "Running"
     SAVING = "Saving"
-    STOPPING = "Stopping"
     REBOOTING = "Rebooting"
-
-
-class Action(Enum):
-    START = "start"
-    STOP = "stop"
-    SAVE = "save"
-    REBOOT = "reboot"
+    REBOOT_FAILED = "RebootFailed"
 
 
 class StartingSubStatus(Enum):
@@ -51,41 +43,31 @@ def singleton(cls):
 @singleton
 class ManagementService:
     _VALID_TRANSITIONS: Dict[BackendStatus, Set[BackendStatus]] = {
-        BackendStatus.STOPPED: {BackendStatus.STARTING},
-        BackendStatus.STARTING: {BackendStatus.RUNNING, BackendStatus.STOPPED},
-        BackendStatus.RUNNING: {BackendStatus.SAVING, BackendStatus.STOPPING, BackendStatus.REBOOTING},
-        BackendStatus.SAVING: {BackendStatus.RUNNING},
-        BackendStatus.STOPPING: {BackendStatus.STOPPED, BackendStatus.RUNNING},
-        BackendStatus.REBOOTING: {
-            BackendStatus.RUNNING,   # 重启成功
-            BackendStatus.STOPPED    # 重启失败
-        }
+        BackendStatus.RUNNING: {BackendStatus.SAVING, BackendStatus.REBOOTING},
+        BackendStatus.SAVING: {BackendStatus.RUNNING},  # 只能转回 RUNNING
+        BackendStatus.REBOOTING: {BackendStatus.RUNNING, BackendStatus.REBOOT_FAILED},
+        BackendStatus.REBOOT_FAILED: set()  # 终态，不能转换到其他状态
     }
 
     def __init__(self):
         self._process_mgr = ComfyUIProcessManager()  # 管理 ComfyUI 子进程
         self._snapshot_mgr = SnapshotManager()  # 管理实例磁盘空间中的工作空间快照
-        self._status = BackendStatus.STOPPED  # 服务进程状态
+        self._status = BackendStatus.RUNNING  # 服务进程状态，实例启动后默认为 RUNNING
         self._sub_status = ""  # 服务进程子状态，例如启动过程中的"下载"、"解压"、"服务启动"
-        self._latest_action = None  # 最近一次管控行为，包含start、stop、save
         self._status_lock = Lock()
+        self._is_stopped = False  # 标记是否已主动停止（用于 PreStop 判断）
+        self._init_time = time.time()  # 实例创建时间，用于 PreStop 过滤短命实例
 
-    def _transition_to(self, new_status: BackendStatus, action: Action) -> None:
+    def _transition_to(self, new_status: BackendStatus) -> None:
         with self._status_lock:
             if new_status not in self._VALID_TRANSITIONS[self._status]:
                 raise StateTransitionError(self._status, new_status)
             self._status = new_status
-            self._latest_action = action
 
     @property
     def status(self) -> BackendStatus:
         with self._status_lock:
             return self._status
-
-    @property
-    def latest_action(self) -> Action:
-        with self._status_lock:
-            return self._latest_action
 
     @property
     def sub_status(self) -> str:
@@ -140,13 +122,7 @@ class ManagementService:
                     - 非空字典 (例: `{'NodeA': 'v1'}`): 只安装字典中指定的有效插件。
                     - 空字典 (`{}`): 启动安装流程，但不安装任何插件。这个场景可用于获取环境的依赖基线(`install_baseline`)而不执行任何实际安装。
         """
-        # 记录调用前是否在 REBOOTING 状态
-        was_rebooting = self.status == BackendStatus.REBOOTING
-        
         print(f"Starting backend process using snapshot '{snapshot_name}'...")
-        # 如果在 REBOOTING 状态，保持 REBOOTING 状态，不转换到 STARTING
-        if not was_rebooting:
-            self._transition_to(BackendStatus.STARTING, Action.START)
         self.sub_status = StartingSubStatus.DOWNLOADING.value
 
         try:
@@ -178,77 +154,56 @@ class ManagementService:
                 self._process_mgr.wait_until_ready()
             result_map["time_start_process"] = round(t_start_process.elapsed, 2)
 
-            # 如果之前在 REBOOTING 状态，保持 REBOOTING 状态（已经在 REBOOTING，不需要转换）
-            # 否则转换到 RUNNING
-            if not was_rebooting:
-                self._transition_to(BackendStatus.RUNNING, Action.START)
             self.sub_status = ""
             return result_map
         except Exception:
-            # 如果之前在 REBOOTING 状态，失败时转换到 STOPPED；否则保持原逻辑
-            if was_rebooting:
-                self._transition_to(BackendStatus.STOPPED, Action.REBOOT)
-            else:
-                self._transition_to(BackendStatus.STOPPED, Action.START)
             self.sub_status = ""
             raise
 
     def save(self, snapshot_type: str) -> Dict:
-        # 记录调用前是否在 REBOOTING 状态
-        was_rebooting = self.status == BackendStatus.REBOOTING
+        """
+        保存工作空间快照。
         
+        状态转换：
+        - RUNNING → SAVING → RUNNING（成功或失败都返回）
+        
+        注意：只能在 RUNNING 状态下调用此方法
+        """
         print(f"Saving workspace (type {snapshot_type})...")
-        # 如果在 REBOOTING 状态，保持 REBOOTING 状态，不转换到 SAVING
-        if not was_rebooting:
-            self._transition_to(BackendStatus.SAVING, Action.SAVE)
+        self._transition_to(BackendStatus.SAVING)
         self.sub_status = SavingSubStatus.PACKAGING.value
 
         try:
             result_map = self._snapshot_mgr.save(snapshot_type)
-            # 如果之前在 REBOOTING 状态，保持 REBOOTING 状态（已经在 REBOOTING，不需要转换）
-            # 否则转换到 RUNNING
-            if not was_rebooting:
-                self._transition_to(BackendStatus.RUNNING, Action.SAVE)
+            # 保存成功，转回 RUNNING
+            self._transition_to(BackendStatus.RUNNING)
             self.sub_status = ""
             return result_map
         except Exception:
-            # 如果之前在 REBOOTING 状态，失败时保持 REBOOTING；否则转换到 RUNNING
-            if was_rebooting:
-                # 保持在 REBOOTING 状态，不转换
-                pass
-            else:
-                self._transition_to(BackendStatus.RUNNING, Action.SAVE)
+            # 保存失败，也转回 RUNNING
+            try:
+                self._transition_to(BackendStatus.RUNNING)
+            except Exception:
+                pass  # 如果状态转换失败，保持当前状态
             self.sub_status = ""
             raise
 
     def stop(self) -> Dict:
-        # 记录调用前是否在 REBOOTING 状态
-        was_rebooting = self.status == BackendStatus.REBOOTING
-        
+        """
+        停止ComfyUI服务进程（原子操作，不涉及状态转换）。
+        """
         print("Stopping workspace...")
-        # 如果在 REBOOTING 状态，保持 REBOOTING 状态，不转换到 STOPPING
-        if not was_rebooting:
-            self._transition_to(BackendStatus.STOPPING, Action.STOP)
 
-        try:
-            result_map = {}
-            
-            with timer("Stop process") as t_stop_process:
-                self._process_mgr.stop()
-            result_map["time_stop_process"] = round(t_stop_process.elapsed, 2)
-            # 如果之前在 REBOOTING 状态，保持 REBOOTING 状态（已经在 REBOOTING，不需要转换）
-            # 否则转换到 STOPPED
-            if not was_rebooting:
-                self._transition_to(BackendStatus.STOPPED, Action.STOP)
-            return result_map
-        except Exception:
-            # 如果之前在 REBOOTING 状态，失败时保持 REBOOTING；否则转换到 RUNNING
-            if was_rebooting:
-                # 保持在 REBOOTING 状态，不转换
-                pass
-            else:
-                self._transition_to(BackendStatus.RUNNING, Action.STOP)
-            raise
+        result_map = {}
+        
+        with timer("Stop process") as t_stop_process:
+            self._process_mgr.stop()
+        result_map["time_stop_process"] = round(t_stop_process.elapsed, 2)
+        
+        # 设置停止标志，PreStop 钩子会检查此标志来决定是否执行兜底保存
+        self._is_stopped = True
+        
+        return result_map
 
     def save_and_stop(self, snapshot_type: str) -> Dict:
         print(f"Saving and Stopping workspace (type {snapshot_type})...")

@@ -160,6 +160,111 @@ def test_save_invalid_type(setup_snapshot_files):
         manager.save("invalid")
 
 
+def test_select_latest_dev_skips_incomplete_snapshot(setup_snapshot_files):
+    """最新 dev 快照缺少压缩包时，选择阶段直接跳过，选中更早的可用快照"""
+    # 删除最新快照的所有压缩包，使其不完整
+    latest_path = os.path.join(constants.SNAPSHOT_DIR, "dev-20231202-120000")
+    for f in os.listdir(latest_path):
+        os.remove(os.path.join(latest_path, f))
+
+    manager = SnapshotManager()
+    result = manager.load(SnapshotManager.USE_LATEST_DEV)
+
+    # 应跳过不完整的最新快照，选中 dev-20231202-115959
+    assert result["snapshot"] == "dev-20231202-115959"
+    assert manager.snapshot_name == "dev-20231202-115959"
+
+
+def test_select_latest_dev_skips_multiple_incomplete(setup_snapshot_files):
+    """多个 dev 快照不完整时，依次跳过直到找到可用的"""
+    for name in ["dev-20231202-120000", "dev-20231202-115959"]:
+        path = os.path.join(constants.SNAPSHOT_DIR, name)
+        for f in os.listdir(path):
+            os.remove(os.path.join(path, f))
+
+    manager = SnapshotManager()
+    result = manager.load(SnapshotManager.USE_LATEST_DEV)
+
+    # 应选中最早的 dev-20231201-120000
+    assert result["snapshot"] == "dev-20231201-120000"
+    assert manager.snapshot_name == "dev-20231201-120000"
+
+
+def test_select_latest_dev_all_incomplete(setup_snapshot_files):
+    """所有 dev 快照都不完整时，返回 None，跳过加载"""
+    for name in ["dev-20231202-120000", "dev-20231202-115959", "dev-20231201-120000"]:
+        path = os.path.join(constants.SNAPSHOT_DIR, name)
+        for f in os.listdir(path):
+            os.remove(os.path.join(path, f))
+
+    manager = SnapshotManager()
+    result = manager.load(SnapshotManager.USE_LATEST_DEV)
+
+    # 没有可用快照，跳过加载
+    assert result["snapshot"] is None
+    assert manager.snapshot_name is None
+
+
+def test_select_latest_dev_missing_venv_only(setup_snapshot_files):
+    """最新快照只缺 venv 压缩包时，也应跳过"""
+    latest_path = os.path.join(constants.SNAPSHOT_DIR, "dev-20231202-120000")
+    # 只删除 venv.tar，保留 comfyui.zip
+    os.remove(os.path.join(latest_path, "venv.tar"))
+
+    manager = SnapshotManager()
+    result = manager.load(SnapshotManager.USE_LATEST_DEV)
+
+    assert result["snapshot"] == "dev-20231202-115959"
+
+
+def test_select_latest_dev_missing_comfyui_only(setup_snapshot_files):
+    """最新快照只缺 comfyui 压缩包时，也应跳过"""
+    latest_path = os.path.join(constants.SNAPSHOT_DIR, "dev-20231202-120000")
+    # 只删除 comfyui.zip，保留 venv.tar
+    os.remove(os.path.join(latest_path, "comfyui.zip"))
+
+    manager = SnapshotManager()
+    result = manager.load(SnapshotManager.USE_LATEST_DEV)
+
+    assert result["snapshot"] == "dev-20231202-115959"
+
+
+def test_load_specific_dev_no_validation(setup_snapshot_files):
+    """指定具名 dev 快照时不做完整性检查，缺文件直接报错"""
+    latest_path = os.path.join(constants.SNAPSHOT_DIR, "dev-20231202-120000")
+    for f in os.listdir(latest_path):
+        os.remove(os.path.join(latest_path, f))
+
+    manager = SnapshotManager()
+    # 指定具名快照加载，不走回退，应直接抛异常
+    with pytest.raises(Exception):
+        manager.load("dev-20231202-120000")
+
+
+def test_select_latest_dev_already_loaded_skips(setup_snapshot_files):
+    """最新可用快照已加载时，直接跳过"""
+    manager = SnapshotManager()
+    manager.cur_snapshot_name = "dev-20231202-120000"
+
+    result = manager.load(SnapshotManager.USE_LATEST_DEV)
+    assert result["snapshot"] == "dev-20231202-120000"
+
+
+def test_is_snapshot_loadable(setup_snapshot_files):
+    """_is_snapshot_loadable 正确判断快照完整性"""
+    manager = SnapshotManager()
+
+    # 完整快照
+    assert manager._is_snapshot_loadable("dev-20231202-120000") is True
+
+    # 删除 venv.tar → 不完整
+    os.remove(os.path.join(constants.SNAPSHOT_DIR, "dev-20231202-120000", "venv.tar"))
+    assert manager._is_snapshot_loadable("dev-20231202-120000") is False
+
+    # 不存在的快照
+    assert manager._is_snapshot_loadable("dev-99999999-999999") is False
+
+
 @pytest.fixture(autouse=True)
 def cleanup(setup_snapshot_files):
     yield

@@ -135,6 +135,7 @@ DEFAULT_INSTALL_TIMEOUT = 600  # 10min default timeout for custom nodes installa
 
 # PreStop 相关配置
 PRESTOP_TIMEOUT = int(os.getenv("PRESTOP_TIMEOUT", "580"))  # preStop 超时时间，默认 580 秒（留 20 秒缓冲）
+PRESTOP_MIN_UPTIME = int(os.getenv("PRESTOP_MIN_UPTIME", "1800"))  # 实例最短存活时间（秒），存活不足则跳过preStop回调，避免fallback ECS产生的短命实例PreStop中保存dev快照
 
 INSTANCE_ID = os.getenv("FC_INSTANCE_ID", socket.gethostname())
 # OSS

@@ -19,6 +19,10 @@ class ManagementRoutes:
 
         @self.bp.post("/start")
         def start():
+            """
+            @deprecated 此接口已废弃，仅用于运维场景。
+            服务在实例启动时会自动启动（通过 /initialize 钩子），无需手动调用。
+            """
             # --- 步骤 1: 从 URL 查询参数获取 snapshot (向下兼容) ---
             snap = request.args.get('snapshot')
 
@@ -76,7 +80,6 @@ class ManagementRoutes:
             return jsonify({
                 "data": {
                     "status": self.service.status.value,
-                    "latest_action": getattr(self.service.latest_action, 'value', None),
                     "sub_status": self.service.sub_status
                 },
                 "status": "success"

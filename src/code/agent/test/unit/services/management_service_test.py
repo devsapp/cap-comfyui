@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from exceptions.exceptions import StateTransitionError
-from services.management_service import ManagementService, BackendStatus, Action
+from services.management_service import ManagementService, BackendStatus
 
 @pytest.fixture
 def mock_process_mgr():
@@ -40,88 +40,35 @@ def service(mock_process_mgr, mock_snapshot_mgr):
     service = ManagementService()
     service._process_mgr = mock_process_mgr
     service._snapshot_mgr = mock_snapshot_mgr
-    service._status = BackendStatus.STOPPED  # 确保初始状态为 STOPPED
-    service._latest_action = None  # 重置最后操作
+    service._status = BackendStatus.RUNNING  # 初始状态为 RUNNING
     service._sub_status = ""  # 重置子状态
+    service._is_stopped = False  # 重置停止标志
     return service
 
-def test_concurrent_start(service, mock_process_mgr, mock_snapshot_mgr):
-    thread_count = 3
-
-    def start_service():
-        try:
-            initial_status = service.status
-            service.start("test_snapshot")
-            return {
-                'success': True,
-                'initial_status': initial_status,
-                'final_status': service.status
-            }
-        except Exception as e:
-            return {
-                'success': False,
-                'initial_status': service.status,
-                'final_status': service.status,
-                'error': str(e)
-            }
-
-    with ThreadPoolExecutor(max_workers=thread_count) as executor:
-        futures = [executor.submit(start_service) for _ in range(thread_count)]
-        start_attempts = [f.result() for f in as_completed(futures)]
-
-    successful_starts = [attempt for attempt in start_attempts if attempt['success']]
-    failed_starts = [attempt for attempt in start_attempts if not attempt['success']]
-
-    assert len(successful_starts) == 1
-    assert len(failed_starts) == thread_count - 1
-
-    successful_start = successful_starts[0]
-    assert successful_start['initial_status'] == BackendStatus.STOPPED
-    assert successful_start['final_status'] == BackendStatus.RUNNING
-
-    for failed_start in failed_starts:
-        assert "Illegal state transition" in str(failed_start['error'])
-
-    assert service.status == BackendStatus.RUNNING
-    assert mock_snapshot_mgr.load.call_count == 1
-    assert mock_process_mgr.start.call_count == 1
-    assert mock_process_mgr.wait_until_ready.call_count == 1
-
-def test_start_during_starting_fails(service):
-    def slow_start():
-        service._transition_to(BackendStatus.STARTING, Action.START)
-        time.sleep(0.5)
-        service._transition_to(BackendStatus.RUNNING, Action.START)
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        first_start = executor.submit(slow_start)
-        time.sleep(0.1)
-
-        with pytest.raises(StateTransitionError):
-            service.start("test_snapshot")
-
-        first_start.result()
-
-    assert service.status == BackendStatus.RUNNING
-
 def test_initial_status(service):
-    assert service.status == BackendStatus.STOPPED
+    """测试初始状态为 RUNNING，且未停止"""
+    assert service.status == BackendStatus.RUNNING
+    assert service._is_stopped is False
 
 def test_start_success(service, mock_process_mgr, mock_snapshot_mgr):
+    """测试 start 方法成功执行（不涉及状态转换）"""
     service.start("test_snapshot")
 
     mock_snapshot_mgr.load.assert_called_once_with("test_snapshot")
     mock_process_mgr.start.assert_called_once()
     mock_process_mgr.wait_until_ready.assert_called_once()
+    # start 不改变状态，保持 RUNNING
     assert service.status == BackendStatus.RUNNING
 
 def test_start_failure(service, mock_process_mgr, mock_snapshot_mgr):
+    """测试 start 方法失败时状态不变"""
     mock_process_mgr.start.side_effect = Exception("Start failed")
 
     with pytest.raises(Exception):
         service.start("test_snapshot")
 
-    assert service.status == BackendStatus.STOPPED
+    # 失败后状态保持不变
+    assert service.status == BackendStatus.RUNNING
 
 def test_save_success(service, mock_snapshot_mgr):
     service._status = BackendStatus.RUNNING
@@ -140,55 +87,76 @@ def test_save_failure(service, mock_snapshot_mgr):
     assert service.status == BackendStatus.RUNNING
 
 def test_stop_success(service, mock_process_mgr):
-    service._status = BackendStatus.RUNNING
+    """测试 stop 方法成功执行（不涉及状态转换，但设置停止标志）"""
+    assert service._is_stopped is False  # 初始状态未停止
+    
     service.stop()
 
     mock_process_mgr.stop.assert_called_once()
-    assert service.status == BackendStatus.STOPPED
+    # stop 不改变状态，保持 RUNNING
+    assert service.status == BackendStatus.RUNNING
+    # 但会设置停止标志
+    assert service._is_stopped is True
 
 def test_stop_failure(service, mock_process_mgr):
-    service._status = BackendStatus.RUNNING
+    """测试 stop 方法失败时抛出异常，且不设置停止标志"""
     mock_process_mgr.stop.side_effect = Exception("Stop failed")
+    assert service._is_stopped is False  # 初始状态未停止
 
     with pytest.raises(Exception):
         service.stop()
 
+    # 失败后状态保持不变
     assert service.status == BackendStatus.RUNNING
+    # 失败后停止标志也不应该被设置
+    assert service._is_stopped is False
 
 def test_save_and_stop(service):
+    """测试 save_and_stop 方法会调用 save 和 stop，并设置停止标志"""
     service._status = BackendStatus.RUNNING
-    with patch.object(service, 'save') as mock_save:
-        with patch.object(service, 'stop') as mock_stop:
-            service.save_and_stop("test_type")
+    assert service._is_stopped is False  # 初始状态未停止
+    
+    with patch.object(service, 'save', return_value={"snapshot": "test"}) as mock_save:
+        with patch.object(service, 'stop', return_value={"time_stop_process": 1.0}) as mock_stop:
+            # 模拟 stop 方法设置 _is_stopped
+            def side_effect_stop():
+                service._is_stopped = True
+                return {"time_stop_process": 1.0}
+            mock_stop.side_effect = side_effect_stop
+            
+            result = service.save_and_stop("test_type")
 
             mock_save.assert_called_once_with("test_type")
             mock_stop.assert_called_once()
+            # 验证 stop 后设置了停止标志
+            assert service._is_stopped is True
+            # 验证返回值合并了 save 和 stop 的结果
+            assert "snapshot" in result
+            assert "time_stop_process" in result
 
-def test_invalid_transition(service):
-    with pytest.raises(StateTransitionError):
-        service._transition_to(BackendStatus.RUNNING, Action.START)
-
-@pytest.mark.parametrize("current_status,new_status,action", [
-    (BackendStatus.STOPPED, BackendStatus.STARTING, Action.START),
-    (BackendStatus.STARTING, BackendStatus.RUNNING, Action.START),
-    (BackendStatus.RUNNING, BackendStatus.SAVING, Action.SAVE),
-    (BackendStatus.SAVING, BackendStatus.RUNNING, Action.SAVE),
-    (BackendStatus.RUNNING, BackendStatus.STOPPING, Action.STOP),
-    (BackendStatus.STOPPING, BackendStatus.STOPPED, Action.STOP),
+@pytest.mark.parametrize("current_status,new_status", [
+    (BackendStatus.RUNNING, BackendStatus.SAVING),
+    (BackendStatus.RUNNING, BackendStatus.REBOOTING),
+    (BackendStatus.SAVING, BackendStatus.RUNNING),
+    (BackendStatus.REBOOTING, BackendStatus.RUNNING),
+    (BackendStatus.REBOOTING, BackendStatus.REBOOT_FAILED),
 ])
-def test_valid_transitions(service, current_status, new_status, action):
+def test_valid_transitions(service, current_status, new_status):
+    """测试有效的状态转换"""
     service._status = current_status
-    service._transition_to(new_status, action)
+    service._transition_to(new_status)
     assert service.status == new_status
-    assert service.latest_action == action
 
-@pytest.mark.parametrize("current_status,new_status,action", [
-    (BackendStatus.STOPPED, BackendStatus.RUNNING, Action.START),
-    (BackendStatus.RUNNING, BackendStatus.STARTING, Action.START),
-    (BackendStatus.SAVING, BackendStatus.STOPPED, Action.STOP),
-    (BackendStatus.STOPPING, BackendStatus.SAVING, Action.SAVE),
+@pytest.mark.parametrize("current_status,new_status", [
+    (BackendStatus.SAVING, BackendStatus.SAVING),  # 不能从 SAVING 转到 SAVING
+    (BackendStatus.SAVING, BackendStatus.REBOOTING),  # 不能从 SAVING 转到 REBOOTING
+    (BackendStatus.REBOOTING, BackendStatus.SAVING),  # 不能从 REBOOTING 转到 SAVING
+    (BackendStatus.REBOOT_FAILED, BackendStatus.RUNNING),  # REBOOT_FAILED 是终态
+    (BackendStatus.REBOOT_FAILED, BackendStatus.SAVING),  # REBOOT_FAILED 是终态
+    (BackendStatus.REBOOT_FAILED, BackendStatus.REBOOTING),  # REBOOT_FAILED 是终态
 ])
-def test_invalid_transitions(service, current_status, new_status, action):
+def test_invalid_transitions(service, current_status, new_status):
+    """测试无效的状态转换"""
     service._status = current_status
     with pytest.raises(StateTransitionError):
-        service._transition_to(new_status, action)
+        service._transition_to(new_status)

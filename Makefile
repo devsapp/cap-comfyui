@@ -7,29 +7,44 @@ $(error Invalid REGION: $(REGION). Must be one of: $(VALID_REGIONS))
 endif
 
 VERSION ?= $(shell date "+%Y%m%d%H%M%S")
-AGENT_IMAGE = cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/image-generation-comfyui-agent-dev:$(VERSION)
+REGISTRY = cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app
+AGENT_IMAGE ?= $(REGISTRY)/image-generation-comfyui-agent-dev:$(VERSION)
 export OSS_BUCKET = dipper-cache-$(REGION)
+WARMUP_REGIONS ?= cn-hangzhou cn-shenzhen cn-beijing cn-shanghai ap-southeast-1
 
-# 构建并推送Agent镜像
-# make all
-# CR_PWD=xxx make all
-# CR_USER=xxx CR_PWD=xxx make all
-# CR_PWD=xxx VERSION=v1.0.0 make all
+# ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+# 预发环境：构建推送 Agent dev 镜像 + 预热杭州
 .PHONY: all
 all:
-	@echo "====== Building and pushing agent image ======"; \
-	BUILD_VERSION=$${VERSION:-$$(date "+%Y%m%d%H%M%S")}; \
-	$(MAKE) VERSION=$$BUILD_VERSION login && \
-	$(MAKE) VERSION=$$BUILD_VERSION build && \
-	$(MAKE) VERSION=$$BUILD_VERSION push; \
-	if [ $$? -eq 0 ]; then \
-		echo "====== Build and push completed successfully ======"; \
-	else \
-		echo "====== Build and push failed ======"; \
+	@IMAGE="$(REGISTRY)/image-generation-comfyui-agent-dev:$(VERSION)"; \
+	echo "====== [Pre] Image: $$IMAGE ======"; \
+	$(MAKE) AGENT_IMAGE="$$IMAGE" login && \
+	$(MAKE) AGENT_IMAGE="$$IMAGE" build && \
+	$(MAKE) AGENT_IMAGE="$$IMAGE" push && \
+	$(MAKE) AGENT_IMAGE="$$IMAGE" WARMUP_REGIONS=cn-hangzhou warmup && \
+	echo "====== [Pre] Completed successfully ======" || \
+	{ echo "====== [Pre] Failed ======"; exit 1; }
+
+# 生产环境：构建推送 Agent 生产镜像 + 预热全部 region（VERSION 必须指定为 git tag）
+# make release VERSION=v1.4.0
+.PHONY: release
+release:
+	@if [ "$(origin VERSION)" = "file" ]; then \
+		echo "[ERROR] VERSION is required for production release. Usage: make release VERSION=v1.4.0"; \
 		exit 1; \
 	fi
+	@IMAGE="$(REGISTRY)/image-generation-comfyui-agent:$(VERSION)"; \
+	echo "====== [Prod] Image: $$IMAGE ======"; \
+	$(MAKE) AGENT_IMAGE="$$IMAGE" login && \
+	$(MAKE) AGENT_IMAGE="$$IMAGE" build && \
+	$(MAKE) AGENT_IMAGE="$$IMAGE" push && \
+	$(MAKE) AGENT_IMAGE="$$IMAGE" warmup && \
+	echo "====== [Prod] Completed successfully ======" || \
+	{ echo "====== [Prod] Failed ======"; exit 1; }
 
-# 构建Agent镜像
+# ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+# Agent镜像相关
+# 镜像构建
 .PHONY: build
 build:
 	cd src/code/agent && docker build --platform linux/amd64 -t $(AGENT_IMAGE) .
@@ -54,7 +69,7 @@ login:
 		docker login cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com; \
 	else \
 		echo "Using provided credentials for login..."; \
-		CR_USER=$${CR_USER:-oyohyee@gmail.com}; \
+		CR_USER=$${CR_USER:-xiliu@1767215449378635}; \
 		echo "$$CR_PWD" | docker login --username=$$CR_USER --password-stdin cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com; \
 	fi
 
@@ -68,6 +83,14 @@ push:
 deploy:
 	export WEBHOOK_URL="http://dipper-any-post-rwhuiqmhaf.cn-hangzhou.fcapp.run/post?uid=a&projectName=a&environmentName=a&serviceName=a&token=a" \
 	&& s deploy -t src/code/comfyui/s-dev-usemodel.yaml
+
+# 镜像预热
+# make warmup AGENT_IMAGE=<image>                                           # warmup all default regions
+# make warmup AGENT_IMAGE=<image> WARMUP_REGIONS=cn-hangzhou                # warmup specific region
+# make warmup AGENT_IMAGE=<image> WARMUP_REGIONS="cn-hangzhou cn-beijing"   # warmup multiple regions
+.PHONY: warmup
+warmup:
+	@./warmup/warmup.sh "$(AGENT_IMAGE)" $(WARMUP_REGIONS)
 
 # ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 .PHONY: build-comfyui

@@ -61,20 +61,17 @@ class ComfyUIProcessManager(ProcessManager):
         注意：不使用 HTTP 请求检查，因为 ComfyUI 繁忙时会超时导致误判。
               使用轻量级的 TCP 端口连接检查，即使繁忙也能快速响应。
 
-        特殊情况：
-        - 主动重启期间：跳过健康检查，避免误判为崩溃
-        - CPU 模式：跳过健康检查，直接返回 True
+        状态检查策略：
+        - 只在 RUNNING 状态时进行健康检查
+        - 其他状态（SAVING、REBOOTING、REBOOT_FAILED）跳过健康检查，避免状态冲突
 
         Returns:
             bool: 如果进程存活返回 True，否则返回 False
         """
-        # CPU 模式无需进行健康检查
-        if constants.COMFYUI_MODE == 'cpu':
-            return True
-
-        # 主动重启期间跳过健康检查，避免误判为崩溃
+        # 只在 RUNNING 状态时进行健康检查，其他状态一律跳过
         from services.management_service import ManagementService, BackendStatus
-        if ManagementService().status == BackendStatus.REBOOTING:
+        status = ManagementService().status
+        if status != BackendStatus.RUNNING:
             return True
 
         # 第一级检查：进程是否存在（快速检测 OOM、crash 等情况）
@@ -149,16 +146,16 @@ class ComfyUIProcessManager(ProcessManager):
 
     def _do_restart(self):
         """重启 ComfyUI 进程，无需加载 snapshot"""
-        from services.management_service import ManagementService, BackendStatus, Action
+        from services.management_service import ManagementService, BackendStatus
         service = ManagementService()
         
         try:
-            service._transition_to(BackendStatus.REBOOTING, Action.REBOOT)
+            service._transition_to(BackendStatus.REBOOTING)
             
             # 先停止旧进程（如果还在运行），释放端口和资源
             if self._is_process_running():
-                log("INFO", "Stopping old ComfyUI process before restart")
-                self.stop()
+                log("INFO", "Killing old ComfyUI process before restart")
+                self._kill_and_cleanup()
             else:
                 # 只清理僵尸进程资源
                 self._cleanup_dead_process()
@@ -167,18 +164,26 @@ class ComfyUIProcessManager(ProcessManager):
             self.start(constants.BOOT_CMD)
             self.wait_until_ready()
             
-        except Exception as e:
-            # 如果重启失败，有两种方案：
-            # 1. 依靠健康检查机制进行重试
-            # 2. 退出主进程作为兜底
-            #    若是项目开发环境，则会触发实例轮转，旧的工作空间丢失
-            #    若是线上服务环境，同步调用会触发实例轮转，异步调用会hang住直到超时，需要手动驱逐实例
-            # 因此，采用方案1，将状态转回 RUNNING，让健康检查继续工作并触发重试，除非用户手动驱逐实例
-            # 注意：不能转换到 STOPPED，因为 STOPPED 只能转换到 STARTING（不能到 REBOOTING）
-            log("WARNING", f"Failed to restart ComfyUI process: {e}")
+            # 重启成功：从 REBOOTING 转换到 RUNNING
+            service._transition_to(BackendStatus.RUNNING)
             
-        finally:
-            try:
-                service._transition_to(BackendStatus.RUNNING, Action.REBOOT)
-            except Exception as transition_error:
-                log("ERROR", f"Failed to update service status: {transition_error}")
+        except Exception as e:
+            # 重启失败：
+            # - 线上服务（USE_API_MODE=True）：转到 RUNNING，依靠健康检查继续重试
+            # - 项目开发（USE_API_MODE=False）：转到 REBOOT_FAILED，停止重试，需要人工介入
+            log("ERROR", f"Failed to restart ComfyUI process: {e}")
+            
+            if constants.USE_API_MODE:
+                # 线上服务：转回 RUNNING，让健康检查继续重试
+                try:
+                    service._transition_to(BackendStatus.RUNNING)
+                    log("WARNING", "Service status set back to RUNNING, health check will retry")
+                except Exception as transition_error:
+                    log("ERROR", f"Failed to update service status: {transition_error}")
+            else:
+                # 项目开发：转到 REBOOT_FAILED，停止自动重试
+                try:
+                    service._transition_to(BackendStatus.REBOOT_FAILED)
+                    log("ERROR", "Service status set to REBOOT_FAILED, manual intervention required")
+                except Exception as transition_error:
+                    log("ERROR", f"Failed to update service status: {transition_error}")

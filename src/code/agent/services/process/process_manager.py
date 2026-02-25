@@ -116,29 +116,35 @@ class ProcessManager(ABC):
                 self.health_check_thread.start()
                 log("INFO", f"{BACKEND_TYPE.capitalize()} health check thread started")
 
-    def stop(self) -> None:
-        """停止子进程"""
-        # 首先停止健康检查
-        self.should_monitor = False
-        if self.health_check_thread and self.health_check_thread.is_alive():
-            self.health_check_thread.join()
+    # 超时配置
+    PROCESS_WAIT_TIMEOUT = 10  # SIGKILL 后等待进程退出的超时时间（秒），超时说明进程卡在内核态 D 状态
+    HEALTH_CHECK_JOIN_TIMEOUT = 1  # stop() 中等待健康检查线程退出的超时时间（秒）
 
+    def _kill_and_cleanup(self):
+        """
+        仅杀死子进程并清理相关资源（管道、线程引用），不涉及健康检查线程和 WebSocket 连接管理。
+
+        供 stop() 和 _do_restart() 内部调用：
+        - stop()：先停止健康检查线程，再调用此方法杀死进程，最后关闭 WebSocket 连接
+        - _do_restart()：在健康检查线程内部调用，仅需杀死旧进程，不能操作健康检查线程（因为自身就是该线程）
+        """
         with self._lock:
             if self.process is None:
                 return
 
+            pid = self.process.pid
             try:
                 self.process.kill()
-                self.process.wait()
+                try:
+                    self.process.wait(timeout=self.PROCESS_WAIT_TIMEOUT)
+                except subprocess.TimeoutExpired:
+                    log("WARNING", f"Process {pid} did not exit within {self.PROCESS_WAIT_TIMEOUT}s after SIGKILL "
+                        "(possibly stuck in D state due to I/O), proceeding with cleanup")
 
                 if self.process.stdout:
                     self.process.stdout.close()
                 if self.process.stderr:
                     self.process.stderr.close()
-
-                # close all ws connection
-                from services.process.websocket.websocket_manager import ws_manager
-                ws_manager.close_all_connections()
 
                 if self.stdout_thread and self.stdout_thread.is_alive():
                     self.stdout_thread.join(timeout=1)
@@ -148,12 +154,35 @@ class ProcessManager(ABC):
                 self.process = None
                 self.stdout_thread = None
                 self.stderr_thread = None
-                self.health_check_thread = None
 
-                log("INFO", f"{BACKEND_TYPE.capitalize()} process killed")
+                log("INFO", f"{BACKEND_TYPE.capitalize()} process stopped (pid: {pid})")
             except Exception as e:
                 log("ERROR", f"Error stopping {BACKEND_TYPE.capitalize()} process: {e}")
                 raise
+
+    def stop(self) -> None:
+        """
+        停止子进程（完整流程：停止健康检查 + 杀死进程 + 清理资源）。
+
+        注意：主动调用 stop() 时，健康检查线程可能正在执行 _do_restart() 中耗时较长的 wait_until_ready()。
+        此时 join 仅等待 HEALTH_CHECK_JOIN_TIMEOUT（1秒），超时后立即继续执行后续的杀进程操作，
+        不等待健康检查线程的重启流程完成。健康检查线程会因为 should_monitor=False 在重启流程结束后自行退出。
+        """
+        # 通知健康检查线程停止，短暂等待后立即继续
+        self.should_monitor = False
+        if self.health_check_thread and self.health_check_thread.is_alive():
+            self.health_check_thread.join(timeout=self.HEALTH_CHECK_JOIN_TIMEOUT)
+            if self.health_check_thread.is_alive():
+                log("WARNING", "Health check thread still running (may be in restart flow), "
+                    "proceeding with stop immediately")
+
+        self._kill_and_cleanup()
+        self.health_check_thread = None
+
+        # 关闭所有 WebSocket 连接，通知前端客户端服务已停止
+        # 仅在 stop() 中执行，restart 时不需要
+        from services.process.websocket.websocket_manager import ws_manager
+        ws_manager.close_all_connections(timeout=5)
 
     def _cleanup_dead_process(self):
         """清理已死亡的进程资源，防止僵尸进程"""

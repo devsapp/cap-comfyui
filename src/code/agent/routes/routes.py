@@ -10,7 +10,7 @@ import requests
 
 import constants
 from exceptions.exceptions import CustomError
-from services.management_service import ManagementService, Action, BackendStatus
+from services.management_service import ManagementService, BackendStatus
 from utils.logger import log
 from utils.error_handler import ErrorResponse
 from utils.user_identity import identify_user_or_default
@@ -117,14 +117,29 @@ class Routes:
 
             service = ManagementService()  # singleton
 
-            # 只有在 RUNNING 或 REBOOTING 状态下才需要在 pre-stop 中保存工作空间，因为这种状态下实例直接销毁只有在实例非预期轮转时才会出现
-            # 其他状态（STOPPED、STARTING、SAVING、STOPPING）不需要保存：
-            # - STOPPED: 服务未启动，无需保存
-            # - STARTING: 服务启动中，尚未就绪，无需保存
-            # - SAVING: 已经在保存中，无需重复保存
-            # - STOPPING: 已经在停止中，通常是 SaveAndStop 触发，已保存过
-            if service.status not in (BackendStatus.RUNNING, BackendStatus.REBOOTING):
-                log("INFO", f"Do nothing in pre-stop, current status: {service.status.value}")
+            # PreStop 兜底保存策略：只在非预期实例销毁时保存
+            # 如果已主动调用 stop 或 saveAndStop，则跳过保存
+            if service._is_stopped:
+                log("INFO", "Skip pre-stop save: service already stopped by user")
+                log("INFO", f"FC PreStop End RequestId: {request_id}")
+                return "OK"
+
+            # 只有在 RUNNING 状态下才需要在 pre-stop 中保存工作空间
+            # 其他状态不保存：
+            # - SAVING: 已经在保存中
+            # - REBOOTING: 正在重启中
+            # - REBOOT_FAILED: 重启失败，无法保存
+            if service.status != BackendStatus.RUNNING:
+                log("INFO", f"Skip pre-stop save, current status: {service.status.value}")
+                log("INFO", f"FC PreStop End RequestId: {request_id}")
+                return "OK"
+
+            # 避免fallback ECS产生的短命实例PreStop中保存dev快照
+            # issue: https://project.aone.alibaba-inc.com/v2/project/2148315/bug/78756665#
+            import time
+            uptime = time.time() - service._init_time
+            if uptime < constants.PRESTOP_MIN_UPTIME:
+                log("INFO", f"Skip pre-stop save: instance uptime too short ({uptime:.0f}s < {constants.PRESTOP_MIN_UPTIME}s)")
                 log("INFO", f"FC PreStop End RequestId: {request_id}")
                 return "OK"
 
@@ -206,10 +221,11 @@ class Routes:
         @identify_user_or_default
         def proxy(path=""):
             backend_status = self.management.service.status
+            # 只有 RUNNING 和 SAVING 状态允许请求通过
             if backend_status not in (BackendStatus.RUNNING, BackendStatus.SAVING):
                 return ErrorResponse.create(
                     error_type="service_not_running",
-                    message="Please start your comfyui/sd service first",
+                    message="Please start your comfyui service first",
                     status_code=503
                 )
 

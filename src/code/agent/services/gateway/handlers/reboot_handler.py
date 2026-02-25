@@ -3,7 +3,6 @@ Reboot Handler
 处理服务重启逻辑
 """
 import json
-import threading
 import time
 import traceback
 
@@ -11,7 +10,7 @@ from flask import request, jsonify, Response
 import requests
 
 import constants
-from services.management_service import ManagementService, Action, BackendStatus
+from services.management_service import ManagementService, BackendStatus
 from utils.logger import log
 from utils.error_handler import ErrorResponse
 
@@ -19,35 +18,24 @@ from utils.error_handler import ErrorResponse
 class RebootHandler:
     """处理服务重启逻辑"""
     
-    def __init__(self):
-        # 重启锁，防止并发重启
-        self._reboot_lock = threading.Lock()
-    
     def handle_reboot(self):
         """
         拦截 ComfyUI-Manager 的 reboot 请求，使用管控接口实现重启
+        
+        并发安全由状态机保证：RUNNING → REBOOTING 的转换在 _status_lock 保护下执行。
         
         CPU 模式：保存当前 snapshot 并通过 header 传递 snapshot 名称给 GPU 函数，然后等待本地 ComfyUI 重启完成
         GPU 模式：
           - 独立 GPU 函数（无 snapshot header）：转发到 ComfyUI backend 直接重启
           - CPU-GPU 架构（有 snapshot header）：停止服务后用指定 snapshot 重启
         """
-        # 检查是否已有重启在进行中
-        if not self._reboot_lock.acquire(blocking=False):
-            log("WARNING", "Reboot request rejected: reboot already in progress")
-            return ErrorResponse.create(
-                error_type="reboot_in_progress",
-                message="Reboot already in progress, please wait",
-                status_code=409
-            )
-        
         service = ManagementService()
         
         try:
             log("DEBUG", f"Received /api/manager/reboot request (mode={constants.COMFYUI_MODE})")
             
             # 开始重启：转换到 REBOOTING 状态
-            service._transition_to(BackendStatus.REBOOTING, Action.REBOOT)
+            service._transition_to(BackendStatus.REBOOTING)
             log("INFO", "Starting service reboot...")
             
             # CPU 模式：保存 snapshot 并通知 GPU 函数重启
@@ -114,7 +102,7 @@ class RebootHandler:
                     log("DEBUG", "Service is ready")
                     
                     # 进程 ready 后：从 REBOOTING 转换到 RUNNING
-                    service._transition_to(BackendStatus.RUNNING, Action.REBOOT)
+                    service._transition_to(BackendStatus.RUNNING)
                     log("INFO", "Service reboot completed successfully")
                     
                     # 返回成功响应
@@ -170,7 +158,7 @@ class RebootHandler:
                         log("DEBUG", "Service is ready")
                         
                         # 进程 ready 后：从 REBOOTING 转换到 RUNNING
-                        service._transition_to(BackendStatus.RUNNING, Action.REBOOT)
+                        service._transition_to(BackendStatus.RUNNING)
                         log("INFO", "Service reboot completed successfully")
                         
                         # 返回成功响应
@@ -228,7 +216,7 @@ class RebootHandler:
                     # 重启成功：从 REBOOTING 转换到 RUNNING
                     # 注意：start() 方法在 REBOOTING 状态下会保持 REBOOTING 状态（不转换到 STARTING）
                     # 所以这里需要在 start() 完成后，将状态从 REBOOTING 转换到 RUNNING
-                    service._transition_to(BackendStatus.RUNNING, Action.REBOOT)
+                    service._transition_to(BackendStatus.RUNNING)
                     log("INFO", "Workspace reloaded successfully")
                     
                     # 返回成功响应
@@ -240,10 +228,10 @@ class RebootHandler:
             error_msg = f"Service reboot failed: {str(e)}"
             log("ERROR", f"{error_msg}\nStacktrace:\n{traceback.format_exc()}")
             
-            # 重启失败：从 REBOOTING 转换到 STOPPED
+            # 重启失败：从 REBOOTING 转换到 REBOOT_FAILED
             try:
-                service._transition_to(BackendStatus.STOPPED, Action.REBOOT)
-                log("WARNING", "Service status set to STOPPED")
+                service._transition_to(BackendStatus.REBOOT_FAILED)
+                log("ERROR", "Service status set to REBOOT_FAILED, manual intervention may be required")
             except Exception as transition_error:
                 log("ERROR", f"Failed to update service status: {transition_error}")
             
@@ -253,8 +241,3 @@ class RebootHandler:
                 message=error_msg,
                 status_code=500
             )
-        finally:
-            # 释放重启锁
-            self._reboot_lock.release()
-            log("DEBUG", "Reboot lock released")
-

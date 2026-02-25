@@ -178,31 +178,46 @@ class WebSocketManager:
         self._enqueue_message(all_connections, message)
         return len(all_connections)
     
-    def close_all_connections(self):
-        """关闭所有WebSocket连接（不停止发送线程，因为重启后需要继续使用）"""
-        try:
-            # 先复制连接列表，避免在锁内执行网络操作
-            with self._lock:
-                connections_to_close = self.active_connections.copy()
-                # 清理连接和映射记录
-                self.active_connections.clear()
-                self._client_id_mapping.clear()
-                self._client_user_mapping.clear()
-            
+    WS_CLOSE_TIMEOUT = 5  # close_all_connections 总超时时间（秒）
+
+    def close_all_connections(self, timeout: float = None):
+        """
+        关闭所有 WebSocket 连接（不停止发送线程，因为重启后需要继续使用）。
+
+        Args:
+            timeout: 总超时时间（秒），超时后放弃剩余未关闭的连接直接返回。
+                     默认使用 WS_CLOSE_TIMEOUT（5秒）。
+        """
+        if timeout is None:
+            timeout = self.WS_CLOSE_TIMEOUT
+
+        # 先清理内部记录，避免在锁内执行网络操作
+        with self._lock:
+            connections_to_close = self.active_connections.copy()
+            self.active_connections.clear()
+            self._client_id_mapping.clear()
+            self._client_user_mapping.clear()
+
+        if not connections_to_close:
+            return
+
+        def _do_close():
             for ws in connections_to_close:
                 try:
-                    # 直接发送关闭消息，不经过队列
                     ws.send('Server shutting down')
                     ws.close()
-                except Exception as e:
-                    # 连接可能已经关闭，忽略错误
+                except Exception:
                     pass
-                
+
+        close_thread = threading.Thread(target=_do_close, daemon=True)
+        close_thread.start()
+        close_thread.join(timeout=timeout)
+
+        if close_thread.is_alive():
+            log("WARNING", f"[WebSocketManager] Closing {len(connections_to_close)} connection(s) "
+                f"did not finish within {timeout}s, giving up remaining connections")
+        else:
             log("INFO", f"[WebSocketManager] Closed {len(connections_to_close)} WebSocket connection(s)")
-        except Exception as e:
-            log("ERROR", f"[WebSocketManager] Error closing connections: {e}")
-            import traceback
-            log("ERROR", f"[WebSocketManager] Cleanup error traceback: {traceback.format_exc()}")
 
     
     def _start_send_thread(self):

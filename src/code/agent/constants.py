@@ -136,7 +136,7 @@ DEFAULT_READINESS_TIMEOUT = int(os.getenv("READINESS_TIMEOUT", "900"))  # 默认
 DEFAULT_LIVENESS_POLL_INTERVAL = 5
 
 # 插件安装相关超时配置
-DEFAULT_INSTALL_TIMEOUT = 3600  # 15min default timeout for custom nodes installation
+DEFAULT_INSTALL_TIMEOUT = 900  # 15min default timeout for custom nodes installation
 
 # PreStop 相关配置
 PRESTOP_TIMEOUT = int(os.getenv("PRESTOP_TIMEOUT", "580"))  # preStop 超时时间，默认 580 秒（留 20 秒缓冲）

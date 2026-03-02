@@ -6,3 +6,4 @@ oss2
 flask-cors
 chardet
 watchdog
+packaging

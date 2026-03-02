@@ -1,0 +1,364 @@
+---
+description: Python 编码标准、命名约定、错误处理、测试和文档规范
+alwaysApply: true
+---
+
+# Python 编码标准
+
+本规则定义了项目的编码标准、命名约定、错误处理模式、测试规范和文档要求。
+
+## 1. 编码标准
+
+### 1.1 类型注解
+
+所有函数和方法必须包含类型注解：
+
+```python
+# ❌ 错误
+def process_task(task_id, client_id):
+    return {"task_id": task_id}
+
+# ✅ 正确
+from typing import Dict, Optional
+
+def process_task(task_id: str, client_id: str) -> Dict[str, str]:
+    return {"task_id": task_id}
+```
+
+### 1.2 导入顺序
+
+按以下顺序组织导入：
+1. 标准库
+2. 第三方库
+3. 本地模块
+
+```python
+# ✅ 正确
+import json
+import threading
+from typing import Dict, Optional
+
+import requests
+from flask import Flask, g
+
+from utils.logger import log
+from exceptions.exceptions import CustomError
+```
+
+### 1.3 代码注释
+
+- **避免冗余注释**：不要添加仅描述代码功能的注释
+- **注释非显而易见的意图**：解释为什么这样做，而不是做了什么
+- **使用中文注释**：项目使用中文作为注释语言
+
+```python
+# ❌ 错误 - 冗余注释
+# 创建任务字典
+self._tasks: Dict[str, Task] = {}
+
+# ✅ 正确 - 解释意图或约束
+# 使用锁保护任务字典，防止并发修改导致的竞态条件
+self._tasks: Dict[str, Task] = {}
+self._lock = threading.Lock()
+```
+
+---
+
+## 2. 命名约定
+
+### 2.1 变量和函数
+
+- **函数名**：使用 `snake_case`，动词开头
+- **变量名**：使用 `snake_case`，名词
+- **私有成员**：以单下划线 `_` 开头
+- **常量**：使用 `UPPER_SNAKE_CASE`
+
+```python
+# ✅ 正确
+class TaskManager:
+    def __init__(self, max_active_tasks: int):
+        self._max_active_tasks = max_active_tasks  # 私有属性
+        self._tasks: Dict[str, Task] = {}
+    
+    def submit_task(self, prompt_body: dict) -> str:  # 公共方法
+        """提交任务"""
+        pass
+    
+    def _validate_task(self, task: Task) -> bool:  # 私有方法
+        """验证任务"""
+        pass
+```
+
+### 2.2 类名
+
+- 使用 `PascalCase`
+- 异常类以 `Error` 结尾
+
+```python
+# ✅ 正确
+class TaskManager:
+    pass
+
+class InvalidRequestError(CustomError):
+    pass
+```
+
+### 2.3 布尔变量
+
+使用 `is_`, `has_`, `should_`, `can_` 等前缀：
+
+```python
+# ✅ 正确
+is_running: bool = True
+has_error: bool = False
+should_retry: bool = True
+can_proceed: bool = False
+```
+
+---
+
+## 3. 错误处理模型
+
+### 3.1 异常层次结构
+
+创建清晰的异常层次，所有自定义异常继承自 `CustomError`：
+
+```python
+# ✅ 正确
+class CustomError(Exception):
+    """自定义异常基类"""
+    def __init__(self, code: int = 500, message: str = ""):
+        self.code = code
+        self.message = message
+        super().__init__(self.message)
+
+class TaskError(CustomError):
+    """任务管理异常基类"""
+    def __init__(self, message: str, error_code: str = "task_error", code: int = 500):
+        self.error_code = error_code
+        super().__init__(code=code, message=message)
+
+class InvalidRequestError(TaskError):
+    """无效请求"""
+    def __init__(self, message: str):
+        super().__init__(message=message, error_code="invalid_request_error", code=400)
+```
+
+### 3.2 错误处理模式
+
+- **捕获具体异常**：避免使用裸 `except`
+- **记录错误上下文**：使用日志记录错误详情
+- **向上抛出业务异常**：将底层异常转换为业务异常
+
+```python
+# ❌ 错误
+try:
+    result = do_something()
+except:
+    pass
+
+# ✅ 正确
+try:
+    result = await fetch_data(endpoint)
+except requests.RequestException as e:
+    log("ERROR", f"Failed to fetch data from {endpoint}", exc_info=e)
+    raise WorkerExecutionError(
+        f"Unable to connect to worker service",
+        original_response={"error": str(e)}
+    )
+```
+
+### 3.3 错误响应
+
+异常类应提供 `to_dict()` 方法用于 API 响应：
+
+```python
+# ✅ 正确
+class TaskError(CustomError):
+    def to_dict(self):
+        return {
+            "type": "error",
+            "error_code": self.error_code,
+            "error_message": self.message
+        }
+```
+
+---
+
+## 4. 测试模式
+
+### 4.1 测试文件组织
+
+- 测试文件命名：`<module_name>_test.py`
+- 使用测试类组织相关测试
+- 使用清晰的中文描述测试意图
+
+```python
+# ✅ 正确
+import pytest
+from unittest.mock import Mock, patch
+
+# ==================== Fixtures ====================
+
+@pytest.fixture
+def task_manager():
+    manager = TaskManager(max_active_tasks=100)
+    yield manager
+
+# ==================== 测试类 ====================
+
+class TestTaskSubmission:
+    """测试任务提交功能"""
+
+    def test_submit_task_success(self, task_manager):
+        """测试用例 1.1: 成功提交任务"""
+        task_id = task_manager.submit_task(prompt_body={}, client_id="client-1")
+        assert task_id is not None
+    
+    def test_queue_full_error(self, task_manager):
+        """测试用例 1.2: 队列已满时抛出异常"""
+        with pytest.raises(TaskQueueFullError):
+            # 测试逻辑
+            pass
+```
+
+### 4.2 使用 Mock 和 Patch
+
+- 使用 `unittest.mock` 进行依赖隔离
+- 为外部服务和 I/O 操作创建 mock
+
+```python
+# ✅ 正确
+@patch('requests.post')
+def test_api_call(mock_post, task_manager):
+    """测试 API 调用"""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {'result': 'success'}
+    mock_post.return_value = mock_response
+    
+    result = task_manager.call_api()
+    assert result['result'] == 'success'
+```
+
+### 4.3 测试注释
+
+使用清晰的分隔符和中文描述：
+
+```python
+# ==================== Fixtures ====================
+# ==================== 测试类 ====================
+# ==================== 一、配置验证测试 ====================
+```
+
+---
+
+## 5. 文档规范
+
+### 5.1 模块级文档
+
+每个模块文件顶部应包含简短的中文描述：
+
+```python
+"""
+任务管理器 - 核心任务管理功能
+使用组合模式集成轮询和广播功能
+"""
+```
+
+### 5.2 类和方法文档
+
+使用简洁的中文 docstring：
+
+```python
+# ✅ 正确
+class TaskManager:
+    """任务管理器
+    
+    负责任务的创建、调度和状态管理
+    """
+    
+    def submit_task(self, prompt_body: dict, client_id: str) -> str:
+        """提交新任务
+        
+        Args:
+            prompt_body: 任务提示内容
+            client_id: 客户端标识
+            
+        Returns:
+            任务 ID
+            
+        Raises:
+            TaskQueueFullError: 当任务队列已满时
+        """
+        pass
+```
+
+### 5.3 行内注释
+
+- 保持简洁，使用中文
+- 仅在必要时添加
+- 解释复杂逻辑或业务规则
+
+```python
+# ✅ 正确
+# 检查活跃任务数量
+with self._lock:
+    active_tasks = sum(
+        1 for task in self._tasks.values()
+        if task.status in [TaskStatus.PENDING, TaskStatus.RUNNING]
+    )
+```
+
+---
+
+## 6. 线程安全
+
+### 6.1 共享状态保护
+
+使用锁保护共享状态：
+
+```python
+# ✅ 正确
+class TaskManager:
+    def __init__(self):
+        self._tasks: Dict[str, Task] = {}
+        self._lock = threading.Lock()
+    
+    def get_task(self, task_id: str) -> Optional[Task]:
+        with self._lock:
+            return self._tasks.get(task_id)
+```
+
+---
+
+## 7. 资源管理
+
+### 7.1 使用上下文管理器
+
+对于需要清理的资源，使用上下文管理器或 fixture：
+
+```python
+# ✅ 正确
+@pytest.fixture
+def task_manager():
+    manager = TaskManager()
+    yield manager
+    manager.stop()  # 清理资源
+```
+
+---
+
+## 检查清单
+
+编写代码时，确保：
+
+- [ ] 所有函数都有类型注解
+- [ ] 使用 snake_case 命名函数和变量
+- [ ] 私有成员以 `_` 开头
+- [ ] 异常继承自 CustomError
+- [ ] 错误被适当记录和抛出
+- [ ] 测试使用清晰的中文描述
+- [ ] 共享状态使用锁保护
+- [ ] 模块顶部有中文描述
+- [ ] 避免冗余注释

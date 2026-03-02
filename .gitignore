@@ -6,3 +6,11 @@
 **/dist
 .DS_Store
 .vscode/settings.json
+
+# Coverage reports
+**/.coverage
+**/.coverage.*
+**/coverage.xml
+**/htmlcov/
+**/diff-coverage.html
+**/gh-pages-deploy/

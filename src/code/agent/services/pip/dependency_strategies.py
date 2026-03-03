@@ -8,8 +8,7 @@
 新增策略时，在该函数内追加调用即可，不需要修改其他文件。
 """
 from typing import Dict, List
-
-from models import DependencyInfo
+from services.pip.models import DependencyInfo
 
 
 def apply_custom_dependency_strategies(

@@ -4,8 +4,8 @@ WORKDIR /root
 
 RUN --mount=type=cache,target=/var/cache/apt \
     # 本地构建时可取消注释以使用阿里云镜像源加速
-    # sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    # sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list && \
+    sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list && \
     apt update && \
     apt install -y \
     git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping \

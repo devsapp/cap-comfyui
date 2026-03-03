@@ -6,9 +6,9 @@ from typing import Dict, List, Tuple, Optional
 
 import constants
 from utils import file_ops
-from models import InstallRecord, DependencyInstallRecord, DependencyInfo
-from version_resolver import resolve_version_conflict
-from dependency_strategies import apply_custom_dependency_strategies
+from services.pip.models import InstallRecord, DependencyInstallRecord, DependencyInfo
+from services.pip.version_resolver import resolve_version_conflict
+from services.pip.dependency_strategies import apply_custom_dependency_strategies
 
 # pip install -r 失败后，最多重试的轮数
 _MAX_INSTALL_RETRIES = 5
@@ -360,11 +360,9 @@ class PIPInstaller:
                     if result.stderr:
                         print(result.stderr, end='')
 
-                    # 解析 stderr，提取失败的包规范
-                    # pip 错误格式：Could not install requirement <pkg_spec> because ...
-                    failed_specs = re.findall(r'Could not install requirement (\S+)', result.stderr)
-
-                    if not failed_specs:
+                    # 从 stderr 里每条 "Could not install" 行同时提取失败包和 from chain，
+                    # 统一定位到 merged.txt 里应剔除的直接依赖
+                    if not re.search(r'Could not install requirement', result.stderr):
                         install_record.success = False
                         install_record.error_msg = (
                             f"pip install failed (returncode={result.returncode}), "
@@ -373,19 +371,16 @@ class PIPInstaller:
                         print(f"[Installer] ## Error: {install_record.error_msg}")
                         break
 
-                    # 从 current_deps 字典中剔除失败包，加入 problematic_deps
                     newly_removed = []
-                    for spec in failed_specs:
-                        pkg_name, _ = self._parse_package_spec(spec)
-                        if pkg_name in current_deps:
-                            dep = current_deps.pop(pkg_name)
-                            self._problematic_deps[pkg_name] = dep
-                            display_spec = f"{pkg_name}{dep.version_spec}" if dep.version_spec else pkg_name
-                            print(f"[Installer] ## Problematic package identified: {display_spec} (will retry without it)")
-                            newly_removed.append(display_spec)
+                    for pkg_name in self._find_direct_deps_to_remove(result.stderr, current_deps):
+                        dep = current_deps.pop(pkg_name)
+                        self._problematic_deps[pkg_name] = dep
+                        display_spec = f"{pkg_name}{dep.version_spec}" if dep.version_spec else pkg_name
+                        print(f"[Installer] ## Problematic package identified: {display_spec} (will retry without it)")
+                        newly_removed.append(display_spec)
 
                     if not newly_removed:
-                        # 所有失败包已在上轮被剔除，无法继续进展，防止死循环
+                        # from chain 已无新的直接依赖可剔除，防止死循环
                         install_record.success = False
                         install_record.error_msg = (
                             "pip install keeps failing on the same package(s); "
@@ -465,6 +460,48 @@ class PIPInstaller:
         for pkg_name, dep_info in self._problematic_deps.items():
             print(f"{pkg_name}{dep_info.version_spec}" if dep_info.version_spec else pkg_name)
         print("[Installer] ## ===============================================")
+
+    def _find_direct_deps_to_remove(self, stderr: str, current_deps: Dict[str, 'DependencyInfo']) -> List[str]:
+        """
+        从 stderr 的每条 "Could not install" 行中，定位 merged.txt 里应剔除的直接依赖。
+
+        pip 每条错误行同时包含：
+          - 失败包规范：Could not install requirement <FAILED_SPEC> from ...
+          - from chain：(from CHAIN (line N))
+
+        两种情况统一处理：
+          直接依赖失败：(from -r file (line N))
+            → i=0，chain 里无中间层，FAILED_SPEC 本身即直接依赖
+          传递依赖失败：(from A->B->DIRECT->-r file (line N))
+            → i>0，->-r 之前的最后一段 DIRECT 是 merged.txt 里的直接依赖
+
+        ->  作为 pip from chain 的分隔符，永远是 "->" 两字符组合，
+        不与版本操作符（>=、<=、>、<）冲突，split('->') 安全。
+        """
+        found: List[str] = []
+        seen: set = set()
+        # 在同一行同时捕获失败包规范和 from chain（含 (line N)）
+        pattern = re.compile(
+            r'Could not install requirement (\S+).*?\(from\s+(.+?)\(line\s+\d+\)\)'
+        )
+        for line in stderr.splitlines():
+            m = pattern.search(line)
+            if not m:
+                continue
+            failed_spec = m.group(1)
+            chain = m.group(2).strip()   # "A->B->DIRECT->-r /tmp/file.txt "
+            parts = chain.split('->')
+            for i, part in enumerate(parts):
+                if part.strip().startswith('-r '):
+                    # i==0：直接依赖，failed_spec 本身就是应剔除的包
+                    # i>0 ：传递依赖，->-r 前的一项是 merged.txt 的直接依赖
+                    direct_spec = failed_spec if i == 0 else parts[i - 1].strip()
+                    pkg_name, _ = self._parse_package_spec(direct_spec)
+                    if pkg_name and pkg_name in current_deps and pkg_name not in seen:
+                        seen.add(pkg_name)
+                        found.append(pkg_name)
+                    break
+        return found
 
     def _parse_package_spec(self, package_spec: str) -> Tuple[str, str]:
         """

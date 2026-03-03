@@ -27,12 +27,17 @@ def _pip_ok():
     return subprocess.CompletedProcess(args=[], returncode=0, stderr="")
 
 
-def _pip_fail(pkg_spec):
-    """模拟 pip 报 'Could not install requirement <pkg_spec>' 的失败。"""
+def _pip_fail(pkg_spec, req_file="/tmp/fakereq.txt", line_no=1):
+    """
+    模拟直接依赖失败：pip 报告 pkg_spec 不可安装，
+    from chain 为 (from -r req_file (line N)) 表示它就在 merged.txt 里。
+    """
     stderr = (
         f"ERROR: pip's dependency resolver...\n"
-        f"Could not install requirement {pkg_spec} "
-        f"from https://pypi.org/simple/ because of download error\n"
+        f"ERROR: Could not install requirement {pkg_spec} "
+        f"from https://pypi.org/simple/{pkg_spec}/ "
+        f"(from -r {req_file} (line {line_no})) "
+        f"because of HTTP error 403\n"
     )
     return subprocess.CompletedProcess(args=[], returncode=1, stderr=stderr)
 
@@ -40,6 +45,21 @@ def _pip_fail(pkg_spec):
 def _pip_fail_opaque(msg="ERROR: subprocess-exited-with-error"):
     """模拟 pip 失败但 stderr 无法解析包名的情况。"""
     return subprocess.CompletedProcess(args=[], returncode=1, stderr=msg)
+
+
+def _pip_fail_transitive(transitive_pkg_spec, direct_dep, req_file="/tmp/fakereq.txt", line_no=1):
+    """
+    模拟传递依赖失败：pip 报告 transitive_pkg 不可安装，
+    from chain 显示路径: some-mid-dep -> direct_dep -> -r req_file (line N)
+    """
+    stderr = (
+        f"Collecting {transitive_pkg_spec}\n"
+        f"ERROR: HTTP error 403 while getting https://mirrors.example.com/...\n"
+        f"ERROR: Could not install requirement {transitive_pkg_spec} from https://... "
+        f"(from some-mid-dep->{direct_dep}->-r {req_file} (line {line_no})) "
+        f"because of HTTP error 403\n"
+    )
+    return subprocess.CompletedProcess(args=[], returncode=1, stderr=stderr)
 
 
 def _make_installer():
@@ -156,8 +176,10 @@ class TestStderrRetry(unittest.TestCase):
             "bad-b":    _dep("bad-b", "==2.0.0"),
         }
         stderr_two_failures = (
-            "Could not install requirement bad-a==1.0.0 from ...\n"
-            "Could not install requirement bad-b==2.0.0 from ...\n"
+            "ERROR: Could not install requirement bad-a==1.0.0 from https://... "
+            "(from -r /tmp/fakereq.txt (line 1)) because of HTTP error 403\n"
+            "ERROR: Could not install requirement bad-b==2.0.0 from https://... "
+            "(from -r /tmp/fakereq.txt (line 2)) because of HTTP error 403\n"
         )
         fail_result = subprocess.CompletedProcess(
             args=[], returncode=1, stderr=stderr_two_failures
@@ -214,6 +236,60 @@ class TestStderrRetry(unittest.TestCase):
         mock_run.assert_not_called()
         self.assertTrue(record.success)
         self.assertEqual(record.requirements_txt, "")
+
+    # ── 9. 传递依赖失败 → from chain 追溯到直接父包 → 剔除后重试成功 ─────────
+    def test_transitive_dep_failure_traced_to_direct_parent(self):
+        """
+        场景：merged.txt 包含 requests + fastmcp；
+        pip 报告 caio（传递依赖，不在 merged.txt）因 403 安装失败，
+        from chain = some-mid-dep->fastmcp->-r file (line 2)。
+
+        期望：_find_direct_deps_from_chain 追溯到 fastmcp，将其剔除并重试，
+        第2次 pip 成功 → 整体成功。
+        """
+        installer = _make_installer()
+        deps = {
+            "requests": _dep("requests"),
+            "fastmcp":  _dep("fastmcp", ">=1.0.0"),
+        }
+
+        fail_result = _pip_fail_transitive("caio<0.10.0,>=0.9.0", "fastmcp>=1.0.0")
+
+        with patch("subprocess.run", side_effect=[fail_result, _pip_ok()]) as mock_run:
+            record = _run(installer, deps)
+
+        self.assertTrue(record.success, "追溯到直接父包后重试应整体成功")
+        self.assertIn("fastmcp", installer._problematic_deps,
+                      "fastmcp 应被加入 problematic_deps")
+        self.assertNotIn("fastmcp", record.requirements_txt,
+                         "最终 requirements_txt 不应含被剔除的 fastmcp")
+        self.assertNotIn("requests", installer._problematic_deps,
+                         "requests 未失败，不应进入 problematic_deps")
+        self.assertEqual(mock_run.call_count, 2, "pip 应调用 2 次（首次失败 + 一次重试）")
+
+    # ── 10. 传递依赖失败且直接父包已被剔除 → 真正无法继续 ───────────────────
+    def test_transitive_dep_failure_parent_already_removed(self):
+        """
+        场景：同上，但 pip 连续两轮都报 caio 失败，
+        第2轮时 fastmcp 已被剔除（不在 current_deps），from chain 无新包可摘除。
+
+        期望：第2轮检测到"no further progress"，报错退出，pip 共调用 2 次。
+        """
+        installer = _make_installer()
+        deps = {
+            "requests": _dep("requests"),
+            "fastmcp":  _dep("fastmcp", ">=1.0.0"),
+        }
+
+        fail_result = _pip_fail_transitive("caio<0.10.0,>=0.9.0", "fastmcp>=1.0.0")
+
+        # 两轮均报 caio 失败；第1轮剔除 fastmcp，第2轮 fastmcp 已不在 current_deps
+        with patch("subprocess.run", side_effect=[fail_result, fail_result]) as mock_run:
+            record = _run(installer, deps)
+
+        self.assertFalse(record.success)
+        self.assertIn("no further progress", record.error_msg)
+        self.assertEqual(mock_run.call_count, 2)
 
 
 if __name__ == "__main__":

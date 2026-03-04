@@ -37,7 +37,7 @@ class PIPInstaller:
 
     def install_all(self, timeout=constants.DEFAULT_INSTALL_TIMEOUT, nodes_map=None):
         """
-        完整安装流程，分三个步骤顺序执行：
+        完整安装流程，分四个步骤顺序执行：
 
           Step 1 — 扫描插件目录，合并所有 requirements.txt，应用黑名单 / 已安装过滤
                    和定制化策略（nunchaku 等），输出最终依赖字典。
@@ -46,6 +46,8 @@ class PIPInstaller:
                    第二轮将 failed_batches 展开后逐个 pip install，仍失败的包加入 problematic_deps。
                    两轮均通过 returncode 判断成功与否，不解析 stderr。
           Step 3 — 逐插件执行 install.py（部分插件需要自己的安装脚本）。
+          Step 4 — 重装 ComfyUI 源码依赖（pip install -r {COMFYUI_DIR}/requirements.txt），
+                   确保插件依赖变更不会破坏 ComfyUI 本身的依赖。
 
         Args:
             timeout:   全局超时秒数，默认 constants.DEFAULT_INSTALL_TIMEOUT（10 分钟）。
@@ -91,6 +93,9 @@ class PIPInstaller:
             # Step 3: 逐插件执行 install.py
             script_records = self._execute_install_scripts(nodes_to_install, timeout, start_time)
             result_map["scripts"] = script_records
+
+            # Step 4: 重装 ComfyUI 源码依赖，防止插件依赖变更覆盖 ComfyUI 自身依赖
+            self._reinstall_comfyui_requirements(timeout, start_time)
 
         except TimeoutError as e:
             print(f"\n[Installer] {e}")
@@ -421,6 +426,36 @@ class PIPInstaller:
 
         print(f"[Installer] ## Executed {install_scripts_found} install.py scripts")
         return script_records
+
+    def _reinstall_comfyui_requirements(self, timeout: float, start_time: float):
+        """
+        步骤4: 重装 ComfyUI 源码依赖。
+
+        插件安装过程中可能降级或覆盖 ComfyUI 自身所依赖的包版本，
+        通过重新执行 pip install -r requirements.txt 将其还原至 ComfyUI 所需版本。
+        """
+        elapsed = time.time() - start_time
+        remaining = timeout - elapsed
+        if remaining <= 0:
+            print(f"\n[Installer] ## Step 4 skipped: Already timed out ({timeout}s)")
+            return
+
+        requirements_path = os.path.join(constants.COMFYUI_DIR, "requirements.txt")
+        if not os.path.exists(requirements_path):
+            print(f"\n[Installer] ## Step 4 skipped: {requirements_path} not found")
+            return
+
+        print(f"\n[Installer] ## Step 4: Reinstalling ComfyUI requirements from {requirements_path}...")
+        cmd = self._construct_pip_cmd(["install", "-r", requirements_path])
+
+        try:
+            result = subprocess.run(cmd, timeout=remaining, env=self._get_pip_install_env())
+            if result.returncode == 0:
+                print("[Installer] ## Step 4: ComfyUI requirements reinstalled successfully")
+            else:
+                print(f"[Installer] ## Step 4: Failed to reinstall ComfyUI requirements (returncode={result.returncode})")
+        except subprocess.TimeoutExpired:
+            print("[Installer] ## Step 4: Timed out while reinstalling ComfyUI requirements")
 
     def _print_problematic_deps(self):
         """打印所有疑难依赖，供用户手动安装。"""

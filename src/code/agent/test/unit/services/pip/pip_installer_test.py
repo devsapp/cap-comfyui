@@ -520,7 +520,8 @@ class TestInstallAll(_Base):
                    return_value=installed_packages):
             installer = PIPInstaller()
         with patch.object(installer, "_install_merged_dependencies") as mock_dep, \
-             patch.object(installer, "_execute_install_scripts", return_value=[]) as mock_scripts, \
+             patch.object(installer, "_execute_install_scripts", return_value=[]), \
+             patch.object(installer, "_reinstall_comfyui_requirements"), \
              patch("builtins.print"):
             mock_dep.return_value = DependencyInstallRecord(
                 requirements_txt="", duration=0.0, success=True, error_msg=""
@@ -587,11 +588,38 @@ class TestInstallAll(_Base):
         with patch("subprocess.run",
                    return_value=subprocess.CompletedProcess(args=[], returncode=0)), \
              patch.object(installer, "_execute_install_scripts", return_value=[]), \
+             patch.object(installer, "_reinstall_comfyui_requirements"), \
              patch("builtins.print"):
             result = installer.install_all(timeout=60, nodes_map=None)
         # problematic_deps 在 dependencies 内部，是 DependencyInfo 序列化后的 dict 列表
         prob_names = {d["package_name"] for d in result["dependencies"]["problematic_deps"]}
         self.assertTrue(any("torch" in name for name in prob_names))
+
+    def test_step4_called_after_scripts(self):
+        """install_all 正常流程中，_reinstall_comfyui_requirements 应被调用一次"""
+        self._make_node("n", requirements="requests\n")
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        with patch.object(installer, "_install_merged_dependencies") as mock_dep, \
+             patch.object(installer, "_execute_install_scripts", return_value=[]), \
+             patch.object(installer, "_reinstall_comfyui_requirements") as mock_step4, \
+             patch("builtins.print"):
+            mock_dep.return_value = DependencyInstallRecord(
+                requirements_txt="", duration=0.0, success=True, error_msg=""
+            )
+            installer.install_all(timeout=60, nodes_map=None)
+        mock_step4.assert_called_once()
+
+    def test_step4_not_called_when_no_nodes(self):
+        """没有节点时整个安装流程提前返回，Step 4 不应被调用"""
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        with patch.object(installer, "_reinstall_comfyui_requirements") as mock_step4, \
+             patch("builtins.print"):
+            installer.install_all(timeout=60, nodes_map={})
+        mock_step4.assert_not_called()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -651,6 +679,114 @@ class TestInstallMergedDependenciesEdgeCases(_Base):
         self.assertTrue(record.success)
         self.assertEqual(len(record.problematic_deps), 1)
         self.assertEqual(record.problematic_deps[0].package_name, "requests")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 14. _reinstall_comfyui_requirements
+# ─────────────────────────────────────────────────────────────────────────────
+class TestReinstallComfyuiRequirements(_Base):
+
+    def setUp(self):
+        super().setUp()
+        self.inst = self._installer()
+        self.req_path = os.path.join(self.comfyui_dir, "requirements.txt")
+
+    def _make_comfyui_requirements(self, content="torch>=2.0.0\nnumpy\n"):
+        with open(self.req_path, "w") as f:
+            f.write(content)
+
+    def _call(self, timeout=600, elapsed=0.0):
+        start_time = time.time() - elapsed
+        with patch("builtins.print"):
+            self.inst._reinstall_comfyui_requirements(timeout=timeout, start_time=start_time)
+
+    def test_requirements_not_found_skips(self):
+        """requirements.txt 不存在时直接跳过，不调用 pip"""
+        with patch("subprocess.run") as mock_run, patch("builtins.print"):
+            self.inst._reinstall_comfyui_requirements(timeout=600, start_time=time.time())
+        mock_run.assert_not_called()
+
+    def test_already_timed_out_skips(self):
+        """全局超时已耗尽时直接跳过，不调用 pip"""
+        self._make_comfyui_requirements()
+        with patch("subprocess.run") as mock_run, patch("builtins.print"):
+            # elapsed > timeout
+            self.inst._reinstall_comfyui_requirements(timeout=1, start_time=time.time() - 9999)
+        mock_run.assert_not_called()
+
+    def test_pip_install_success(self):
+        """pip install -r requirements.txt 成功（returncode=0）"""
+        self._make_comfyui_requirements()
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch("subprocess.run", return_value=mock_result) as mock_run, \
+             patch("builtins.print"):
+            self.inst._reinstall_comfyui_requirements(timeout=600, start_time=time.time())
+        mock_run.assert_called_once()
+        cmd_args = mock_run.call_args[0][0]
+        self.assertIn("install", cmd_args)
+        self.assertIn("-r", cmd_args)
+        self.assertIn(self.req_path, cmd_args)
+
+    def test_pip_install_failure_returncode(self):
+        """pip install 返回非零 returncode 时，方法仍正常结束（不抛异常）"""
+        self._make_comfyui_requirements()
+        mock_result = subprocess.CompletedProcess(args=[], returncode=1)
+        with patch("subprocess.run", return_value=mock_result), \
+             patch("builtins.print") as mock_print:
+            self.inst._reinstall_comfyui_requirements(timeout=600, start_time=time.time())
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        self.assertIn("returncode=1", printed)
+
+    def test_pip_install_timeout_expired(self):
+        """subprocess.TimeoutExpired 时，方法正常结束（不向外抛异常）"""
+        self._make_comfyui_requirements()
+        with patch("subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(cmd="pip", timeout=1)), \
+             patch("builtins.print") as mock_print:
+            self.inst._reinstall_comfyui_requirements(timeout=600, start_time=time.time())
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        self.assertIn("Timed out", printed)
+
+    def test_pip_cmd_uses_venv_executable(self):
+        """pip 命令应以 VENV_EXECUTABLE -m pip 开头"""
+        self._make_comfyui_requirements()
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch("subprocess.run", return_value=mock_result) as mock_run, \
+             patch("builtins.print"):
+            self.inst._reinstall_comfyui_requirements(timeout=600, start_time=time.time())
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[0], "/fake/venv/bin/python")
+        self.assertEqual(cmd[1], "-m")
+        self.assertEqual(cmd[2], "pip")
+
+    def test_pip_env_has_no_proxy(self):
+        """pip install 执行时环境变量中不含代理设置"""
+        self._make_comfyui_requirements()
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        base_env = {
+            "PATH": "/usr/bin",
+            "http_proxy": "http://proxy:8080",
+            "HTTPS_PROXY": "https://proxy:8080",
+        }
+        with patch("subprocess.run", return_value=mock_result) as mock_run, \
+             patch("os.environ.copy", return_value=base_env.copy()), \
+             patch("builtins.print"):
+            self.inst._reinstall_comfyui_requirements(timeout=600, start_time=time.time())
+        used_env = mock_run.call_args[1]["env"]
+        self.assertNotIn("http_proxy", used_env)
+        self.assertNotIn("HTTPS_PROXY", used_env)
+        self.assertIn("PATH", used_env)
+
+    def test_remaining_timeout_passed_to_subprocess(self):
+        """subprocess.run 的 timeout 参数应等于剩余时间（总超时 - 已耗时）"""
+        self._make_comfyui_requirements()
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch("subprocess.run", return_value=mock_result) as mock_run, \
+             patch("builtins.print"):
+            start = time.time() - 10   # 已耗时 ~10s
+            self.inst._reinstall_comfyui_requirements(timeout=600, start_time=start)
+        used_timeout = mock_run.call_args[1]["timeout"]
+        self.assertAlmostEqual(used_timeout, 590, delta=2)
 
 
 if __name__ == "__main__":

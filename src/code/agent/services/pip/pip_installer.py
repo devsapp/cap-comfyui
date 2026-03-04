@@ -247,7 +247,7 @@ class PIPInstaller:
                     nodes_str = ", ".join(dep.source_nodes[:3]) + f" and {len(dep.source_nodes) - 3} more"
                 comment = f"  # required by {nodes_str}"
 
-            print(f"[Installer] ## {package_line}{comment}")
+            print(f"{package_line}{comment}")
 
         print("[Installer] ## " + "=" * 60)
         print(f"[Installer] ## Total: {len(deps)} packages to install")

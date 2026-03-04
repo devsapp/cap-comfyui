@@ -12,9 +12,9 @@ BACKEND_TYPE = os.getenv('BACKEND_TYPE', TYPE_COMFYUI)
 # ComfyUI 模式配置：'cpu' 或 'gpu'
 COMFYUI_MODE = os.getenv('COMFYUI_MODE', 'gpu').lower()
 
-# API Mode
+# 判断 项目开发(false) 还是 线上服务(true)
 USE_API_MODE = bool(os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME"))
-AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest")
+AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest-dev")
 
 WORK_DIR = os.getenv('WORK_DIR', '/root')
 MNT_DIR = os.getenv('MODEL_ASSET_DIR', '/mnt/auto')
@@ -25,6 +25,8 @@ SHARED_MODELS_DIR = os.getenv('SHARED_MODELS_DIR', '/mnt/shared/models')
 SKIP_SNAPSHOT_LOADING = os.getenv('SKIP_SNAPSHOT_LOADING')
 # API函数启动时是否跳过加载NAS中的custom_nodes.zip到实例磁盘，若跳过则可能遇到部分插件在多个实例并发读写NAS中插件目录时的冲突情况
 SKIP_NODES_LOADING = os.getenv('SKIP_NODES_LOADING', '').lower() == 'true'
+# 初始化时是否安装所有 custom_nodes 插件依赖，默认不安装；线上服务强制为 False，仅开发阶段且值为 'true'/'True' 时才安装
+AUTO_INSTALL = (not USE_API_MODE) and os.getenv('AUTO_INSTALL', '').lower() == 'true'
 SNAPSHOT_DIR = MNT_DIR + '/snapshots'
 SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
 COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')

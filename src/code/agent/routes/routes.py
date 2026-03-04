@@ -82,9 +82,11 @@ class Routes:
             service = ManagementService()
             
             # 使用环境变量指定的snapshot，默认为latest-dev
-            snapshot_name = os.environ.get('AUTO_LAUNCH_SNAPSHOT_NAME', 'latest-dev')
-            log("INFO", f"Initializing function with ComfyUI mode: {constants.COMFYUI_MODE}, snapshot: {snapshot_name}")
-            service.start(snapshot_name, nodes_map={})
+            snapshot_name = constants.AUTO_LAUNCH_SNAPSHOT_NAME
+            # AUTO_INSTALL=true 时安装所有插件依赖，否则跳过安装（默认）
+            nodes_map = None if constants.AUTO_INSTALL else service.SKIP_INSTALL_SENTINEL
+            log("INFO", f"Initializing function with ComfyUI mode: {constants.COMFYUI_MODE}, snapshot: {snapshot_name}, auto_install: {constants.AUTO_INSTALL}")
+            service.start(snapshot_name, nodes_map=nodes_map)
 
             if (
                 constants.PREWARM_PROMPT

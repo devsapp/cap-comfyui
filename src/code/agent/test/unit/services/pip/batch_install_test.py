@@ -118,8 +118,8 @@ class TestInstallInBatches(unittest.TestCase):
         def fake_time():
             nonlocal call_count
             call_count += 1
-            # 前几次返回正常时间让第一批执行，之后超出 timeout
-            return 0.0 if call_count <= 4 else 9999.0
+            # 第 1 次（batch1 超时检查）返回正常时间让第一批执行；之后超出 timeout 让 batch2 被推迟
+            return 0.0 if call_count <= 1 else 9999.0
 
         with patch("subprocess.run", return_value=_ok()), \
              patch("builtins.print"), \
@@ -307,34 +307,37 @@ class TestInstallMergedDependenciesRounds(unittest.TestCase):
             record = self._run(deps)
         self.assertTrue(record.success)
         self.assertEqual(len(record.problematic_deps), 1)
-        self.assertEqual(record.problematic_deps[0]["package_name"], "bad-pkg")
+        self.assertEqual(record.problematic_deps[0].package_name, "bad-pkg")
 
     def test_partial_failure_only_bad_in_problematic(self):
-        """好包批次成功，坏包批次失败后 Round 2 也失败"""
-        good_deps = {f"good-{i}": _dep(f"good-{i}") for i in range(_BATCH_SIZE)}
-        bad_deps = {"bad": _dep("bad", "==0.0.1")}
+        """好包批次成功，坏包批次失败后 Round 2 也失败。
+        包名用 aaa-* 确保字典序排在 zzz-bad 之前，
+        使 good 包在 batch1、zzz-bad 在 batch2。"""
+        good_deps = {f"aaa-{i}": _dep(f"aaa-{i}") for i in range(_BATCH_SIZE)}
+        bad_deps = {"zzz-bad": _dep("zzz-bad", "==0.0.1")}
         deps = {**good_deps, **bad_deps}
         with patch("subprocess.run", side_effect=[_ok(), _fail(), _fail()]):
             record = self._run(deps)
         self.assertTrue(record.success)
-        prob_names = {d["package_name"] for d in record.problematic_deps}
-        self.assertIn("bad", prob_names)
+        prob_names = {d.package_name for d in record.problematic_deps}
+        self.assertIn("zzz-bad", prob_names)
         for i in range(_BATCH_SIZE):
-            self.assertNotIn(f"good-{i}", prob_names)
+            self.assertNotIn(f"aaa-{i}", prob_names)
 
     def test_round2_rescues_some_packages(self):
-        """第一轮批次失败的包中，有的在 Round 2 成功，有的失败"""
-        deps = {"ok-pkg": _dep("ok-pkg"), "bad-pkg": _dep("bad-pkg")}
+        """第一轮批次失败的包中，有的在 Round 2 成功，有的失败。
+        aaa-ok 字典序在 zzz-bad 之前，Round 2 按序执行：aaa-ok 先成功，zzz-bad 后失败。"""
+        deps = {"aaa-ok": _dep("aaa-ok"), "zzz-bad": _dep("zzz-bad")}
         with patch("subprocess.run", side_effect=[
             _fail(),   # Round 1 批次失败（两个包都在这批）
-            _ok(),     # Round 2: ok-pkg 成功
-            _fail(),   # Round 2: bad-pkg 失败
+            _ok(),     # Round 2: aaa-ok 成功（字典序第一）
+            _fail(),   # Round 2: zzz-bad 失败（字典序第二）
         ]):
             record = self._run(deps)
         self.assertTrue(record.success)
-        prob_names = {d["package_name"] for d in record.problematic_deps}
-        self.assertIn("bad-pkg", prob_names)
-        self.assertNotIn("ok-pkg", prob_names)
+        prob_names = {d.package_name for d in record.problematic_deps}
+        self.assertIn("zzz-bad", prob_names)
+        self.assertNotIn("aaa-ok", prob_names)
 
     # ── 超时场景 ──────────────────────────────────────────────────────────────
 
@@ -357,7 +360,7 @@ class TestInstallMergedDependenciesRounds(unittest.TestCase):
             record = self._run(deps)
         self.assertTrue(record.success)
         self.assertEqual(len(record.problematic_deps), 1)
-        self.assertEqual(record.problematic_deps[0]["package_name"], "slow")
+        self.assertEqual(record.problematic_deps[0].package_name, "slow")
 
     # ── record 字段 ───────────────────────────────────────────────────────────
 
@@ -391,7 +394,7 @@ class TestInstallMergedDependenciesRounds(unittest.TestCase):
             record = installer._install_merged_dependencies(
                 {"requests": _dep("requests")}, timeout=600, start_time=time.time()
             )
-        prob_names = {d["package_name"] for d in record.problematic_deps}
+        prob_names = {d.package_name for d in record.problematic_deps}
         self.assertIn("torch", prob_names)
 
 

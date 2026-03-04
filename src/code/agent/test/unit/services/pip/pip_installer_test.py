@@ -650,7 +650,7 @@ class TestInstallMergedDependenciesEdgeCases(_Base):
             )
         self.assertTrue(record.success)
         self.assertEqual(len(record.problematic_deps), 1)
-        self.assertEqual(record.problematic_deps[0]["package_name"], "requests")
+        self.assertEqual(record.problematic_deps[0].package_name, "requests")
 
 
 if __name__ == "__main__":

@@ -95,6 +95,8 @@ CAP-ComfyUI 在启动时需要为用户配置的自定义节点（custom nodes�
 | 总耗时 | **最短** | 较长 | 最长 |
 | 实现复杂度 | 中（需合并逻辑） | 低 | 低 |
 
+> **当前采用方案：** 在方案一基础上引入两轮批次安装（见"问题三"），以 `BATCH_SIZE=10` 分批，牺牲少量版本全局最优性，换取对单包失败的容错能力，同时避免逐行安装的极高 pip 启动开销。
+
 ---
 
 ## 当前方案（方案一）的补充优化
@@ -151,13 +153,13 @@ PyPI     有 tyro==0.8.5，可正常下载  ← 未被尝试
 
 ---
 
-### 问题三：单包安装失败导致整批中止（已规划）
+### 问题三：单包安装失败导致整批中止
 
 **根因：** `pip install -r` 的默认行为是 fail-fast：任意一个包安装失败，立即中止，后续所有包都无法安装。在镜像覆盖不全的环境下，极少数新包的 403 会导致大量本可成功安装的包被连带跳过。
 
-**解法：在方案一基础上增加"解析 stderr → 剔除失败包 → 有限次重试"机制**
+**解法：两轮批次安装**
 
-核心思路是保留方案一的整体 `pip install -r`（充分利用 resolver，避免重装），但在失败时自动剔除问题包并重试，而不是彻底放弃本轮安装。
+核心思路：将合并后的全量依赖按固定批次大小分批安装（第一轮），再将所有失败批次的依赖汇总、逐个重装（第二轮）。两轮均直接通过 `returncode` 感知成功与失败，无需解析 stderr，实现简单且行为可预测。
 
 **疑难依赖（problematic_deps）概念**
 
@@ -166,7 +168,7 @@ PyPI     有 tyro==0.8.5，可正常下载  ← 未被尝试
 | 来源 | 说明 |
 |------|------|
 | 黑名单命中 | 在 `_filter_merged_dependencies` 阶段被主动过滤掉的包（如与 ComfyUI 核心依赖冲突的包） |
-| 安装失败 | pip install 重试耗尽后仍未能安装成功的包 |
+| 安装失败 | 第二轮逐个安装后仍失败的包 |
 
 所有疑难依赖在安装流程结束后，以 `requirements.txt` 格式统一打印到日志，供用户复制后手动安装：
 
@@ -184,28 +186,30 @@ PyPI     有 tyro==0.8.5，可正常下载  ← 未被尝试
 **流程设计：**
 
 ```
-准备 requirements 内容（合并后）
+准备 requirements 内容（合并后，共 N 个依赖）
   │
   ├─ _filter_merged_dependencies()
-  │    ├─ 黑名单命中的包 ──────────────→ 加入 problematic_deps（标注来源：blacklist）
-  │    ├─ git+ 依赖跳过 ──────────────→ 加入 problematic_deps（标注来源：git+，需手动安装）
-  │    └─ 已安装且无版本约束 → 跳过（正常，不加入 problematic_deps）
+  │    ├─ 黑名单命中 ──────────────→ 加入 problematic_deps（标注：blacklist）
+  │    ├─ git+ 依赖 ───────────────→ 加入 problematic_deps（标注：git+，需手动安装）
+  │    └─ 已安装且无版本约束 → 跳过（不加入 problematic_deps）
   │
   ▼
-┌─────────────────────────────────────────────┐
-│  pip install -r <tmpfile>                   │
-│  ├─ 成功（returncode == 0）→ 结束，全部装完   │
-│  └─ 失败（returncode != 0）                 │
-│       ├─ 解析 stderr，提取失败包名           │
-│       ├─ 从 requirements 内容中剔除失败包    │
-│       ├─ 失败包加入 problematic_deps         │
-│       │    （标注来源：install_failed）      │
-│       └─ 检查退出条件 ──────────────────────┤
-│            ├─ 已重试 >= MAX_RETRIES 次 → 退出│
-│            ├─ 剩余时间 < 阈值 → 退出         │
-│            └─ 未提取到新的失败包 → 退出       │
-│                 （防止同一包反复失败死循环）  │
-└─────────────────────────────────────────────┘
+【第一轮：分批安装】
+将依赖列表按 BATCH_SIZE（默认 10）切分为 ceil(N/10) 个批次
+  │
+  for each batch [dep₁, dep₂, ..., dep₁₀]:
+    pip install dep₁ dep₂ ... dep₁₀
+    ├─ 成功（returncode == 0）→ 该批完成，继续下一批
+    └─ 失败（returncode != 0）→ 整批记入 failed_batches，继续下一批
+  │
+  ▼
+【第二轮：逐个安装失败依赖】
+将 failed_batches 中所有依赖展开并去重，得到 failed_deps
+  │
+  for each dep in failed_deps:
+    pip install <dep>
+    ├─ 成功（returncode == 0）→ 完成
+    └─ 失败（returncode != 0）→ 加入 problematic_deps（标注：install_failed）
   │
   ▼
 打印 problematic_deps（requirements.txt 格式，供用户手动安装）
@@ -214,95 +218,68 @@ PyPI     有 tyro==0.8.5，可正常下载  ← 未被尝试
 返回结果（含 problematic_deps 列表）
 ```
 
-**关键参数：**
+**批次大小选择（BATCH_SIZE = 10）：**
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `MAX_RETRIES` | 5 | 最大重试轮数上限，防止无限循环 |
-| 超时检查 | 每轮重试前检查 | 若已用时超过 `install_all` 的总超时，不再重试 |
+| 批次大小 | pip 启动次数 | 单批失败波及范围 | 第二轮兜底工作量 |
+|---------|------------|----------------|----------------|
+| 1（逐个） | N 次 | 仅 1 个包 | 无需第二轮 |
+| **10（当前）** | **ceil(N/10) 次** | **最多 10 个包** | **较小** |
+| 全量（N） | 1 次 | 全部中止 | 等同逐个安装全量 |
 
-**stderr 解析正则：**
+选择 10 是在 pip 启动开销与失败隔离之间取得平衡的经验值：既不像全量安装那样"一粒老鼠屎坏一锅粥"，也不像逐包安装那样重复启动开销过高。
 
-```python
-# pip 错误输出格式固定：
-# ERROR: Could not install requirement <pkg_spec> from ...
-failed = re.findall(r'Could not install requirement ([^\s]+)', stderr)
-```
+**版本一致性说明：**
 
-**复杂度分析：**
+两轮批次安装中每批独立运行 pip resolver，批内版本全局最优，但批间存在版本覆盖的可能（与方案二的逐插件安装相同）。这是在稳定性与速度之间的有意权衡：
 
-理论上最坏情况为 O(N²)，但实际远好于此，原因是：
-- 已成功安装的包命中 pip 的本地缓存（metadata check 极快，不重新下载）
-- 每轮重试的 requirements 内容比上一轮更少（剔除了失败包）
-- 触发重试的场景仅限于极少数镜像覆盖不全的包（通常 ≤ 5 个），而非普遍现象
-- 实际表现接近 O(N + K²)，其中 K 为失败包数量（K << N）
+- 大部分插件的依赖不存在深度版本交叉，批次隔离不影响结果
+- 对于确实存在跨批版本约束的依赖，最终安装的版本仍满足各自批次内的约束
+- 极端情况下（如 A 批安装了 `torch==2.4`，B 批要求 `torch>=2.5`），后一批会触发升级，pip 会正确处理
 
-**与纯逐行安装的对比：**
+**与其他方案对比：**
 
-| 维度 | 逐行安装 | 有限次重试（本方案） |
-|------|---------|-------------------|
-| 依赖解析 | 每包独立解析，版本顺序相关 | 每轮仍为整体解析，版本全局最优 |
-| 重装风险 | 高（每次 pip 重评估已装包） | 低（已装包命中缓存，不重装） |
-| 失败容错 | 高（单包失败跳过） | 高（失败包被剔除后继续） |
-| 疑难依赖可见性 | 无（失败散落在各插件日志中） | **统一汇总，格式化输出供手动安装** |
-| 实现复杂度 | 低 | 中（需解析 stderr） |
+| 维度 | 整体安装（方案一）| 两轮批次安装（当前方案）| 逐个安装（方案三）|
+|------|-----------------|----------------------|----------------|
+| pip 启动次数 | 1 次 | ceil(N/10) + 失败数 | N 次 |
+| 版本全局最优 | 是 | 批内最优，批间可能覆盖 | 否（顺序相关）|
+| 单包失败波及 | 整批中止 | 最多 10 个连带 | 仅当前包 |
+| 失败感知方式 | 需解析 stderr | **直接通过 returncode** | 直接通过 returncode |
+| 实现复杂度 | 高（stderr 解析 + 重试） | **低** | 低 |
+| 疑难依赖可见性 | 需解析 stderr 反查 | **第二轮直接确认** | 分散在各包日志中 |
 
 ---
 
-### 问题四：stderr 解析的传递依赖盲区
+### 问题四：弃用基于 stderr 解析的重试机制
 
-**根因：** `_install_merged_dependencies` 用正则 `Could not install requirement (\S+)` 从 stderr 中提取失败包名，再从 `current_deps`（即 merged.txt 的直接依赖字典）中查找并剔除。但 pip 报告的失败包有时是**传递依赖**（依赖的依赖），它不在 merged.txt 里，因此在 `current_deps` 中找不到，`newly_removed` 为空，被误判为"同一个包反复失败→死循环"，提前 break，导致后续本可成功安装的包也被放弃。
+早期设计（见下方存档）曾计划在整体安装失败后，通过解析 pip stderr 提取失败包名、剔除后重试，最多重试 `MAX_RETRIES` 次。该方案在实际落地时遇到以下根本性困难，最终弃用：
 
-**两类真实 stderr 样本：**
+**困难一：传递依赖盲区**
+
+pip 报告的失败包有时是**传递依赖**（依赖的依赖），它不在 `merged.txt` 里。正则 `Could not install requirement (\S+)` 提取到的包名在 `current_deps` 中找不到，`newly_removed` 为空，触发"防死循环"提前 break，导致后续本可成功安装的包一并放弃。
+
+典型样本：
 
 ```
-# 样本1：直接依赖失败（aisuite[all] 本身就在 merged.txt 里，正常可处理）
+# 直接依赖：aisuite[all] 在 merged.txt 中，正则可处理
 ERROR: Could not install requirement aisuite[all] from https://mirrors.ustc.edu.cn/...
-(from -r /tmp/tmpl05gkzud.txt (line 6)) because of HTTP error 403
 
-# 样本2：传递依赖失败（caio 不在 merged.txt，是 fastmcp 的子子依赖）
+# 传递依赖：caio 不在 merged.txt，是 fastmcp 的子子依赖，正则无法追溯
 ERROR: Could not install requirement caio<0.10.0,>=0.9.0 from https://mirrors.ustc.edu.cn/...
-(from aiofile>=3.5.0->py-key-value-aio[filetree,keyring,memory]<0.5.0,>=0.4.4->fastmcp->-r /tmp/tmpc7uczj4b.txt (line 32))
-because of HTTP error 403
+(from aiofile>=3.5.0->py-key-value-aio[...]->fastmcp->-r /tmp/file.txt (line 32))
 ```
 
-pip 在 `from` 链中完整记录了依赖路径，格式为：
+虽然可以进一步解析 from chain 反查直接父包，但这引入了更多正则和边界情况，维护成本高。
 
-```
-(from 直接父->祖父->...->MERGED_TXT_DIRECT_DEP->-r /tmp/requirements.txt (line N))
-```
+**困难二：重试中的重装开销**
 
-**解法：从 from chain 反查直接父包**
+每轮重试时，已成功安装的包仍需重新被 pip resolver 评估（metadata check），即使命中缓存速度较快，也随重试轮数累积，最坏复杂度为 O(N²)。
 
-当 `newly_removed` 为空（所有失败包均为传递依赖）时，解析 stderr 中每条错误行的 from 链，提取 `->-r` 之前的最后一个包名，即 merged.txt 里的直接依赖，将其剔除后继续重试：
+**为何两轮批次安装更优：**
 
-```python
-# 从 pip from chain 提取直接父包
-# 格式：(from A->B->DIRECT->-r file (line N))
-# DIRECT 为 ->-r 之前的最后一项，即 merged.txt 的直接依赖
-for m in re.finditer(r'\(from\s+(.+?)\(line\s+\d+\)\)', stderr):
-    chain = m.group(1).strip()      # "A->B->DIRECT->-r /tmp/file.txt "
-    parts = chain.split('->')       # 按 -> 分割（-> 不是合法版本操作符，分割安全）
-    for i, part in enumerate(parts):
-        if part.strip().startswith('-r ') and i > 0:
-            direct_spec = parts[i - 1].strip()  # "DIRECT"（可能含版本约束或 extras）
-            pkg_name, _ = _parse_package_spec(direct_spec)
-            if pkg_name in current_deps:
-                # 剔除这个直接依赖，加入 problematic_deps，然后重试
-                ...
-```
-
-**为什么 `->` 分割是安全的：**
-
-pip 依赖链中 `->` 作为分隔符，永远是 `-` 和 `>` 的连续组合。版本操作符 `>=`、`<=`、`>`、`<` 中的 `>` 前面没有 `-`，不会与 `->` 混淆。包名本身可含 `-`（如 `py-key-value-aio`）但不含 `>`，因此 `.split('->')` 能正确切分每段包规范。
-
-**更新后的防死循环判断：**
-
-| 情况 | 处理 |
-|------|------|
-| `failed_specs` 中有包在 `current_deps` → 直接依赖失败 | 原有逻辑：剔除并重试 |
-| `failed_specs` 全为传递依赖 + from chain 可追溯到直接父包 | 新增逻辑：剔除直接父包并重试 |
-| `failed_specs` 全为传递依赖 + from chain 无法追溯（格式异常）或直接父包已在上轮剔除 | 退出（真正的死循环） |
+- 第一轮批次失败直接通过 `returncode` 感知，无需解析任何文本
+- 第二轮逐个安装能精确定位具体失败包，同样无需 stderr
+- 失败影响范围天然被 `BATCH_SIZE` 限制，无需防死循环判断
+- 代码路径简单，行为对 stderr 格式变化免疫（pip 版本升级不会影响逻辑）
 
 ---
 
@@ -383,13 +360,20 @@ PIPInstaller.install_all()
   │    └─ 根据 nodes_map 确定要安装的节点列表
   │
   ├─ Step 1: _merge_requirements_from_nodes()
-  │    ├─ _merge_requirements_file()         逐文件合并，版本冲突解决
-  │    ├─ _filter_merged_dependencies()      黑名单 / 已安装 / git+ 过滤
-  │    ├─ _apply_custom_dependency_strategies()  定制化策略（nunchaku 等）
-  │    └─ _generate_requirements_content()   输出最终 requirements.txt 内容
+  │    ├─ _merge_requirements_file()              逐文件合并，版本冲突解决
+  │    ├─ _filter_merged_dependencies()           黑名单 / 已安装 / git+ 过滤
+  │    │    └─ 黑名单 / git+ 包 → problematic_deps
+  │    ├─ _apply_custom_dependency_strategies()   定制化策略（nunchaku 等）
+  │    └─ _generate_requirements_content()        输出最终依赖列表
   │
-  ├─ Step 2: _install_merged_dependencies()
-  │    └─ pip install -r <tmpfile>（整体安装，带超时）
+  ├─ Step 2: _install_merged_dependencies()       两轮批次安装
+  │    ├─ 第一轮：按 BATCH_SIZE=10 分批
+  │    │    ├─ pip install dep₁ ... dep₁₀  → 成功，继续
+  │    │    ├─ pip install dep₁₁ ... dep₂₀ → 失败，记入 failed_batches
+  │    │    └─ ...（共 ceil(N/10) 批）
+  │    └─ 第二轮：逐个安装所有 failed_batches 中的依赖
+  │         ├─ pip install <dep> → 成功
+  │         └─ pip install <dep> → 失败 → 加入 problematic_deps
   │
   └─ Step 3: _execute_install_scripts()
        └─ 逐插件执行 install.py
@@ -401,10 +385,15 @@ PIPInstaller.install_all()
 {
     "baseline": {"torch": "2.9.0", ...},   # 安装前已有包基线（包名 → 版本）
     "dependencies": {                       # Step 2 结果
-        "requirements_txt": "...",          # 实际安装的内容
+        "requirements_txt": "...",          # 实际安装的内容（过滤后）
         "duration": 45.2,
         "success": True,
-        "error_msg": ""
+        "problematic_deps": [               # 无法自动安装的包（黑名单 + 安装失败）
+            {"spec": "tyro==0.8.5",         # 原始规范字符串
+             "reason": "install_failed"},   # blacklist / git+ / install_failed
+            {"spec": "torch",
+             "reason": "blacklist"},
+        ]
     },
     "scripts": [                            # Step 3 结果列表
         {

@@ -387,6 +387,8 @@ class TestFilterMergedDependencies(_Base):
 # 9. _generate_requirements_content
 # ─────────────────────────────────────────────────────────────────────────────
 class TestGenerateRequirementsContent(_Base):
+    """_generate_requirements_content 接受已排序的 List[DependencyInfo]，
+    由调用方负责排序。"""
 
     def setUp(self):
         super().setUp()
@@ -394,30 +396,31 @@ class TestGenerateRequirementsContent(_Base):
 
     def test_empty_deps_returns_empty(self):
         with patch("builtins.print"):
-            content = self.inst._generate_requirements_content({})
+            content = self.inst._generate_requirements_content([])
         self.assertEqual(content, "")
 
-    def test_sorted_alphabetically(self):
-        deps = {
-            "torch": self._dep("torch", ">=1.8.0"),
-            "numpy": self._dep("numpy", "==1.21.0"),
-            "accelerate": self._dep("accelerate"),
-        }
+    def test_preserves_caller_order(self):
+        """方法按传入顺序输出，不自行排序（排序由调用方保证）"""
+        deps = sorted([
+            self._dep("torch", ">=1.8.0"),
+            self._dep("numpy", "==1.21.0"),
+            self._dep("accelerate"),
+        ], key=lambda d: d.package_name)
         with patch("builtins.print"):
             content = self.inst._generate_requirements_content(deps)
         lines = content.splitlines()
         self.assertEqual(lines, ["accelerate", "numpy==1.21.0", "torch>=1.8.0"])
 
     def test_package_with_no_version_spec(self):
-        deps = {"requests": self._dep("requests")}
         with patch("builtins.print"):
-            content = self.inst._generate_requirements_content(deps)
+            content = self.inst._generate_requirements_content([self._dep("requests")])
         self.assertEqual(content, "requests")
 
     def test_package_with_version_spec(self):
-        deps = {"requests": self._dep("requests", ">=2.25.0")}
         with patch("builtins.print"):
-            content = self.inst._generate_requirements_content(deps)
+            content = self.inst._generate_requirements_content(
+                [self._dep("requests", ">=2.25.0")]
+            )
         self.assertEqual(content, "requests>=2.25.0")
 
 
@@ -527,8 +530,10 @@ class TestInstallAll(_Base):
 
     def test_result_has_required_keys(self):
         result, _ = self._run_install_all(nodes_map={})
-        for key in ("baseline", "dependencies", "scripts", "problematic_deps"):
+        for key in ("baseline", "dependencies", "scripts"):
             self.assertIn(key, result)
+        # problematic_deps 已移入 dependencies 内部
+        self.assertNotIn("problematic_deps", result)
 
     def test_empty_nodes_map_no_dep_install_called(self):
         with patch("services.pip.pip_installer.subprocess.check_output",
@@ -551,13 +556,13 @@ class TestInstallAll(_Base):
     def test_dependencies_structure(self):
         result, _ = self._run_install_all(nodes_map={})
         deps = result["dependencies"]
-        for key in ("requirements_txt", "duration", "success", "error_msg"):
+        for key in ("requirements_txt", "duration", "success", "error_msg", "problematic_deps"):
             self.assertIn(key, deps)
 
-    def test_problematic_deps_in_result(self):
-        """problematic_deps 列表要出现在返回结果里"""
+    def test_problematic_deps_inside_dependencies(self):
+        """problematic_deps 位于 dependencies 内部，不在顶层"""
         result, _ = self._run_install_all(nodes_map={})
-        self.assertIsInstance(result["problematic_deps"], list)
+        self.assertIsInstance(result["dependencies"]["problematic_deps"], list)
 
     def test_timeout_during_merge_returns_partial_result(self):
         self._make_node("slow-node", requirements="requests\n")
@@ -572,25 +577,26 @@ class TestInstallAll(_Base):
         self.assertIn("baseline", result)
 
     def test_blacklisted_packages_appear_in_problematic_deps(self):
+        """黑名单包应出现在 dependencies.problematic_deps 中"""
         self._make_node("n", requirements="torch>=1.8.0\nrequests\n")
         with patch("services.pip.pip_installer.subprocess.check_output",
                    return_value="Package Version\n"):
             installer = PIPInstaller(blacklist=["torch"])
-        dep_record = DependencyInstallRecord(
-            requirements_txt="requests", duration=1.0, success=True, error_msg=""
-        )
-        with patch.object(installer, "_install_merged_dependencies",
-                          return_value=dep_record), \
+        # 不 mock _install_merged_dependencies，让过滤阶段真实运行，
+        # mock subprocess.run 让 pip 安装成功
+        with patch("subprocess.run",
+                   return_value=subprocess.CompletedProcess(args=[], returncode=0)), \
              patch.object(installer, "_execute_install_scripts", return_value=[]), \
              patch("builtins.print"):
             result = installer.install_all(timeout=60, nodes_map=None)
-        # problematic_deps 是 "{name}{version_spec}" 格式的字符串列表
-        self.assertTrue(any("torch" in s for s in result["problematic_deps"]))
+        # problematic_deps 在 dependencies 内部，是 DependencyInfo 序列化后的 dict 列表
+        prob_names = {d["package_name"] for d in result["dependencies"]["problematic_deps"]}
+        self.assertTrue(any("torch" in name for name in prob_names))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 13. _install_merged_dependencies — 仅验证无依赖时的快速路径
-#     （stderr 重试完整链路由 stderr_retry_test.py 覆盖）
+# 13. _install_merged_dependencies — 边界情况
+#     （两轮完整链路由 batch_install_test.py 详细覆盖）
 # ─────────────────────────────────────────────────────────────────────────────
 class TestInstallMergedDependenciesEdgeCases(_Base):
 
@@ -599,35 +605,42 @@ class TestInstallMergedDependenciesEdgeCases(_Base):
         self.inst = self._installer()
 
     def test_empty_deps_returns_success_immediately(self):
-        with patch("builtins.print"):
+        """空依赖字典：立即返回成功，不调用 pip"""
+        with patch("subprocess.run") as mock_run, patch("builtins.print"):
             record = self.inst._install_merged_dependencies(
                 {}, timeout=600, start_time=time.time()
             )
+        mock_run.assert_not_called()
         self.assertTrue(record.success)
-        self.assertEqual(record.error_msg, "")
         self.assertEqual(record.requirements_txt, "")
+        self.assertEqual(record.problematic_deps, [])
 
-    def test_timeout_before_start_returns_failure(self):
+    def test_global_timeout_all_deps_become_problematic(self):
+        """全局超时：所有依赖进入 problematic_deps，success 仍为 True（两轮均优雅处理）"""
         deps = {"requests": self._dep("requests")}
-        past_time = time.time() - 9999  # 已经过了很久
-        with patch("builtins.print"):
+        past_time = time.time() - 9999
+        with patch("subprocess.run") as mock_run, patch("builtins.print"):
             record = self.inst._install_merged_dependencies(
                 deps, timeout=1, start_time=past_time
             )
-        self.assertFalse(record.success)
-        self.assertIn("timeout", record.error_msg.lower())
+        mock_run.assert_not_called()
+        self.assertTrue(record.success)
+        self.assertEqual(len(record.problematic_deps), 1)
 
-    def test_pip_success_on_first_attempt(self):
+    def test_pip_success_on_first_batch(self):
+        """第一轮批次成功：success=True，无 problematic_deps"""
         deps = {"requests": self._dep("requests")}
-        ok_result = subprocess.CompletedProcess(args=[], returncode=0, stderr="")
-        with patch("subprocess.run", return_value=ok_result), \
+        with patch("subprocess.run",
+                   return_value=subprocess.CompletedProcess(args=[], returncode=0)), \
              patch("builtins.print"):
             record = self.inst._install_merged_dependencies(
                 deps, timeout=600, start_time=time.time()
             )
         self.assertTrue(record.success)
+        self.assertEqual(record.problematic_deps, [])
 
-    def test_pip_timeout_records_error(self):
+    def test_batch_subprocess_timeout_dep_in_problematic(self):
+        """批次 subprocess 超时：两轮均超时，依赖进入 problematic_deps，success=True"""
         deps = {"requests": self._dep("requests")}
         with patch("subprocess.run",
                    side_effect=subprocess.TimeoutExpired(cmd="pip", timeout=1)), \
@@ -635,8 +648,9 @@ class TestInstallMergedDependenciesEdgeCases(_Base):
             record = self.inst._install_merged_dependencies(
                 deps, timeout=600, start_time=time.time()
             )
-        self.assertFalse(record.success)
-        self.assertIn("timed out", record.error_msg)
+        self.assertTrue(record.success)
+        self.assertEqual(len(record.problematic_deps), 1)
+        self.assertEqual(record.problematic_deps[0]["package_name"], "requests")
 
 
 if __name__ == "__main__":

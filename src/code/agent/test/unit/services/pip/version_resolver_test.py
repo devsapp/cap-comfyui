@@ -219,6 +219,11 @@ class TestParseSingleOp(unittest.TestCase):
     def test_whitespace_stripped(self):
         self.assertEqual(_parse_single_op("  >=1.0.0  "), (">=", "1.0.0"))
 
+    def test_operator_with_space_before_version(self):
+        """操作符与版本号之间有空格时也能解析，如 requirements 中 'accelerate >= 0.33.0'"""
+        self.assertEqual(_parse_single_op(">= 0.33.0"), (">=", "0.33.0"))
+        self.assertEqual(_parse_single_op("<= 2.0"), ("<=", "2.0"))
+
     def test_multi_segment_version(self):
         self.assertEqual(_parse_single_op(">=1.26.4"), (">=", "1.26.4"))
 

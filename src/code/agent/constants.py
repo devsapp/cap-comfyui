@@ -27,6 +27,8 @@ SKIP_SNAPSHOT_LOADING = os.getenv('SKIP_SNAPSHOT_LOADING')
 SKIP_NODES_LOADING = os.getenv('SKIP_NODES_LOADING', '').lower() == 'true'
 # 初始化时是否安装所有 custom_nodes 插件依赖，默认不安装；线上服务强制为 False，仅开发阶段且值为 'true'/'True' 时才安装
 AUTO_INSTALL = (not USE_API_MODE) and os.getenv('AUTO_INSTALL', '').lower() == 'true'
+# 第一轮分批安装每批的包数，可通过环境变量 INSTALL_BATCH_SIZE 覆盖
+INSTALL_BATCH_SIZE = int(os.getenv('INSTALL_BATCH_SIZE', '20'))
 SNAPSHOT_DIR = MNT_DIR + '/snapshots'
 SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
 COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')

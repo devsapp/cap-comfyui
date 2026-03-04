@@ -135,10 +135,10 @@ def _parse_single_op(spec: str) -> Tuple[Optional[str], Optional[str]]:
     spec = spec.strip()
     if ',' in spec:
         return None, None
-    # 按长度从长到短匹配，确保 >= 优先于 >，<= 优先于 <
-    m = re.match(r'^(>=|<=|>|<)([\d].*)$', spec)
+    # 允许操作符与版本号之间有空格，如 ">= 0.33.0"
+    m = re.match(r'^(>=|<=|>|<)\s*([\d].*)$', spec)
     if m:
-        return m.group(1), m.group(2)
+        return m.group(1), m.group(2).strip()
     return None, None
 
 

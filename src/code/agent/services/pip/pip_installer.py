@@ -10,9 +10,6 @@ from services.pip.models import InstallRecord, DependencyInstallRecord, Dependen
 from services.pip.version_resolver import resolve_version_conflict
 from services.pip.dependency_strategies import apply_custom_dependency_strategies
 
-# 第一轮分批安装每批的包数
-_BATCH_SIZE = 10
-
 # 逐个安装（fallback 轮）使用的 pip 源：aliyun 主源 + PyPI 官方兜底
 # 通过环境变量覆盖 pip.conf，避免 tsinghua/ustc 源问题干扰兜底安装
 _FALLBACK_INDEX_URL = "https://mirrors.aliyun.com/pypi/simple/"
@@ -42,7 +39,7 @@ class PIPInstaller:
           Step 1 — 扫描插件目录，合并所有 requirements.txt，应用黑名单 / 已安装过滤
                    和定制化策略（nunchaku 等），输出最终依赖字典。
           Step 2 — 两轮批次安装：
-                   第一轮按 _BATCH_SIZE=10 分批 pip install，失败批整批记入 failed_batches；
+                   第一轮按 INSTALL_BATCH_SIZE 分批 pip install，失败批整批记入 failed_batches；
                    第二轮将 failed_batches 展开后逐个 pip install，仍失败的包加入 problematic_deps。
                    两轮均通过 returncode 判断成功与否，不解析 stderr。
           Step 3 — 逐插件执行 install.py（部分插件需要自己的安装脚本）。
@@ -264,11 +261,11 @@ class PIPInstaller:
         """
         步骤2: 两轮批次安装。
 
-        第一轮按 _BATCH_SIZE 分批执行 pip install，整批失败的批次记入 failed_batches。
+        第一轮按 INSTALL_BATCH_SIZE 分批执行 pip install，整批失败的批次记入 failed_batches。
         第二轮将 failed_batches 中的依赖展开去重后逐个安装，
         仍失败的包加入 self._problematic_deps。
         """
-        print(f"\n[Installer] ## Step 2: Installing dependencies (two-round batch, batch_size={_BATCH_SIZE}, timeout={timeout}s)...")
+        print(f"\n[Installer] ## Step 2: Installing dependencies (two-round batch, batch_size={constants.INSTALL_BATCH_SIZE}, timeout={timeout}s)...")
 
         sorted_deps = sorted(merged_deps.values(), key=lambda d: d.package_name)
         initial_content = self._generate_requirements_content(sorted_deps)
@@ -282,7 +279,7 @@ class PIPInstaller:
 
         try:
             # 第一轮：分批安装
-            print(f"\n[Installer] ## Round 1: {len(sorted_deps)} deps → {-(-len(sorted_deps) // _BATCH_SIZE)} batches of {_BATCH_SIZE}")
+            print(f"\n[Installer] ## Round 1: {len(sorted_deps)} deps → {-(-len(sorted_deps) // constants.INSTALL_BATCH_SIZE)} batches of {constants.INSTALL_BATCH_SIZE}")
             failed_deps = self._install_in_batches(sorted_deps, timeout, start_time)
 
             # 第二轮：逐个安装失败批次的依赖
@@ -312,12 +309,12 @@ class PIPInstaller:
         start_time: float,
     ) -> List[DependencyInfo]:
         """
-        第一轮：按 _BATCH_SIZE 分批安装，返回所有失败的依赖（平铺列表）。
+        第一轮：按 INSTALL_BATCH_SIZE 分批安装，返回所有失败的依赖（平铺列表）。
 
         批次失败（returncode != 0 或超时）时，整批加入 failed_deps 供第二轮兜底。
         超时前未执行的批次同样加入，确保每个包都有第二轮的机会。
         """
-        batches = [deps[i:i + _BATCH_SIZE] for i in range(0, len(deps), _BATCH_SIZE)]
+        batches = [deps[i:i + constants.INSTALL_BATCH_SIZE] for i in range(0, len(deps), constants.INSTALL_BATCH_SIZE)]
         total_batches = len(batches)
         failed_deps: List[DependencyInfo] = []
         failed_batch_count = 0

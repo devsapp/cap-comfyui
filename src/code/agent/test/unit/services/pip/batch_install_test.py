@@ -12,8 +12,11 @@ import time
 import unittest
 from unittest.mock import patch
 
-from services.pip.pip_installer import PIPInstaller, _BATCH_SIZE
+from services.pip.pip_installer import PIPInstaller
 from models import DependencyInfo
+
+# 测试中使用的固定批次大小，与 _make_installer 中 mock 的 INSTALL_BATCH_SIZE 一致
+TEST_BATCH_SIZE = 10
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -46,6 +49,16 @@ def _make_installer():
 # 1. _install_in_batches
 # ─────────────────────────────────────────────────────────────────────────────
 class TestInstallInBatches(unittest.TestCase):
+    """运行期间固定 INSTALL_BATCH_SIZE=10，否则会使用 constants 默认值 20 导致断言失败"""
+
+    def setUp(self):
+        self._batch_patcher = patch(
+            "services.pip.pip_installer.constants.INSTALL_BATCH_SIZE", TEST_BATCH_SIZE
+        )
+        self._batch_patcher.start()
+
+    def tearDown(self):
+        self._batch_patcher.stop()
 
     def _run(self, installer, deps, timeout=600):
         with patch("builtins.print"):
@@ -79,7 +92,7 @@ class TestInstallInBatches(unittest.TestCase):
     def test_only_failed_batch_deps_returned(self):
         """两批：第一批成功，第二批失败；返回值只含第二批"""
         installer = _make_installer()
-        batch1 = [_dep(f"good-{i}") for i in range(_BATCH_SIZE)]
+        batch1 = [_dep(f"good-{i}") for i in range(TEST_BATCH_SIZE)]
         batch2 = [_dep("bad")]
         with patch("subprocess.run", side_effect=[_ok(), _fail()]):
             result = self._run(installer, batch1 + batch2)
@@ -99,7 +112,7 @@ class TestInstallInBatches(unittest.TestCase):
     def test_global_timeout_all_remaining_deferred(self):
         """全局超时时，当前及后续批次全部移入 failed_deps，不调用 pip"""
         installer = _make_installer()
-        deps = [_dep(f"pkg-{i}") for i in range(_BATCH_SIZE + 3)]
+        deps = [_dep(f"pkg-{i}") for i in range(TEST_BATCH_SIZE + 3)]
         with patch("subprocess.run") as mock_run, patch("builtins.print"):
             result = installer._install_in_batches(
                 deps, timeout=1, start_time=time.time() - 9999
@@ -110,7 +123,7 @@ class TestInstallInBatches(unittest.TestCase):
     def test_global_timeout_mid_run_defers_remaining(self):
         """第一批成功后全局超时，第二批未执行也进入 failed_deps"""
         installer = _make_installer()
-        batch1 = [_dep(f"good-{i}") for i in range(_BATCH_SIZE)]
+        batch1 = [_dep(f"good-{i}") for i in range(TEST_BATCH_SIZE)]
         batch2 = [_dep("not-tried")]
         call_count = 0
         original_time = time.time
@@ -133,14 +146,14 @@ class TestInstallInBatches(unittest.TestCase):
 
     def test_exact_batch_size_is_one_call(self):
         installer = _make_installer()
-        deps = [_dep(f"pkg-{i}") for i in range(_BATCH_SIZE)]
+        deps = [_dep(f"pkg-{i}") for i in range(TEST_BATCH_SIZE)]
         with patch("subprocess.run", return_value=_ok()) as mock_run:
             self._run(installer, deps)
         self.assertEqual(mock_run.call_count, 1)
 
     def test_batch_size_plus_one_is_two_calls(self):
         installer = _make_installer()
-        deps = [_dep(f"pkg-{i}") for i in range(_BATCH_SIZE + 1)]
+        deps = [_dep(f"pkg-{i}") for i in range(TEST_BATCH_SIZE + 1)]
         with patch("subprocess.run", return_value=_ok()) as mock_run:
             self._run(installer, deps)
         self.assertEqual(mock_run.call_count, 2)
@@ -261,9 +274,17 @@ class TestInstallIndividually(unittest.TestCase):
 # 3. _install_merged_dependencies — 完整两轮链路
 # ─────────────────────────────────────────────────────────────────────────────
 class TestInstallMergedDependenciesRounds(unittest.TestCase):
+    """运行期间固定 INSTALL_BATCH_SIZE=10，保证两批边界与用例假设一致"""
 
     def setUp(self):
+        self._batch_patcher = patch(
+            "services.pip.pip_installer.constants.INSTALL_BATCH_SIZE", TEST_BATCH_SIZE
+        )
+        self._batch_patcher.start()
         self.installer = _make_installer()
+
+    def tearDown(self):
+        self._batch_patcher.stop()
 
     def _run(self, deps, timeout=600):
         with patch("builtins.print"):
@@ -313,7 +334,7 @@ class TestInstallMergedDependenciesRounds(unittest.TestCase):
         """好包批次成功，坏包批次失败后 Round 2 也失败。
         包名用 aaa-* 确保字典序排在 zzz-bad 之前，
         使 good 包在 batch1、zzz-bad 在 batch2。"""
-        good_deps = {f"aaa-{i}": _dep(f"aaa-{i}") for i in range(_BATCH_SIZE)}
+        good_deps = {f"aaa-{i}": _dep(f"aaa-{i}") for i in range(TEST_BATCH_SIZE)}
         bad_deps = {"zzz-bad": _dep("zzz-bad", "==0.0.1")}
         deps = {**good_deps, **bad_deps}
         with patch("subprocess.run", side_effect=[_ok(), _fail(), _fail()]):
@@ -321,7 +342,7 @@ class TestInstallMergedDependenciesRounds(unittest.TestCase):
         self.assertTrue(record.success)
         prob_names = {d.package_name for d in record.problematic_deps}
         self.assertIn("zzz-bad", prob_names)
-        for i in range(_BATCH_SIZE):
+        for i in range(TEST_BATCH_SIZE):
             self.assertNotIn(f"aaa-{i}", prob_names)
 
     def test_round2_rescues_some_packages(self):

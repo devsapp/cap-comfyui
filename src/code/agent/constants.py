@@ -131,7 +131,8 @@ else:
 APP_HOST = f"127.0.0.1:{BACKEND_PROCESS_PORT}"
 
 DEFAULT_READINESS_POLL_INTERVAL = 3
-DEFAULT_READINESS_TIMEOUT = 900  # 15min waiting for comfyui subprocess start
+# 启动/重启后等待ComfyUI子进程就绪的超时（秒），可通过 READINESS_TIMEOUT 覆盖
+DEFAULT_READINESS_TIMEOUT = int(os.getenv("READINESS_TIMEOUT", "900"))  # 默认 15 分钟
 DEFAULT_LIVENESS_POLL_INTERVAL = 5
 
 # 插件安装相关超时配置

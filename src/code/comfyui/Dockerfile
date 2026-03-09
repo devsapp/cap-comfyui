@@ -12,7 +12,7 @@ RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     git checkout "v0.3.77"
 
 # 复制插件列表配置文件
-COPY code/comfyui/custom_nodes_config/custom_nodes.json /tmp/custom_nodes.json
+COPY code/comfyui/custom_nodes_config/custom_nodes_top_100_2026-03-05.json /tmp/custom_nodes.json
 
 # 批量安装自定义节点插件
 # 从 custom_nodes.json 读取插件列表，循环安装启用的插件

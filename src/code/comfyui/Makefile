@@ -4,6 +4,12 @@ COMFYUI_IMAGE = registry.$(REGION).aliyuncs.com/ohyee/fc-demo:cap-comfyui
 OSS_BUCKET ?= dipper-cache-$(REGION)
 OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
 
+# 模型同步：dev OSS <-> prod OSS
+DEV_MOUNT ?= /mnt/funart-dev/models
+PROD_MOUNT ?= /mnt/funart/models
+DEV_OSS_BUCKET ?= dipper-cache-$(REGION)-dev
+PROD_OSS_BUCKET ?= dipper-cache-$(REGION)
+
 .PHONY: upgrade
 upgrade: build upload-base
 
@@ -95,3 +101,31 @@ build-from-snapshot:
 
 	@rm -rf tmp
 	@echo "Build completed successfully"
+
+# ===== 模型管理 =====
+
+# 列出 dev 有但 prod 没有的模型，生成 diff_YYYYMMDD.json
+# 输出文件位于 models/ 目录下
+.PHONY: diff-models
+diff-models:
+	@DEV_MOUNT=$(DEV_MOUNT) \
+	 PROD_MOUNT=$(PROD_MOUNT) \
+	 bash models/sync_dev_to_prod.sh --diff-only
+
+# 将 dev 有但 prod 没有的模型同步到 prod OSS
+.PHONY: sync-models-to-prod
+sync-models-to-prod:
+	@DEV_MOUNT=$(DEV_MOUNT) \
+	 PROD_MOUNT=$(PROD_MOUNT) \
+	 DEV_OSS_BUCKET=$(DEV_OSS_BUCKET) \
+	 PROD_OSS_BUCKET=$(PROD_OSS_BUCKET) \
+	 bash models/sync_dev_to_prod.sh
+
+# 打印将要执行的 ossutil 同步命令（不实际执行）
+.PHONY: sync-models-to-prod-dry-run
+sync-models-to-prod-dry-run:
+	@DEV_MOUNT=$(DEV_MOUNT) \
+	 PROD_MOUNT=$(PROD_MOUNT) \
+	 DEV_OSS_BUCKET=$(DEV_OSS_BUCKET) \
+	 PROD_OSS_BUCKET=$(PROD_OSS_BUCKET) \
+	 bash models/sync_dev_to_prod.sh --dry-run

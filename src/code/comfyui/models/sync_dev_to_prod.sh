@@ -179,7 +179,7 @@ FAILED=0
 FAILED_MODELS=()
 
 # 使用进程替换避免子 shell 导致计数器失效
-while IFS='###SEP###' read -r filename directory; do
+while IFS=$'\t' read -r filename directory; do
     src="oss://${DEV_OSS_BUCKET}/${DEV_OSS_PREFIX}/${directory}/${filename}"
     dst="oss://${PROD_OSS_BUCKET}/${PROD_OSS_PREFIX}/${directory}/${filename}"
 
@@ -202,7 +202,7 @@ with open('${OUTPUT_JSON}', 'r') as f:
     data = json.load(f)
 for filename, info in data.items():
     directory = info.get('directory', 'unknown')
-    print(f'{filename}###SEP###{directory}')
+    print(f'{filename}\t{directory}')
 ")
 
 if [ "$DRY_RUN" = false ]; then

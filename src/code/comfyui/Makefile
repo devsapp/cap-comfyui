@@ -104,6 +104,18 @@ build-from-snapshot:
 
 # ===== 模型管理 =====
 
+# 将 models_xxx.json 融入 models.json（主模型列表），已存在的模型不覆盖
+# 用法: make merge-models MODELS_JSON=models/models_20260308.json
+MODELS_JSON ?=
+.PHONY: merge-models
+merge-models:
+	@if [ -z "$(MODELS_JSON)" ]; then \
+		echo "错误: 请指定 MODELS_JSON"; \
+		echo "用法: make merge-models MODELS_JSON=models/models_20260308.json"; \
+		exit 1; \
+	fi
+	@python3 models/merge_models.py $(MODELS_JSON) models/models.json
+
 # 列出 dev 有但 prod 没有的模型，生成 diff_YYYYMMDD.json
 # 输出文件位于 models/ 目录下
 .PHONY: diff-models

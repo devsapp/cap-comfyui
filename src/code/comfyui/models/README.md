@@ -1,246 +1,219 @@
-# ComfyUI 模型下载工具
+# ComfyUI 模型管理工具
 
-从 ComfyUI 模板中提取模型信息，批量下载并验证文件完整性的工具集。
+批量下载、验证、同步 ComfyUI 模型的工具集。
 
-## 📁 工具脚本
+## 📁 目录结构
 
-| 脚本 | 功能 |
-|------|------|
-| `extract_models.py` | 从模板中提取模型信息 |
-| `download_models.sh` | 批量下载模型文件 |
-| `cal_checksum.py` | 验证文件 SHA256 完整性 |
+```
+models/
+├── models.json              # 主模型列表（全量，长期维护）
+├── models_xxx.json          # 增量模型列表（按批次，合并前暂存）
+├── scripts/
+│   ├── extract_models.py    # 从模板中提取模型信息
+│   ├── download_models.sh   # 批量下载模型文件
+│   ├── cal_checksum.py      # 验证文件 SHA256 完整性
+│   ├── merge_models.py      # 将增量列表合并到 models.json
+│   └── sync_dev_to_prod.sh  # 将 dev OSS 模型同步到 prod OSS
+└── README.md
+```
 
-## 🚀 使用流程
+**OSS 挂载说明**：
+
+| 环境 | 挂载路径 | OSS Bucket |
+|------|----------|------------|
+| Dev  | `/mnt/funart-dev/models` | `dipper-cache-cn-hangzhou-dev` |
+| Prod | `/mnt/funart-prod/models` | `dipper-cache-cn-hangzhou` |
+
+---
+
+## 🚀 完整工作流
 
 ### 准备工作
 
-安装依赖：
 ```bash
 pip install huggingface_hub
 ```
 
-### 第 1 步：提取模型信息
+---
 
-从 `templates` 目录提取所有模板使用的模型信息：
+### 第 1 步：准备增量模型列表
+
+**方式 A：从模板自动提取**（提取工作流广场模板中引用的模型）
 
 ```bash
 cd models
-python3 extract_models.py
+python3 scripts/extract_models.py
+# 输出: models_YYYYMMDD.json
 ```
 
-**输出**：`models_20251225.json`（自动生成当前日期）
+**方式 B：手动维护**
 
-### 第 2 步：下载模型
+直接创建或编辑 `models_xxx.json`，格式如下：
 
-根据提取的配置文件下载模型：
+```json
+{
+    "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors": {
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+        "directory": "diffusion_models"
+    }
+}
+```
+
+---
+
+### 第 2 步：下载模型到 dev
 
 ```bash
 # 下载所有模型（使用国内镜像加速）
-./download_models.sh models_20251220.json /root/ComfyUI/models --use-mirror
+export HF_ENDPOINT="https://hf-mirror.com"
+./scripts/download_models.sh models_20260308.json /mnt/funart-dev/models --use-mirror
 
-# 只下载指定目录的模型（推荐）
-./download_models.sh models_20251220.json /root/ComfyUI/models --use-mirror --dirs vae loras
-
-# 支持多个目录
-./download_models.sh models_20251220.json /root/ComfyUI/models --use-mirror --dirs unet clip vae loras
+# 只下载指定目录的模型（推荐，按需下载）
+./scripts/download_models.sh models_20260308.json /mnt/funart-dev/models --use-mirror --dirs diffusion_models loras
 ```
 
 **参数说明**：
-- `models_*.json`：第 1 步生成的配置文件
-- `/root/ComfyUI/models`：下载目标目录
-- `--use-mirror`：使用国内镜像（https://hf-mirror.com）
-- `--dirs <目录...>`：只下载指定目录的模型
 
-**功能特性**：
-- ✅ 自动创建目录结构
-- ✅ 跳过已存在的文件
-- ✅ 失败自动重试 3 次
-- ✅ 显示详细的下载进度和统计
+| 参数 | 说明 |
+|------|------|
+| `models_xxx.json` | 增量模型列表 |
+| `/mnt/funart-dev/models` | 下载目标目录（dev 挂载路径） |
+| `--use-mirror` | 使用国内镜像（https://hf-mirror.com） |
+| `--dirs <目录...>` | 只下载指定目录的模型 |
 
-### 第 3 步：验证完整性
+---
 
-验证下载的文件是否完整：
+### 第 3 步：验证 checksum
 
 ```bash
-# 验证所有模型
-python3 cal_checksum.py /root/ComfyUI/models models_20251220.json
+# 验证所有下载的模型
+python3 scripts/cal_checksum.py /mnt/funart-dev/models models_20260308.json
 
 # 只验证指定目录
-python3 cal_checksum.py /root/ComfyUI/models models_20251220.json --dir vae
-
-# 使用国内镜像获取 SHA256（推荐）
-export HF_ENDPOINT="https://hf-mirror.com"
-python3 cal_checksum.py /root/ComfyUI/models models_20251220.json
+python3 scripts/cal_checksum.py /mnt/funart-dev/models models_20260308.json --dir diffusion_models
 ```
 
-**验证结果**：
+验证结果：
 - ✅ **一致**：文件完整
-- ❌ **不一致**：需要重新下载
-- ⚠️ **错误**：无法验证（非 HF 链接或缺少 URL）
+- ❌ **不一致**：删除后重新下载
 
-如有不一致的文件，删除后重新运行第 2 步：
 ```bash
-rm /root/ComfyUI/models/loras/problematic_model.safetensors
-./download_models.sh models_20251225.json /root/ComfyUI/models --use-mirror --dirs loras
+# 重新下载不一致的模型
+rm /mnt/funart-dev/models/diffusion_models/problematic_model.safetensors
+./scripts/download_models.sh models_20260308.json /mnt/funart-dev/models --use-mirror --dirs diffusion_models
 ```
+
+---
+
+### 第 4 步：同步到 prod OSS
+
+确认 dev 下载无误后，将新模型同步到 prod。
+
+**先 dry-run，确认将执行的 ossutil 命令**：
+
+```bash
+make sync-models-to-prod-dry-run
+```
+
+输出示例：
+
+```
+[Dry Run] 将执行以下 ossutil 命令:
+  ossutil cp --ignore-existing "oss://dipper-cache-cn-hangzhou-dev/funart/models/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors" "oss://dipper-cache-cn-hangzhou/function-art/comfyui/models/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
+  ...
+```
+
+**确认无误后，正式同步**：
+
+```bash
+make sync-models-to-prod
+```
+
+> 同步使用 `--ignore-existing`，不会覆盖 prod 中已存在的模型。
+
+**只查看 diff，不执行同步**：
+
+```bash
+make diff-models
+# 生成 models/diff_YYYYMMDD.json
+```
+
+---
+
+### 第 5 步：合并到主模型列表
+
+同步完成后，将增量列表合并到 `models.json`：
+
+```bash
+make merge-models MODELS_JSON=models/models_20260308.json
+```
+
+输出示例：
+
+```
+源文件:   models/models_20260308.json  (5 个模型)
+目标文件: models/models.json
+
+新增 5 个模型:
+  + wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors
+  + wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors
+  ...
+
+完成。models.json 现有 140 个模型。
+```
+
+> 合并规则：新模型追加，已存在的跳过，不会覆盖 `models.json` 中已有条目。
+
+---
+
+## 📋 Make 命令速查
+
+| 命令 | 说明 |
+|------|------|
+| `make diff-models` | 列出 dev 有但 prod 没有的模型，生成 `diff_YYYYMMDD.json` |
+| `make sync-models-to-prod-dry-run` | 预览将执行的 ossutil 命令（不实际执行） |
+| `make sync-models-to-prod` | 将 dev 新模型同步到 prod OSS |
+| `make merge-models MODELS_JSON=models/models_xxx.json` | 将增量列表合并到 `models.json` |
+
+**覆盖默认变量**（如挂载路径或 bucket 不同时）：
+
+```bash
+make sync-models-to-prod \
+  DEV_MOUNT=/custom/dev/path \
+  PROD_MOUNT=/custom/prod/path \
+  DEV_OSS_BUCKET=my-dev-bucket \
+  PROD_OSS_BUCKET=my-prod-bucket
+```
+
+---
 
 ## 💡 使用技巧
 
 ### 按需下载，节省时间和空间
 
-根据实际需要，先下载关键模型：
-
 ```bash
 # 先下载小文件
-./download_models.sh models_20251225.json /root/models --use-mirror --dirs vae loras clip
+./scripts/download_models.sh models_xxx.json /mnt/funart-dev/models --use-mirror --dirs vae loras clip
 
 # 网络稳定时再下载大模型
-./download_models.sh models_20251225.json /root/models --use-mirror --dirs unet checkpoints
+./scripts/download_models.sh models_xxx.json /mnt/funart-dev/models --use-mirror --dirs diffusion_models unet checkpoints
 ```
 
-### 查看可用目录
-
-查看配置文件中包含哪些目录：
+### 查看模型按目录分布
 
 ```bash
 python3 -c "
 import json
 from collections import Counter
-with open('models_20251225.json') as f:
+with open('models/models.json') as f:
     data = json.load(f)
 dirs = Counter(info.get('directory', 'unknown') for info in data.values())
-for dir_name, count in sorted(dirs.items()):
-    print(f'{dir_name}: {count} 个模型')
+for d, count in sorted(dirs.items()):
+    print(f'{d}: {count} 个模型')
 "
 ```
 
-常见目录：
-- `unet`：UNET 模型（通常较大）
-- `vae`：VAE 编码器
-- `clip`：CLIP 文本编码器
-- `loras`：LoRA 微调模型
-- `checkpoints`：完整检查点
-- `controlnet`：ControlNet 控制模型
-- `clip_vision`：CLIP 视觉编码器
-
-## 📊 输出示例
-
-### 提取模型信息
-
-```
-==============================
-提取 ComfyUI 模板中的模型信息
-==============================
-模板目录: ../templates
-
-正在分析模板文件...
-找到 206 个模板文件
-✓ 找到 130 个独特的模型文件
-✓ 已生成: models_20251220.json
-
-按目录分布:
-  unet      : 46 个
-  loras     : 18 个
-  checkpoints: 19 个
-  vae       : 10 个
-  ...
-```
-
-### 下载模型
-
-```
-======================================
-开始下载 ComfyUI 模型
-======================================
-模型配置: models_20251220.json
-目标目录: /root/ComfyUI/models
-筛选目录: vae loras
-
-可用目录: audio checkpoints clip controlnet loras unet vae
-要下载 28 个模型
-
-[1/28] vae-ft-mse-840000-ema-pruned.safetensors
-  目录: vae
-  下载中...
-  ✓ 下载完成
-
-[2/28] flux1-depth-dev-lora.safetensors
-  目录: loras
-  ✓ 已存在，跳过
-...
-
-======================================
-下载完成!
-======================================
-成功: 22
-跳过: 5
-失败: 1
-总计: 28
-======================================
-```
-
-### 验证完整性
-
-```
-================================================================================
-🔍 ComfyUI 模型 SHA256 验证工具
-================================================================================
-✓ 找到 28 个模型文件
-
-[1/28] 验证: vae/vae-ft-mse.safetensors
-  计算本地 SHA256...
-  从 Hugging Face 获取 SHA256...
-✅ 状态: 一致
-...
-
-================================================================================
-📊 验证总结
-================================================================================
-总文件数: 28
-✅ 一致:   27
-❌ 不一致: 1
-
-⚠️  以下模型 SHA256 不一致，建议重新下载:
-  • loras/problematic_model.safetensors
-================================================================================
-```
-
-## ⚠️ 常见问题
-
-### 1. 下载速度慢
-
-**解决方案**：使用 `--use-mirror` 启用国内镜像加速
-
-```bash
-./download_models.sh models_20251225.json /root/models --use-mirror
-```
-
-### 2. 找不到 hf 命令
-
-**解决方案**：
-```bash
-pip install -U huggingface_hub
-```
-
-### 3. 下载失败
-
-**解决方案**：
-1. 检查网络连接
-2. 使用镜像加速（`--use-mirror`）
-3. 检查磁盘空间：`df -h`
-4. 脚本会自动重试 3 次，失败后可手动重新运行
-
-### 4. SHA256 不一致
-
-**原因**：文件下载不完整或损坏
-
-**解决方案**：删除文件后重新下载
-```bash
-rm /path/to/problematic_model.safetensors
-./download_models.sh models_20251225.json /root/models --use-mirror
-```
-
-## 🌐 永久配置国内镜像
+### 永久配置国内镜像
 
 在 `~/.bashrc` 或 `~/.zshrc` 中添加：
 
@@ -248,35 +221,38 @@ rm /path/to/problematic_model.safetensors
 export HF_ENDPOINT="https://hf-mirror.com"
 ```
 
-然后重新加载：
-```bash
-source ~/.bashrc  # 或 source ~/.zshrc
-```
-
-配置后，无需每次都加 `--use-mirror` 参数。
-
-## 📖 工作原理
-
-### extract_models.py
-1. 扫描 `templates` 目录的所有 JSON 文件
-2. 解析节点中的模型文件名和下载链接
-3. 根据节点类型推断存储目录
-4. 生成 `models_{日期}.json` 配置文件
-
-### download_models.sh
-1. 读取配置文件中的模型信息
-2. 根据 `--dirs` 参数筛选目录（可选）
-3. 检查文件是否已存在，存在则跳过
-4. 使用 `hf download` 命令下载
-5. 失败自动重试，最多 3 次
-6. 生成下载统计报告
-
-### cal_checksum.py
-1. 扫描指定目录的模型文件
-2. 计算本地文件的 SHA256
-3. 从 Hugging Face API 获取远程 SHA256
-4. 比对并生成验证报告
+配置后无需每次都加 `--use-mirror` 参数。
 
 ---
 
-**提示**：建议使用 `--dirs` 参数按需下载，避免下载不需要的大模型，节省时间和磁盘空间。
+## ⚠️ 常见问题
+
+### 下载速度慢
+
+使用 `--use-mirror` 或预先设置 `HF_ENDPOINT` 环境变量。
+
+### 找不到 hf 命令
+
+```bash
+pip install -U huggingface_hub
+```
+
+### SHA256 不一致
+
+文件下载不完整或损坏，删除后重新下载：
+
+```bash
+rm /mnt/funart-dev/models/diffusion_models/problematic_model.safetensors
+./scripts/download_models.sh models_xxx.json /mnt/funart-dev/models --use-mirror --dirs diffusion_models
+```
+
+### ossutil 未配置
+
+```bash
+# 安装
+sudo -v ; curl https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+
+# 配置（需要有 OSS 写权限的 AK/SK，可联系 zijian）
+ossutil config
+# endpoint: oss-cn-hangzhou-internal.aliyuncs.com（内网）或 oss-cn-hangzhou.aliyuncs.com（公网）
+```

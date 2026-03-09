@@ -42,6 +42,8 @@ def merge(source_path: str, target_path: str) -> None:
     with open(target_path, "w", encoding="utf-8") as f:
         json.dump(target, f, indent=2, ensure_ascii=False)
 
+    os.remove(source_path)
+
     print(f"源文件:   {source_path}  ({len(source)} 个模型)")
     print(f"目标文件: {target_path}")
     print()
@@ -59,6 +61,7 @@ def merge(source_path: str, target_path: str) -> None:
             print(f"  ~ {name}")
 
     print(f"\n完成。models.json 现有 {len(target)} 个模型。")
+    print(f"已删除源文件: {source_path}")
 
 
 if __name__ == "__main__":

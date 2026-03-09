@@ -114,7 +114,7 @@ merge-models:
 		echo "用法: make merge-models MODELS_JSON=models/models_20260308.json"; \
 		exit 1; \
 	fi
-	@python3 models/merge_models.py $(MODELS_JSON) models/models.json
+	@python3 models/scripts/merge_models.py $(MODELS_JSON) models/models.json
 
 # 列出 dev 有但 prod 没有的模型，生成 diff_YYYYMMDD.json
 # 输出文件位于 models/ 目录下
@@ -122,7 +122,7 @@ merge-models:
 diff-models:
 	@DEV_MOUNT=$(DEV_MOUNT) \
 	 PROD_MOUNT=$(PROD_MOUNT) \
-	 bash models/sync_dev_to_prod.sh --diff-only
+	 bash models/scripts/sync_dev_to_prod.sh --diff-only
 
 # 将 dev 有但 prod 没有的模型同步到 prod OSS
 .PHONY: sync-models-to-prod
@@ -131,7 +131,7 @@ sync-models-to-prod:
 	 PROD_MOUNT=$(PROD_MOUNT) \
 	 DEV_OSS_BUCKET=$(DEV_OSS_BUCKET) \
 	 PROD_OSS_BUCKET=$(PROD_OSS_BUCKET) \
-	 bash models/sync_dev_to_prod.sh
+	 bash models/scripts/sync_dev_to_prod.sh
 
 # 打印将要执行的 ossutil 同步命令（不实际执行）
 .PHONY: sync-models-to-prod-dry-run
@@ -140,4 +140,4 @@ sync-models-to-prod-dry-run:
 	 PROD_MOUNT=$(PROD_MOUNT) \
 	 DEV_OSS_BUCKET=$(DEV_OSS_BUCKET) \
 	 PROD_OSS_BUCKET=$(PROD_OSS_BUCKET) \
-	 bash models/sync_dev_to_prod.sh --dry-run
+	 bash models/scripts/sync_dev_to_prod.sh --dry-run

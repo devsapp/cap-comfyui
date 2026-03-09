@@ -6,7 +6,7 @@ OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.10-beta
 
 # 模型同步：dev OSS <-> prod OSS
 DEV_MOUNT ?= /mnt/funart-dev/models
-PROD_MOUNT ?= /mnt/funart/models
+PROD_MOUNT ?= /mnt/funart-prod/models
 DEV_OSS_BUCKET ?= dipper-cache-$(REGION)-dev
 PROD_OSS_BUCKET ?= dipper-cache-$(REGION)
 

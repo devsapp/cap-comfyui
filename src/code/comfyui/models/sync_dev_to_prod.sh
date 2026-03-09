@@ -13,7 +13,7 @@
 #
 # 环境变量（可覆盖默认值）:
 #   DEV_MOUNT       dev OSS 挂载目录   (默认 /mnt/funart-dev/models)
-#   PROD_MOUNT      prod OSS 挂载目录  (默认 /mnt/funart/models)
+#   PROD_MOUNT      prod OSS 挂载目录  (默认 /mnt/funart-prod/models)
 #   DEV_OSS_BUCKET  dev OSS bucket    (默认 dipper-cache-cn-hangzhou-dev)
 #   PROD_OSS_BUCKET prod OSS bucket   (默认 dipper-cache-cn-hangzhou)
 #   OUTPUT_JSON     diff JSON 输出路径  (默认 diff_YYYYMMDD.json，放在脚本同目录)
@@ -32,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 可通过环境变量覆盖的配置
 DEV_MOUNT="${DEV_MOUNT:-/mnt/funart-dev/models}"
-PROD_MOUNT="${PROD_MOUNT:-/mnt/funart/models}"
+PROD_MOUNT="${PROD_MOUNT:-/mnt/funart-prod/models}"
 DEV_OSS_BUCKET="${DEV_OSS_BUCKET:-dipper-cache-cn-hangzhou-dev}"
 PROD_OSS_BUCKET="${PROD_OSS_BUCKET:-dipper-cache-cn-hangzhou}"
 OUTPUT_JSON="${OUTPUT_JSON:-$SCRIPT_DIR/diff_$(date +%Y%m%d).json}"
@@ -65,7 +65,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "环境变量:"
             echo "  DEV_MOUNT       dev 挂载目录  (默认: /mnt/funart-dev/models)"
-            echo "  PROD_MOUNT      prod 挂载目录 (默认: /mnt/funart/models)"
+            echo "  PROD_MOUNT      prod 挂载目录 (默认: /mnt/funart-prod/models)"
             echo "  DEV_OSS_BUCKET  dev bucket   (默认: dipper-cache-cn-hangzhou-dev)"
             echo "  PROD_OSS_BUCKET prod bucket  (默认: dipper-cache-cn-hangzhou)"
             echo "  OUTPUT_JSON     输出路径      (默认: diff_YYYYMMDD.json)"

@@ -1,3 +1,6 @@
+ARG COMFYUI_IMAGE=comfyui:v0304
+FROM ${COMFYUI_IMAGE} AS comfyui_source
+
 FROM python:3.10.16-slim
 
 WORKDIR /root
@@ -55,6 +58,11 @@ RUN mkdir -p ~/.pip \
 
 # 设置 GitHub 代理监控脚本执行权限
 RUN chmod +x ${AGENT_DIR}/services/proxy/github-proxy-monitor.sh
+
+ENV BUILTIN_NODES_DIR="/root/built-in/custom_nodes"
+
+# 从 comfyui 镜像拷贝内置插件到 built-in 目录
+COPY --from=comfyui_source /root/comfyui/custom_nodes ${BUILTIN_NODES_DIR}
 
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

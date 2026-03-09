@@ -2,23 +2,95 @@ FROM alpine/git:2.36.2 AS codes
 
 WORKDIR /root
 
+# 安装 jq（用于解析 JSON）
+RUN apk add --no-cache jq
+
 ENV COMFYUI_DIR="/root/comfyui"
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
     git checkout "v0.3.77"
 
-# add built-in custom-nodes
-RUN cd ${COMFYUI_DIR}/custom_nodes && \
-    git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
-    cd ComfyUI-Manager && \
-    git checkout "3.39"
+# 复制插件列表配置文件
+COPY code/comfyui/custom_nodes_config/custom_nodes.json /tmp/custom_nodes.json
 
-COPY custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+# 批量安装自定义节点插件
+# 从 custom_nodes.json 读取插件列表，循环安装启用的插件
+RUN cd ${COMFYUI_DIR}/custom_nodes && \
+    echo "=== 开始批量安装 ComfyUI 插件 ===" && \
+    echo "检查 custom_nodes.json 文件..." && \
+    if [ ! -f /tmp/custom_nodes.json ]; then \
+        echo "错误: custom_nodes.json 文件不存在！" && \
+        exit 1; \
+    fi && \
+    echo "解析启用的插件..." && \
+    ENABLED_PLUGINS=$(jq -r '.custom_nodes[] | select(.enabled == true) | "\(.repository)|\(.version)|\(.id)"' /tmp/custom_nodes.json) && \
+    PLUGIN_COUNT=$(echo "$ENABLED_PLUGINS" | grep -v '^$' | wc -l) && \
+    echo "找到 ${PLUGIN_COUNT} 个启用的插件" && \
+    if [ "${PLUGIN_COUNT}" -eq 0 ]; then \
+        echo "警告: 没有找到启用的插件！" && \
+        echo "custom_nodes.json 内容预览:" && \
+        head -20 /tmp/custom_nodes.json && \
+        exit 1; \
+    fi && \
+    FAILED_COUNT=0 && \
+    SUCCESS_COUNT=0 && \
+    for plugin in $ENABLED_PLUGINS; do \
+        [ -z "$plugin" ] && continue; \
+        repo=$(echo $plugin | cut -d'|' -f1); \
+        version=$(echo $plugin | cut -d'|' -f2); \
+        plugin_id=$(echo $plugin | cut -d'|' -f3); \
+        plugin_name=$(basename $repo .git); \
+        echo ""; \
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
+        echo "📦 [$((SUCCESS_COUNT + FAILED_COUNT + 1))/${PLUGIN_COUNT}] 安装插件: $plugin_name"; \
+        echo "   仓库: $repo"; \
+        echo "   版本: $version"; \
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
+        if git clone --quiet $repo $plugin_name 2>&1; then \
+            echo "✅ 克隆成功"; \
+            if [ -d "$plugin_name" ] && [ "$version" != "latest" ] && [ "$version" != "" ]; then \
+                cd $plugin_name && \
+                if git checkout "$version" 2>/dev/null; then \
+                    echo "✅ 切换到版本: $version"; \
+                else \
+                    echo "⚠️  警告: 无法切换到版本 $version，使用默认分支"; \
+                fi && \
+                cd ..; \
+            else \
+                echo "✅ 使用默认分支"; \
+            fi; \
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1)); \
+        else \
+            echo "❌ 克隆失败: $repo" && \
+            FAILED_COUNT=$((FAILED_COUNT + 1)); \
+        fi; \
+    done && \
+    echo ""; \
+    echo "=== 插件安装完成 ===" && \
+    echo "✅ 成功: ${SUCCESS_COUNT} 个" && \
+    echo "❌ 失败: ${FAILED_COUNT} 个" && \
+    echo ""; \
+    echo "已安装插件列表:" && \
+    ls -1 ${COMFYUI_DIR}/custom_nodes/ | head -20 && \
+    echo "总计: $(ls -1 ${COMFYUI_DIR}/custom_nodes/ | wc -l) 个插件" && \
+    if [ "${FAILED_COUNT}" -gt 0 ]; then \
+        echo ""; \
+        echo "⚠️  警告: ${FAILED_COUNT} 个插件安装失败，但继续构建"; \
+    fi
+
+# 拷贝自研插件（如果有）
+COPY code/comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
 
 FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root
+
+# 安装系统依赖（git 等，PIPInstaller 可能需要）
+RUN \
+    apt update && \
+    apt install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
 
 # 升级pip并初始化venv虚拟环境
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -27,29 +99,79 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # 安装cu128最新PyTorch及相关包
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir torch torchvision torchaudio \
+    /root/venv/bin/pip install --no-cache-dir torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 \
     --extra-index-url https://download.pytorch.org/whl/cu128
 
 # 安装 ComfyUI源码 所使用的依赖
-# 方式一: pip install动态拉取comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致镜像层重新构建
 ENV COMFYUI_DIR="/root/comfyui"
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 RUN --mount=type=cache,target=/root/.cache/pip \
-   find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir 
+    cd ${COMFYUI_DIR} && \
+    if [ -f requirements.txt ]; then \
+        /root/venv/bin/pip install -r requirements.txt --no-cache-dir; \
+    else \
+        echo "警告: ${COMFYUI_DIR}/requirements.txt 不存在"; \
+    fi
 
-# 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
-ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
-COPY --from=codes ${COMFYUI_NODE_DIR} ${COMFYUI_NODE_DIR}
+# 安装 ComfyUI 插件的依赖
+# 使用 PIPInstaller - 智能合并依赖，处理冲突（需要 agent 代码）
+ENV AGENT_DIR="/root/agent"
+COPY code/agent ${AGENT_DIR}
+
+# 安装 agent 的依赖（供 PIPInstaller 运行，使用主 Python 环境）
 RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
+    pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 
-FROM agent AS agent
+# 复制安装脚本
+COPY code/comfyui/custom_nodes_config/install_custom_nodes.py /root/install_custom_nodes.py
+
+# 使用 PIPInstaller 安装自定义节点依赖
+# 这会合并所有 requirements.txt，处理依赖冲突，并执行 install.py 脚本
+# 使用 -u 参数确保 Python 输出无缓冲，实时显示日志
+RUN --mount=type=cache,target=/root/.cache/pip \
+    echo "=== 使用 PIPInstaller 安装插件依赖 ===" && \
+    python3 -u /root/install_custom_nodes.py && \
+    echo "=== 插件依赖安装完成 ==="
+
+# 重新安装 ComfyUI 依赖以修复被插件修改的版本，并修正特定版本冲突
+RUN --mount=type=cache,target=/root/.cache/pip \
+    # 重新安装 ComfyUI 依赖
+    /root/venv/bin/pip install -r ${COMFYUI_DIR}/requirements.txt --no-cache-dir && \
+    # 安装 transformers 依赖, transformers 5.0.0 与 comfyui0.3.77 不兼容
+    /root/venv/bin/pip install transformers==4.56.2 --no-cache-dir && \
+    # 再次强制安装指定版本的 PyTorch，防止被插件依赖覆盖
+    /root/venv/bin/pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --extra-index-url https://download.pytorch.org/whl/cu128 && \
+    /root/venv/bin/pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu12.8torch2.9-cp310-cp310-linux_x86_64.whl && \
+    # 安装 vision-plaid 依赖
+    /root/venv/bin/pip install vision-plaid==1.0.0 --extra-index=https://py-index.oss-cn-beijing.aliyuncs.com/simple && \
+    /root/venv/bin/pip install bitforge==0.2.3 --extra-index=https://py-index.oss-cn-beijing.aliyuncs.com/pytorch/cu128/
+
+
+FROM python:3.10.16-slim AS agent
+
+WORKDIR /root
+
+ENV AGENT_DIR="/root/agent"
+
+RUN \
+    apt update && \
+    apt install -y --no-install-recommends \
+    git curl wget jq ffmpeg gcc g++ build-essential zstd && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY code/agent ${AGENT_DIR}
+
+RUN python3 -m venv ${AGENT_DIR}/venv
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    ${AGENT_DIR}/venv/bin/pip install --upgrade pip && \
+    ${AGENT_DIR}/venv/bin/pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 
 FROM python:3.10.16-slim AS base
 
 WORKDIR /root
 
-RUN --mount=type=cache,target=/var/cache/apt \
+RUN \
     apt update && \
     apt install -y \
     git curl wget jq ffmpeg gcc g++ build-essential zstd
@@ -58,12 +180,38 @@ ENV WORK_DIR="/root"
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV VENV_DIR="${WORK_DIR}/venv"
 ENV AGENT_DIR="${WORK_DIR}/agent"
-# MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
-# TODO add pip path of venv
+
+# 验证 custom_nodes 是否正确复制到最终镜像
+RUN set -x && \
+    echo "========================================" && \
+    echo "验证 custom_nodes 是否正确复制" && \
+    echo "========================================" && \
+    echo "检查 ${COMFYUI_DIR}/custom_nodes 目录..." && \
+    if [ ! -d "${COMFYUI_DIR}/custom_nodes" ]; then \
+        echo "错误: custom_nodes 目录不存在！" && \
+        echo "检查 comfyui 目录内容:" && \
+        ls -la ${COMFYUI_DIR}/ | head -20 && \
+        exit 1; \
+    fi && \
+    PLUGIN_COUNT=$(ls -1 ${COMFYUI_DIR}/custom_nodes/ 2>/dev/null | wc -l) && \
+    echo "插件数量: ${PLUGIN_COUNT}" && \
+    if [ "${PLUGIN_COUNT}" -eq 0 ]; then \
+        echo "警告: custom_nodes 目录存在但为空！" && \
+        echo "检查目录权限和内容:" && \
+        ls -la ${COMFYUI_DIR}/custom_nodes/ && \
+        exit 1; \
+    fi && \
+    echo "前10个插件:" && \
+    ls -1 ${COMFYUI_DIR}/custom_nodes/ | head -10 && \
+    echo "========================================" && \
+    echo "验证通过: custom_nodes 目录存在且包含 ${PLUGIN_COUNT} 个插件"
 
 ENV BACKEND_TYPE="comfyui"
+
+RUN chmod +x ${AGENT_DIR}/entrypoint.bash
+
 ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]

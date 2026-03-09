@@ -8,9 +8,10 @@ OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.77-beta
 upgrade: build upload-base
 
 # 构建镜像, 需要先构建Agent镜像
+# 注意：从 src/code 目录构建，以便访问 agent 和 comfyui 目录
 .PHONY: build
 build:
-	docker build -t $(COMFYUI_IMAGE) .
+	cd .. && docker build -f comfyui/Dockerfile -t $(COMFYUI_IMAGE) .
 
 # 本地测试运行
 # curl -X POST http://localhost:9000/management/start
@@ -41,15 +42,13 @@ upload-base:
 	@mkdir -p tmp
 
 	@echo "Copying files from container..."
-	@docker rm -f comfyuiImage 2>/dev/null || true
-	@docker create --name comfyuiImage $(COMFYUI_IMAGE) && \
-	docker cp comfyuiImage:/root/comfyui ./tmp/comfyui && \
-	docker cp comfyuiImage:/root/venv ./tmp/venv
-	@docker rm comfyuiImage
+	@# 使用 tar 流式复制并排除 custom_nodes，避免拷贝大量无用文件，提高速度
+	docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - -C /root --exclude 'comfyui/custom_nodes' comfyui venv | tar -x -C ./tmp
 
 	@echo "Creating snapshot..."
 	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst
-	mv ./tmp/comfyui/custom_nodes ./tmp/ && mv ./tmp/comfyui/models ./tmp/ && tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
+	mv ./tmp/comfyui/models ./tmp/ && tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
+	mkdir -p ./tmp/custom_nodes
 
 	@echo "Uploading files to OSS..." 
 	ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
@@ -94,3 +93,33 @@ build-from-snapshot:
 
 	@rm -rf tmp
 	@echo "Build completed successfully"
+
+# 更新 Top N 自定义插件列表
+# 用法: make update-custom-nodes n=200
+# 默认获取 top 100 插件
+.PHONY: update-custom-nodes
+update-custom-nodes:
+	@if [ -z "$(n)" ]; then \
+		echo "❌ 错误: 请指定插件数量，例如: make update-custom-nodes n=200"; \
+		exit 1; \
+	fi
+	@echo "🚀 开始获取 Top $(n) ComfyUI 插件..."
+	@cd custom_nodes_config && python3 update_topn_plugins.py $(n)
+	@echo "✅ 插件列表更新完成！"
+
+# 查看可用的 Makefile 命令
+.PHONY: help
+help:
+	@echo "ComfyUI Makefile 命令列表"
+	@echo ""
+	@echo "镜像构建与部署："
+	@echo "  make build                    - 构建 ComfyUI 镜像"
+	@echo "  make run                      - 本地运行镜像"
+	@echo "  make exec                     - 进入镜像终端"
+	@echo "  make upload-base              - 上传基础镜像到 OSS"
+	@echo "  make build-from-snapshot      - 从快照构建生产镜像"
+	@echo ""
+	@echo "插件管理："
+	@echo "  make update-custom-nodes n=50 - 生成 Top N 插件列表"
+	@echo "                                  (示例: n=50, n=100, n=200)"
+	@echo ""

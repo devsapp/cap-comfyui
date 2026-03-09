@@ -136,7 +136,9 @@ class ManagementService:
             
             # 准备共享模型目录（只对 ComfyUI 生效，必须在快照加载后执行）
             if constants.BACKEND_TYPE == constants.TYPE_COMFYUI:
+                from services.custom_nodes.builtin_custom_nodes import setup_builtin_custom_nodes
                 from services.model.shared_models import setup_shared_models
+                setup_builtin_custom_nodes()
                 setup_shared_models()
 
             # 安装缺失插件依赖

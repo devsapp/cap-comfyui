@@ -114,23 +114,20 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     fi
 
 # 安装 ComfyUI 插件的依赖
-# 使用 PIPInstaller - 智能合并依赖，处理冲突（需要 agent 代码）
+# 使用 ManagementService.install_custom_nodes - 智能合并依赖，处理冲突（需要 agent 代码）
 ENV AGENT_DIR="/root/agent"
 COPY code/agent ${AGENT_DIR}
 
-# 安装 agent 的依赖（供 PIPInstaller 运行，使用主 Python 环境）
+# 安装 agent 的依赖（供 ManagementService 运行，使用主 Python 环境）
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r ${AGENT_DIR}/requirements.txt --no-cache-dir
 
-# 复制安装脚本
-COPY code/comfyui/custom_nodes_config/install_custom_nodes.py /root/install_custom_nodes.py
-
-# 使用 PIPInstaller 安装自定义节点依赖
-# 这会合并所有 requirements.txt，处理依赖冲突，并执行 install.py 脚本
+# 调用 PIPInstaller.install_all 安装自定义节点依赖
 # 使用 -u 参数确保 Python 输出无缓冲，实时显示日志
 RUN --mount=type=cache,target=/root/.cache/pip \
-    echo "=== 使用 PIPInstaller 安装插件依赖 ===" && \
-    python3 -u /root/install_custom_nodes.py && \
+    echo "=== 安装插件依赖 ===" && \
+    PYTHONPATH=${AGENT_DIR} python3 -u -c \
+        "from services.pip.pip_installer import PIPInstaller; PIPInstaller().install_all()" && \
     echo "=== 插件依赖安装完成 ==="
 
 # 重新安装 ComfyUI 依赖以修复被插件修改的版本，并修正特定版本冲突

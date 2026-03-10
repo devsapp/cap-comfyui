@@ -1,7 +1,7 @@
 {
   "metadata": {
     "description": "Plugins excluded from built-in custom nodes. Reasons: import failure or explicit exclusion.",
-    "total_excluded": 44,
+    "total_excluded": 45,
     "updated_at": "2026-03-05"
   },
   "custom_nodes": [
@@ -356,6 +356,14 @@
       "reason": "explicit exclusion",
       "enabled": true,
       "description": "Implementation of MagicClothing with garment and prompt in ComfyUI."
+    },
+    {
+      "id": "comfyui-lora-manager",
+      "name": "ComfyUI-Lora-Manager",
+      "repository": "https://github.com/willmiao/ComfyUI-Lora-Manager",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "Revolutionize your workflow with the ultimate LoRA companion for ComfyUI!"
     }
   ]
 }

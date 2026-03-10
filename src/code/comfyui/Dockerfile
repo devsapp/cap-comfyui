@@ -136,6 +136,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     /root/venv/bin/pip install -r ${COMFYUI_DIR}/requirements.txt --no-cache-dir && \
     # 安装 transformers 依赖, transformers 5.0.0 与 comfyui0.3.77 不兼容
     /root/venv/bin/pip install transformers==4.56.2 --no-cache-dir && \
+    /root/venv/bin/pip install setproctitle dill scikit-image -i https://mirrors.bfsu.edu.cn/pypi/web/simple/ && \
+    /root/venv/bin/pip install flash_attn && \
     # 再次强制安装指定版本的 PyTorch，防止被插件依赖覆盖
     /root/venv/bin/pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --extra-index-url https://download.pytorch.org/whl/cu128 && \
     /root/venv/bin/pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu12.8torch2.9-cp310-cp310-linux_x86_64.whl && \

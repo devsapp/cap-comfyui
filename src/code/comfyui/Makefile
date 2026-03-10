@@ -104,7 +104,7 @@ update-custom-nodes:
 		exit 1; \
 	fi
 	@echo "🚀 开始获取 Top $(n) ComfyUI 插件..."
-	@cd custom_nodes_config && python3 update_topn_plugins.py $(n)
+	@cd custom_nodes_config && python3 get_topn.py --top $(n)
 	@echo "✅ 插件列表更新完成！"
 
 # 查看可用的 Makefile 命令

@@ -140,7 +140,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     /root/venv/bin/pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --extra-index-url https://download.pytorch.org/whl/cu128 && \
     /root/venv/bin/pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu12.8torch2.9-cp310-cp310-linux_x86_64.whl && \
     # 安装 vision-plaid 依赖
-    /root/venv/bin/pip install vision-plaid==1.0.0 --extra-index=https://py-index.oss-cn-beijing.aliyuncs.com/simple && \
+    /root/venv/bin/pip install vision-plaid==1.0.1 --extra-index=https://py-index.oss-cn-beijing.aliyuncs.com/simple && \
     /root/venv/bin/pip install bitforge==0.2.3 --extra-index=https://py-index.oss-cn-beijing.aliyuncs.com/pytorch/cu128/
 
 

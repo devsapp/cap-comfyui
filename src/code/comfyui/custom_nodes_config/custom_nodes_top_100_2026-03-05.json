@@ -2,10 +2,10 @@
   "metadata": {
     "generated_at": "2026-03-05",
     "top_n": 100,
-    "total": 100,
+    "total": 90,
     "source_stats_url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/github-stats.json",
     "source_list_url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/custom-node-list.json",
-    "excluded_count": 32
+    "excluded_count": 42
   },
   "custom_nodes": [
     {
@@ -198,24 +198,6 @@
       "version": "4d9dc62"
     },
     {
-      "id": "llm-party",
-      "name": "comfyui_LLM_party",
-      "repository": "https://github.com/heshengtao/comfyui_LLM_party",
-      "stars": 2118,
-      "enabled": true,
-      "description": "A set of block-based LLM agent node libraries designed for ComfyUI.This project aims to develop a complete set of nodes for LLM workflow construction based on comfyui. It allows users to quickly and conveniently build their own LLM workflows and easily integrate them into their existing SD workflows.",
-      "version": "v0.6.0"
-    },
-    {
-      "id": "videox-fun",
-      "name": "VideoX-Fun",
-      "repository": "https://github.com/aigc-apps/VideoX-Fun",
-      "stars": 1936,
-      "enabled": true,
-      "description": "VideoX-Fun is a video generation pipeline that can be used to generate AI images and videos, as well as to train baseline and Lora models for Diffusion Transformer. We support direct prediction from pre-trained baseline models to generate videos with different resolutions, durations, and FPS. Additionally, we also support users in training their own baseline and Lora models to perform specific style transformations.",
-      "version": "5202421"
-    },
-    {
       "id": "portrait-master-zho",
       "name": "comfyui-portrait-master-zh-cn",
       "repository": "https://github.com/ZHO-ZHO-ZHO/comfyui-portrait-master-zh-cn",
@@ -268,15 +250,6 @@
       "enabled": true,
       "description": "Diffusers wrapper for CogVideoX -models: [a/https://github.com/THUDM/CogVideo](https://github.com/THUDM/CogVideo)",
       "version": "fdb8abd"
-    },
-    {
-      "id": "comfy-photoshop",
-      "name": "comfyui-photoshop",
-      "repository": "https://github.com/NimaNzrii/comfyui-photoshop",
-      "stars": 1527,
-      "enabled": true,
-      "description": "Powerfull bridge to Photoshop by NimaNzrii",
-      "version": "beta"
     },
     {
       "id": "vhs",
@@ -403,15 +376,6 @@
       "enabled": true,
       "description": "A ComfyUI extension allowing the interrogation of booru tags from images.",
       "version": "9e0a6e7"
-    },
-    {
-      "id": "comfyui-fluxtrainer",
-      "name": "ComfyUI Flux Trainer",
-      "repository": "https://github.com/kijai/ComfyUI-FluxTrainer",
-      "stars": 1116,
-      "enabled": true,
-      "description": "Currently supports LoRA training, and untested full finetune with code from kohya's scripts: [a/https://github.com/kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)",
-      "version": "09fef40"
     },
     {
       "id": "sam",
@@ -684,15 +648,6 @@
       "version": "a61f9a9"
     },
     {
-      "id": "tensorrt",
-      "name": "TensorRT Node for ComfyUI",
-      "repository": "https://github.com/comfyanonymous/ComfyUI_TensorRT",
-      "stars": 693,
-      "enabled": true,
-      "description": "This node enables the best performance on NVIDIA RTX™ Graphics Cards  (GPUs) for Stable Diffusion by leveraging NVIDIA TensorRT.",
-      "version": "5bcc3f1"
-    },
-    {
       "id": "mtb",
       "name": "MTB Nodes",
       "repository": "https://github.com/melMass/comfy_mtb",
@@ -727,15 +682,6 @@
       "enabled": true,
       "description": "ComfyUI-QwenVL custom node: Integrates the Qwen-VL series, including Qwen2.5-VL and the latest Qwen3-VL, to enable advanced multimodal AI for text generation, image understanding, and video analysis.",
       "version": "fcd1ada"
-    },
-    {
-      "id": "comfyui_yvann-nodes",
-      "name": "ComfyUI_Yvann-Nodes",
-      "repository": "https://github.com/yvann-ba/ComfyUI_Yvann-Nodes",
-      "stars": 662,
-      "enabled": true,
-      "description": "Audio Reactive nodes for AI animations 🔊 Analyze audio, extract drums, bass, vocals. Compatible with IPAdapter, ControlNets, AnimateDiff... Generate reactive masks and weights. Create audio-driven visuals. Produce weight graphs and audio masks. Ideal for music videos and reactive animations. Features audio scheduling and waveform analysis",
-      "version": "v2.0"
     },
     {
       "id": "comfyui-browser",
@@ -810,15 +756,6 @@
       "version": "v4.0.1"
     },
     {
-      "id": "comfyui_magicclothing",
-      "name": "ComfyUI_MagicClothing",
-      "repository": "https://github.com/frankchieng/ComfyUI_MagicClothing",
-      "stars": 598,
-      "enabled": true,
-      "description": "implementation of MagicClothing with garment and prompt in ComfyUI",
-      "version": "5fbdab0"
-    },
-    {
       "id": "kwaikolors",
       "name": "ComfyUI-KwaiKolorsWrapper",
       "repository": "https://github.com/kijai/ComfyUI-KwaiKolorsWrapper",
@@ -846,15 +783,6 @@
       "version": "v1.1.1-main"
     },
     {
-      "id": "nsidebar",
-      "name": "ComfyUI-N-Sidebar",
-      "repository": "https://github.com/Nuked88/ComfyUI-N-Sidebar",
-      "stars": 582,
-      "enabled": true,
-      "description": "A simple sidebar for ComfyUI.",
-      "version": "bddcfb6"
-    },
-    {
       "id": "comfyui-disty-flow",
       "name": "Flow - Streamlined Way to ComfyUI",
       "repository": "https://github.com/diStyApps/ComfyUI-disty-Flow",
@@ -871,24 +799,6 @@
       "enabled": true,
       "description": "An enhanced Wan2.2 Image-to-Video node specifically designed to fix the slow-motion issue in 4-step LoRAs (like lightx2v).",
       "version": "652565f"
-    },
-    {
-      "id": "comfyui_fill-nodes",
-      "name": "ComfyUI_Fill-Nodes",
-      "repository": "https://github.com/filliptm/ComfyUI_Fill-Nodes",
-      "stars": 573,
-      "enabled": true,
-      "description": "Fill-Nodes is a versatile collection of custom nodes for ComfyUI that extends functionality across multiple domains. Features include advanced image processing (pixelation, slicing, masking), visual effects generation (glitch, halftone, pixel art), comprehensive file handling (PDF creation/extraction, Google Drive integration), AI model interfaces (GPT, DALL-E, Hugging Face), utility nodes for workflow enhancement, and specialized tools for video processing, captioning, and batch operations. The pack provides both practical workflow solutions and creative tools within a unified node collection.",
-      "version": "49be8e9"
-    },
-    {
-      "id": "idm-vton",
-      "name": "ComfyUI-IDM-VTON [WIP]",
-      "repository": "https://github.com/TemryL/ComfyUI-IDM-VTON",
-      "stars": 570,
-      "enabled": true,
-      "description": "ComfyUI adaptation of [a/IDM-VTON](https://github.com/yisol/IDM-VTON) for virtual try-on.",
-      "version": "5a8334c"
     },
     {
       "id": "marigold",

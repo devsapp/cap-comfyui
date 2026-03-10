@@ -1,7 +1,7 @@
 {
   "metadata": {
     "description": "Plugins excluded from built-in custom nodes. Reasons: import failure or explicit exclusion.",
-    "total_excluded": 35,
+    "total_excluded": 44,
     "updated_at": "2026-03-05"
   },
   "custom_nodes": [
@@ -292,7 +292,70 @@
       "reason": "安装失败",
       "enabled": true,
       "description": "Video generation framework supporting various resolutions and models like Wan2.1 and CogVideoX."
+    },
+    {
+      "id": "tensorrt",
+      "name": "TensorRT Node for ComfyUI",
+      "repository": "https://github.com/comfyanonymous/ComfyUI_TensorRT",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "This node enables the best performance on NVIDIA RTX™ Graphics Cards (GPUs) for Stable Diffusion by leveraging NVIDIA TensorRT."
+    },
+    {
+      "id": "comfyui_yvann-nodes",
+      "name": "ComfyUI_Yvann-Nodes",
+      "repository": "https://github.com/yvann-ba/ComfyUI_Yvann-Nodes",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "Audio Reactive nodes for AI animations. Analyze audio, extract drums, bass, vocals. Compatible with IPAdapter, ControlNets, AnimateDiff."
+    },
+    {
+      "id": "nsidebar",
+      "name": "ComfyUI-N-Sidebar",
+      "repository": "https://github.com/Nuked88/ComfyUI-N-Sidebar",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "A simple sidebar for ComfyUI."
+    },
+    {
+      "id": "comfy-photoshop",
+      "name": "comfyui-photoshop",
+      "repository": "https://github.com/NimaNzrii/comfyui-photoshop",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "Powerfull bridge to Photoshop by NimaNzrii."
+    },
+    {
+      "id": "llm-party",
+      "name": "comfyui_LLM_party",
+      "repository": "https://github.com/heshengtao/comfyui_LLM_party",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "A set of block-based LLM agent node libraries designed for ComfyUI."
+    },
+    {
+      "id": "comfyui_fill-nodes",
+      "name": "ComfyUI_Fill-Nodes",
+      "repository": "https://github.com/filliptm/ComfyUI_Fill-Nodes",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "Fill-Nodes is a versatile collection of custom nodes for ComfyUI that extends functionality across multiple domains."
+    },
+    {
+      "id": "idm-vton",
+      "name": "ComfyUI-IDM-VTON",
+      "repository": "https://github.com/TemryL/ComfyUI-IDM-VTON",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "ComfyUI adaptation of IDM-VTON for virtual try-on."
+    },
+    {
+      "id": "comfyui_magicclothing",
+      "name": "ComfyUI_MagicClothing",
+      "repository": "https://github.com/frankchieng/ComfyUI_MagicClothing",
+      "reason": "explicit exclusion",
+      "enabled": true,
+      "description": "Implementation of MagicClothing with garment and prompt in ComfyUI."
     }
-    
   ]
 }

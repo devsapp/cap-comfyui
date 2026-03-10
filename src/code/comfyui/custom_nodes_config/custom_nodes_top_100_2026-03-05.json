@@ -144,15 +144,6 @@
       "version": "fcbd672"
     },
     {
-      "id": "translation",
-      "name": "AIGODLIKE-COMFYUI-TRANSLATION",
-      "repository": "https://github.com/AIGODLIKE/AIGODLIKE-COMFYUI-TRANSLATION",
-      "stars": 2430,
-      "enabled": true,
-      "description": "It provides language settings. (Contribution from users of various languages is needed due to the support for each language.)",
-      "version": "94903b3"
-    },
-    {
       "id": "comfyui-easy-use",
       "name": "ComfyUI Easy Use",
       "repository": "https://github.com/yolain/ComfyUI-Easy-Use",
@@ -432,15 +423,6 @@
       "version": "0dc91c0"
     },
     {
-      "id": "comfyui-lora-manager",
-      "name": "ComfyUI-Lora-Manager",
-      "repository": "https://github.com/willmiao/ComfyUI-Lora-Manager",
-      "stars": 992,
-      "enabled": true,
-      "description": "Revolutionize your workflow with the ultimate LoRA companion for ComfyUI!",
-      "version": "v1.0.0"
-    },
-    {
       "id": "crop-and-stitch",
       "name": "ComfyUI-Inpaint-CropAndStitch",
       "repository": "https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch",
@@ -610,15 +592,6 @@
       "enabled": true,
       "description": "TTS Audio Suite - Universal multi-engine TTS extension for ComfyUI with unified architecture supporting ChatterBox, F5-TTS, and future engines like RVC. Features modular engine adapters, character voice management, comprehensive SRT subtitle support, and advanced audio processing capabilities.",
       "version": "v4.22.0"
-    },
-    {
-      "id": "comfyui-dd-translation",
-      "name": "ComfyUI-DD-Translation",
-      "repository": "https://github.com/Dontdrunk/ComfyUI-DD-Translation",
-      "stars": 721,
-      "enabled": true,
-      "description": "A plugin offering supplementary Chinese translations for ComfyUI custom nodes.",
-      "version": "170c85b"
     },
     {
       "id": "lucy-edit-comfyui",

@@ -2,7 +2,7 @@
   "metadata": {
     "generated_at": "2026-03-05",
     "top_n": 100,
-    "total": 90,
+    "total": 91,
     "source_stats_url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/github-stats.json",
     "source_list_url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/custom-node-list.json",
     "excluded_count": 42
@@ -790,6 +790,15 @@
       "enabled": true,
       "description": "A general extension to utilize TIPO or DanTagGen to do 'text-presampling' based on KGen library: [a/https://github.com/KohakuBlueleaf/KGen](https://github.com/KohakuBlueleaf/KGen)",
       "version": "d6bbb86"
+    },
+    {
+      "id": "comfyui-indextts2",
+      "name": "ComfyUI-IndexTTS2",
+      "repository": "https://github.com/snicolast/ComfyUI-IndexTTS2",
+      "stars": 178,
+      "enabled": true,
+      "description": "Lightweight ComfyUI wrapper for IndexTTS 2 (voice cloning + emotion control). The nodes call the original IndexTTS2 inference and keep behavior faithful to the repo.",
+      "version": "5b33e02"
     }
   ]
 }

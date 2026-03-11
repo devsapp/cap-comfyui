@@ -1,0 +1,17 @@
+{
+"svdq-int4_r32-qwen-image-edit-2509.safetensors": {
+    "url": "https://huggingface.co/nunchaku-tech/nunchaku-qwen-image-edit-2509/resolve/main/svdq-int4_r32-qwen-image-edit-2509.safetensors",
+    "directory": "diffusion_models"
+  },
+  "qwen_image_2512_fp8_e4m3fn.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors",
+    "directory": "diffusion_models"
+  },
+  "svdq-int4_r128-qwen-image.safetensors": {
+    "url": "https://huggingface.co/nunchaku-tech/nunchaku-qwen-image/resolve/main/svdq-int4_r128-qwen-image.safetensors",
+    "directory": "diffusion_models"
+  },
+  "wan2.1_t2v_1.3B_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_bf16.safetensors",
+    "directory": "unet"
+  }}

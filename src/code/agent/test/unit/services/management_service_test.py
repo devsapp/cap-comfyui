@@ -140,6 +140,47 @@ def test_save_and_stop(service):
             assert "snapshot" in result
             assert "time_stop_process" in result
 
+def test_install_custom_nodes_calls_install_all(service):
+    """install_custom_nodes 应创建 PIPInstaller 并调用 install_all"""
+    expected = {"baseline": {}, "dependencies": {}, "scripts": []}
+    with patch("services.pip.pip_installer.PIPInstaller") as mock_cls:
+        mock_cls.return_value.install_all.return_value = expected
+        result = service.install_custom_nodes()
+    _, kwargs = mock_cls.return_value.install_all.call_args
+    assert kwargs["nodes_map"] is None
+    assert kwargs["custom_nodes_dirs"] is None
+    assert result == expected
+
+
+def test_install_custom_nodes_passes_custom_dirs(service):
+    """install_custom_nodes 应将 custom_nodes_dirs 透传给 install_all"""
+    dirs = ["/some/custom_nodes", "/extra/custom_nodes"]
+    with patch("services.pip.pip_installer.PIPInstaller") as mock_cls:
+        mock_cls.return_value.install_all.return_value = {}
+        service.install_custom_nodes(custom_nodes_dirs=dirs)
+    _, kwargs = mock_cls.return_value.install_all.call_args
+    assert kwargs["custom_nodes_dirs"] == dirs
+
+
+def test_install_custom_nodes_passes_nodes_map(service):
+    """install_custom_nodes 应将 nodes_map 透传给 install_all"""
+    nodes = {"NodeA": {"version": "1.0"}}
+    with patch("services.pip.pip_installer.PIPInstaller") as mock_cls:
+        mock_cls.return_value.install_all.return_value = {}
+        service.install_custom_nodes(nodes_map=nodes)
+    _, kwargs = mock_cls.return_value.install_all.call_args
+    assert kwargs["nodes_map"] == nodes
+
+
+def test_install_custom_nodes_passes_timeout(service):
+    """install_custom_nodes 应将 timeout 透传给 install_all"""
+    with patch("services.pip.pip_installer.PIPInstaller") as mock_cls:
+        mock_cls.return_value.install_all.return_value = {}
+        service.install_custom_nodes(timeout=999)
+    _, kwargs = mock_cls.return_value.install_all.call_args
+    assert kwargs["timeout"] == 999
+
+
 @pytest.mark.parametrize("current_status,new_status", [
     (BackendStatus.RUNNING, BackendStatus.SAVING),
     (BackendStatus.RUNNING, BackendStatus.REBOOTING),

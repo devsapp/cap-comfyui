@@ -3,9 +3,7 @@ PIPInstaller 单元测试
 =====================
 覆盖 services/pip/pip_installer.py 中 PIPInstaller 类的各个方法。
 
-版本裁决逻辑已移至 version_resolver.py，
-定制化策略已移至 dependency_strategies.py，
-各自由独立测试文件覆盖。
+版本裁决逻辑已移至 version_resolver.py，由独立测试文件覆盖。
 """
 import os
 import shutil
@@ -234,7 +232,91 @@ class TestGetPossibleNodes(_Base):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. _determine_nodes_to_install
+# 6. _build_node_paths_map
+# ─────────────────────────────────────────────────────────────────────────────
+class TestBuildNodePathsMap(_Base):
+
+    def setUp(self):
+        super().setUp()
+        self.inst = self._installer()
+        self.custom_nodes_dir2 = os.path.join(self.tmp, "extra_nodes")
+        os.makedirs(self.custom_nodes_dir2)
+
+    def _make_node_in(self, base_dir, name):
+        node_dir = os.path.join(base_dir, name)
+        os.makedirs(node_dir, exist_ok=True)
+        return node_dir
+
+    def test_basic_mapping(self):
+        """基本场景：正确返回 {小写名 -> 完整路径} 的映射"""
+        self._make_node("node-a")
+        result = self.inst._build_node_paths_map([self.custom_nodes_dir])
+        self.assertIn("node-a", result)
+        self.assertEqual(result["node-a"], os.path.join(self.custom_nodes_dir, "node-a"))
+
+    def test_key_is_lowercased(self):
+        """目录名含大写时，映射的 key 应转为小写"""
+        self._make_node("ComfyUI-Manager")
+        result = self.inst._build_node_paths_map([self.custom_nodes_dir])
+        self.assertIn("comfyui-manager", result)
+        self.assertNotIn("ComfyUI-Manager", result)
+
+    def test_path_preserves_original_case(self):
+        """映射的 value（完整路径）保留文件系统原始大小写"""
+        self._make_node("ComfyUI-Manager")
+        result = self.inst._build_node_paths_map([self.custom_nodes_dir])
+        self.assertIn("ComfyUI-Manager", result["comfyui-manager"])
+
+    def test_duplicate_across_dirs_first_wins(self):
+        """多目录中存在同名插件（忽略大小写）时，以列表中先出现的目录为准"""
+        self._make_node_in(self.custom_nodes_dir, "MyNode")
+        self._make_node_in(self.custom_nodes_dir2, "mynode")
+        with patch("builtins.print"):
+            result = self.inst._build_node_paths_map(
+                [self.custom_nodes_dir, self.custom_nodes_dir2]
+            )
+        self.assertEqual(len([k for k in result if k == "mynode"]), 1)
+        self.assertIn(self.custom_nodes_dir, result["mynode"])
+
+    def test_duplicate_across_dirs_prints_warning(self):
+        """重名时应打印警告"""
+        self._make_node_in(self.custom_nodes_dir, "MyNode")
+        self._make_node_in(self.custom_nodes_dir2, "mynode")
+        with patch("builtins.print") as mock_print:
+            self.inst._build_node_paths_map(
+                [self.custom_nodes_dir, self.custom_nodes_dir2]
+            )
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        self.assertIn("Duplicate", printed)
+
+    def test_nonexistent_dir_skipped_with_warning(self):
+        """不存在的目录跳过，并打印警告；其余目录仍正常扫描"""
+        self._make_node("node-a")
+        fake_dir = os.path.join(self.tmp, "nonexistent")
+        with patch("builtins.print") as mock_print:
+            result = self.inst._build_node_paths_map([fake_dir, self.custom_nodes_dir])
+        self.assertIn("node-a", result)
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        self.assertIn("does not exist", printed)
+
+    def test_multiple_dirs_merged(self):
+        """多个目录中的插件合并到同一映射"""
+        self._make_node("node-a")
+        self._make_node_in(self.custom_nodes_dir2, "node-b")
+        result = self.inst._build_node_paths_map(
+            [self.custom_nodes_dir, self.custom_nodes_dir2]
+        )
+        self.assertIn("node-a", result)
+        self.assertIn("node-b", result)
+
+    def test_empty_dirs_list_returns_empty_map(self):
+        """空目录列表返回空映射"""
+        result = self.inst._build_node_paths_map([])
+        self.assertEqual(result, {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. _determine_nodes_to_install
 # ─────────────────────────────────────────────────────────────────────────────
 class TestDetermineNodesToInstall(_Base):
 
@@ -264,6 +346,16 @@ class TestDetermineNodesToInstall(_Base):
                                                           nodes_map={"a": {}, "nonexistent": {}})
         self.assertIn("a", nodes)
         self.assertNotIn("nonexistent", nodes)
+
+    def test_nodes_map_keys_case_insensitive(self):
+        """nodes_map 中含大写的 key 应能匹配到小写的 available node"""
+        with patch("builtins.print"):
+            nodes = self.inst._determine_nodes_to_install(
+                ["comfyui-manager", "node-b"],
+                nodes_map={"ComfyUI-Manager": {}, "NODE-B": {}}
+            )
+        self.assertIn("comfyui-manager", nodes)
+        self.assertIn("node-b", nodes)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -511,7 +603,7 @@ class TestDoInstallScript(_Base):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 12. install_all — 结构一致性 & 边界情况
+# 13. install_all — 结构一致性 & 边界情况
 # ─────────────────────────────────────────────────────────────────────────────
 class TestInstallAll(_Base):
 
@@ -621,9 +713,53 @@ class TestInstallAll(_Base):
             installer.install_all(timeout=60, nodes_map={})
         mock_step4.assert_not_called()
 
+    def test_custom_nodes_dirs_scans_extra_dir(self):
+        """custom_nodes_dirs 指定额外目录时，其中的插件应被识别"""
+        extra_dir = os.path.join(self.tmp, "extra_nodes")
+        os.makedirs(extra_dir)
+        extra_node_dir = os.path.join(extra_dir, "extra-node")
+        os.makedirs(extra_node_dir)
+        with open(os.path.join(extra_node_dir, "requirements.txt"), "w") as f:
+            f.write("requests\n")
+
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        with patch.object(installer, "_install_merged_dependencies") as mock_dep, \
+             patch.object(installer, "_execute_install_scripts", return_value=[]), \
+             patch.object(installer, "_reinstall_comfyui_requirements"), \
+             patch("builtins.print"):
+            mock_dep.return_value = DependencyInstallRecord(
+                requirements_txt="", duration=0.0, success=True, error_msg=""
+            )
+            result = installer.install_all(
+                timeout=60,
+                nodes_map=None,
+                custom_nodes_dirs=[extra_dir],
+            )
+        self.assertIn("baseline", result)
+        # extra-node 被扫描到，触发依赖安装流程
+        mock_dep.assert_called_once()
+
+    def test_custom_nodes_dirs_none_uses_default(self):
+        """custom_nodes_dirs=None 时，应退回到默认的 custom_nodes 目录"""
+        self._make_node("default-node", requirements="numpy\n")
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        with patch.object(installer, "_install_merged_dependencies") as mock_dep, \
+             patch.object(installer, "_execute_install_scripts", return_value=[]), \
+             patch.object(installer, "_reinstall_comfyui_requirements"), \
+             patch("builtins.print"):
+            mock_dep.return_value = DependencyInstallRecord(
+                requirements_txt="", duration=0.0, success=True, error_msg=""
+            )
+            installer.install_all(timeout=60, nodes_map=None, custom_nodes_dirs=None)
+        mock_dep.assert_called_once()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 13. _install_merged_dependencies — 边界情况
+# 14. _install_merged_dependencies — 边界情况
 #     （两轮完整链路由 batch_install_test.py 详细覆盖）
 # ─────────────────────────────────────────────────────────────────────────────
 class TestInstallMergedDependenciesEdgeCases(_Base):
@@ -682,7 +818,7 @@ class TestInstallMergedDependenciesEdgeCases(_Base):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 14. _reinstall_comfyui_requirements
+# 15. _reinstall_comfyui_requirements
 # ─────────────────────────────────────────────────────────────────────────────
 class TestReinstallComfyuiRequirements(_Base):
 

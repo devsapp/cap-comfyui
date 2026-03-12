@@ -29,6 +29,8 @@ SKIP_NODES_LOADING = os.getenv('SKIP_NODES_LOADING', '').lower() == 'true'
 AUTO_INSTALL = (not USE_API_MODE) and os.getenv('AUTO_INSTALL', '').lower() == 'true'
 # 第一轮分批安装每批的包数，可通过环境变量 INSTALL_BATCH_SIZE 覆盖
 INSTALL_BATCH_SIZE = int(os.getenv('INSTALL_BATCH_SIZE', '20'))
+BUILTIN_NODES_DIR = os.getenv("BUILTIN_NODES_DIR", "/root/built-in/custom_nodes")
+BUILTIN_DELTA_NODES_DIR = os.getenv("BUILTIN_DELTA_NODES_DIR", "/root/built-in/custom_nodes_delta")
 SNAPSHOT_DIR = MNT_DIR + '/snapshots'
 SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
 COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')

@@ -17,6 +17,12 @@ def mock_process_mgr():
 
 
 @pytest.fixture
+def mock_setup_builtin_custom_nodes():
+    with patch('services.custom_nodes.builtin_custom_nodes.setup_builtin_custom_nodes') as mock:
+        yield mock
+
+
+@pytest.fixture
 def mock_snapshot_mgr():
     with patch('services.workspace.snapshot_manager.SnapshotManager') as mock:
         instance = mock.return_value
@@ -34,7 +40,7 @@ def mock_snapshot_mgr():
         yield instance
 
 @pytest.fixture
-def service(mock_process_mgr, mock_snapshot_mgr):
+def service(mock_process_mgr, mock_snapshot_mgr, mock_setup_builtin_custom_nodes):
     # 确保每次测试都使用新的 service 实例
     ManagementService._instances = {}  # 清除单例缓存
     service = ManagementService()

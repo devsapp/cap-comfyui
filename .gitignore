@@ -6,3 +6,6 @@
 **/dist
 .DS_Store
 .vscode/settings.json
+reference
+test
+.cursor

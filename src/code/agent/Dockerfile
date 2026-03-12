@@ -28,6 +28,12 @@ RUN mkdir ~/.transparent-background && \
     wget https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_fast.pth && \
     wget https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_base_nightly.pth
 
+
+# 下载 rembg 模型
+RUN mkdir ~/.rembg && \
+    cd ~/.rembg && \
+    wget https://huggingface.co/tomjackson2023/rembg/resolve/main/u2net.onnx
+
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV SD_DIR="${WORK_DIR}/stable-diffusion-webui"

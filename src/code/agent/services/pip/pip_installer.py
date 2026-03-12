@@ -2,133 +2,113 @@ import os
 import re
 import subprocess
 import time
-from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple, Optional
 
 import constants
 from utils import file_ops
+from services.pip.models import InstallRecord, DependencyInstallRecord, DependencyInfo
+from services.pip.version_resolver import resolve_version_conflict
+from services.pip.dependency_strategies import apply_custom_dependency_strategies
 
-
-@dataclass
-class InstallRecord:
-    """用于记录 install.py 脚本的执行结果"""
-    node_name: str
-    script_name: str = "install.py"  # 脚本名称，通常是 install.py
-    duration: float = 0  # 耗时(秒)
-    success: bool = True
-    error_msg: str = ""
-
-    def to_dict(self):
-        return asdict(self)
-
-
-@dataclass
-class DependencyInstallRecord:
-    """用于记录 pip install -r 批量安装的结果"""
-    requirements_txt: str  # 实际安装的 requirements.txt 内容
-    duration: float = 0  # 耗时(秒)
-    success: bool = True
-    error_msg: str = ""
-
-    def to_dict(self):
-        return asdict(self)
-
-
-@dataclass
-class DependencyInfo:
-    """依赖包信息"""
-    package_name: str  # 基础包名（不含版本）
-    version_spec: str  # 版本规范（如 ==1.0.0, >=1.5.0）
-    original_line: str  # 原始行内容
-    source_nodes: List[str]  # 来源插件列表
+# 逐个安装（fallback 轮）使用的 pip 源：aliyun 主源 + PyPI 官方兜底
+# 通过环境变量覆盖 pip.conf，避免 tsinghua/ustc 源问题干扰兜底安装
+_FALLBACK_INDEX_URL = "https://mirrors.aliyun.com/pypi/simple/"
+_FALLBACK_EXTRA_INDEX_URL = "https://pypi.org/simple/"
 
 
 class PIPInstaller:
-    """优化版本的 PIP 安装器，支持依赖合并、过滤和批量安装"""
-    
+    """优化版本的 PIP 安装器，支持依赖合并、过滤和两轮批次安装"""
+
     def __init__(self, blacklist: Optional[List[str]] = None):
         """
-        初始化优化版安装器
-        
         Args:
-            blacklist: 黑名单包列表，这些包将被跳过安装
+            blacklist: 黑名单包列表，这些包将被跳过安装并记录为疑难依赖
         """
         self._origin_packages = self._try_get_installed_packages()
         self.blacklist = set(blacklist) if blacklist else set()
-        
-        # 用于合并依赖的数据结构
-        self._merged_dependencies: Dict[str, DependencyInfo] = {}
-        
+        # 收集所有无法自动安装的疑难依赖（黑名单 / git+ / 安装失败），key 为规范化包名
+        self._problematic_deps: Dict[str, DependencyInfo] = {}
+
     def get_origin_packages(self):
         return self._origin_packages
 
     def install_all(self, timeout=constants.DEFAULT_INSTALL_TIMEOUT, nodes_map=None):
         """
-        安装流程：先合并所有插件requirements.txt并批量安装，然后逐个插件执行 install.py
+        完整安装流程，分四个步骤顺序执行：
+
+          Step 1 — 扫描插件目录，合并所有 requirements.txt，应用黑名单 / 已安装过滤
+                   和定制化策略（nunchaku 等），输出最终依赖字典。
+          Step 2 — 两轮批次安装：
+                   第一轮按 INSTALL_BATCH_SIZE 分批 pip install，失败批整批记入 failed_batches；
+                   第二轮将 failed_batches 展开后逐个 pip install，仍失败的包加入 problematic_deps。
+                   两轮均通过 returncode 判断成功与否，不解析 stderr。
+          Step 3 — 逐插件执行 install.py（部分插件需要自己的安装脚本）。
+          Step 4 — 重装 ComfyUI 源码依赖（pip install -r {COMFYUI_DIR}/requirements.txt），
+                   确保插件依赖变更不会破坏 ComfyUI 本身的依赖。
 
         Args:
-            timeout: 超时时间（秒），默认使用 constants.DEFAULT_INSTALL_TIMEOUT（10分钟）。在 pip install -r 阶段强制中止安装进程
-            nodes_map: 节点映射，控制安装行为
-            
+            timeout:   全局超时秒数，默认 constants.DEFAULT_INSTALL_TIMEOUT（10 分钟）。
+                       Step 2 的每轮 pip 子进程和 Step 3 均受此约束。
+            nodes_map: 节点配置映射。None = 安装所有可用节点；{} = 不安装任何节点；
+                       非空 dict = 只安装其中指定的有效节点。
+
         Returns:
             Dict: {
-                "baseline": Dict[str, str],                       # 安装前的包基线（包名 -> 版本）
-                "dependencies": DependencyInstallRecord.to_dict(), # 依赖安装结果
-                "scripts": [InstallRecord.to_dict(), ...]          # install.py 脚本安装结果列表
+                "baseline":     Dict[str, str],           # 安装前的环境快照（包名 → 版本）
+                "dependencies": dict,                     # Step 2 安装结果（含 problematic_deps）
+                "scripts":      [dict, ...],              # Step 3 各插件脚本结果
             }
         """
         nodes_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes")
         all_available_nodes = self._get_possible_nodes(nodes_path)
 
-        # --- 确定要安装的节点列表 ---
         nodes_to_install = self._determine_nodes_to_install(all_available_nodes, nodes_map)
-        
-        # 初始化结果映射
+
+        self._problematic_deps: Dict[str, DependencyInfo] = {}
+
         result_map = {
-            "baseline": self._origin_packages,  # 安装前的包基线
-            "dependencies": None,             # 依赖安装结果
-            "scripts": []                     # install.py 脚本安装结果列表
+            "baseline": self._origin_packages,
+            "dependencies": DependencyInstallRecord().to_dict(),
+            "scripts": [],
         }
-        
+
         if not nodes_to_install:
             print("\n[Installer] No nodes to install. Skipping.")
-            # 返回空的依赖安装记录
-            empty_dep_record = DependencyInstallRecord(requirements_txt="")
-            empty_dep_record.success = True
-            empty_dep_record.duration = 0
-            result_map["dependencies"] = empty_dep_record.to_dict()
             return result_map
 
         print(f"\n[Installer] Starting installation for {len(nodes_to_install)} nodes...")
         start_time = time.time()
 
         try:
-            # 步骤1: 合并所有 requirements.txt 并应用过滤
-            requirements_content = self._merge_requirements_from_nodes(nodes_to_install, nodes_map, timeout, start_time)
-            
-            # 步骤2: 使用 pip install -r 批量安装依赖包（强制超旲）
-            dependency_record = self._install_merged_dependencies(requirements_content, timeout)
+            # Step 1: 合并所有 requirements.txt → 过滤 → 定制化策略
+            merged_deps = self._merge_requirements_from_nodes(nodes_to_install, nodes_map, timeout, start_time)
+
+            # Step 2: 依赖安装
+            dependency_record = self._install_merged_dependencies(merged_deps, timeout, start_time)
             result_map["dependencies"] = dependency_record.to_dict()
-            
-            # 步骤3: 执行各插件的 install.py 脚本（强制超时机制）
+
+            # Step 3: 逐插件执行 install.py
             script_records = self._execute_install_scripts(nodes_to_install, timeout, start_time)
             result_map["scripts"] = script_records
-            
+
+            # Step 4: 重装 ComfyUI 源码依赖，防止插件依赖变更覆盖 ComfyUI 自身依赖
+            self._reinstall_comfyui_requirements(timeout, start_time)
+
         except TimeoutError as e:
             print(f"\n[Installer] {e}")
-            # 即使超时，也返回已经完成的部分
-        
+
+        self._print_problematic_deps()
+
         total_duration = time.time() - start_time
         print(f"\n[Installer] Installation completed. Total time: {total_duration:.1f}s")
-        
-        # 统计信息
+
         dep_success = result_map["dependencies"]["success"] if result_map["dependencies"] else True
         script_success_count = len([r for r in result_map["scripts"] if r["success"]])
         script_total_count = len(result_map["scripts"])
-        
+
         print(f"[Installer] Dependencies: {'Success' if dep_success else 'Failed'}")
         print(f"[Installer] Scripts: {script_success_count}/{script_total_count} successful")
-        
+
         return result_map
 
     def _determine_nodes_to_install(self, all_available_nodes: List[str], nodes_map) -> List[str]:
@@ -140,11 +120,9 @@ class PIPInstaller:
         - 非空字典: 只安装字典中指定的有效节点。
         """
         if nodes_map is None:
-            # 场景1: 安装所有节点
             nodes_to_install = sorted(all_available_nodes)
             print(f"\n[Installer] Preparing to install all {len(nodes_to_install)} available nodes.")
         else:
-            # 场景2: 安装指定节点
             requested_nodes = set(nodes_map.keys())
             available_nodes_set = set(all_available_nodes)
 
@@ -159,396 +137,373 @@ class PIPInstaller:
 
         return nodes_to_install
 
-    def _merge_requirements_from_nodes(self, nodes_to_install: List[str], nodes_map, timeout: float, start_time: float) -> str:
-        """步骤1: 遍历并合并所有节点的 requirements.txt，应用过滤逻辑（如黑名单），输出最终的 requirements.txt 内容"""
+    def _merge_requirements_from_nodes(self, nodes_to_install: List[str], nodes_map, timeout: float, start_time: float) -> Dict[str, DependencyInfo]:
+        """步骤1: 遍历并合并所有节点的 requirements.txt，应用过滤逻辑（如黑名单），返回过滤后的依赖字典"""
         print(f"\n[Installer] ## Step 1: Merging requirements.txt from {len(nodes_to_install)} nodes...")
-        
-        self._merged_dependencies = {}
+
+        merged_dependencies: Dict[str, DependencyInfo] = {}
         for node_name in nodes_to_install:
             if time.time() - start_time >= timeout:
                 raise TimeoutError(f"Timeout ({timeout}s) reached during requirements merging")
-                
+
             node_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes", node_name)
             requirements_path = os.path.join(node_path, "requirements.txt")
-            
+
             if os.path.exists(requirements_path):
-                self._merge_requirements_file(requirements_path, node_name)
-        
-        print(f"[Installer] ## Merged {len(self._merged_dependencies)} unique dependencies from requirements.txt files")
-        
-        # 应用过滤逻辑
-        filtered_deps = self._filter_merged_dependencies()
+                self._merge_requirements_file(requirements_path, node_name, merged_dependencies)
 
-        # 应用定制化依赖策略钩子
-        filtered_deps = self._apply_custom_dependency_strategies(filtered_deps, nodes_to_install, nodes_map)
+        print(f"[Installer] ## Merged {len(merged_dependencies)} unique dependencies from requirements.txt files")
 
-        # 生成最终的 requirements.txt 内容
-        requirements_content = self._generate_requirements_content(filtered_deps)
-        
-        return requirements_content
+        merged_deps = self._filter_merged_dependencies(merged_dependencies)
+        merged_deps = apply_custom_dependency_strategies(merged_deps, nodes_to_install, nodes_map)
 
-    def _merge_requirements_file(self, requirements_path: str, node_name: str):
-        """合并单个 requirements.txt 文件"""
+        return merged_deps
+
+    def _merge_requirements_file(self, requirements_path: str, node_name: str, merged_dependencies: Dict[str, DependencyInfo]):
+        """合并单个 requirements.txt 文件到 merged_dependencies 字典"""
         lines = file_ops.robust_readlines(requirements_path)
-        
+
         for line in lines:
             package_spec = self._extract_package_name(line)
             if not package_spec:
                 continue
-                
-            # 解析包名和版本规范
+
             base_name, version_spec = self._parse_package_spec(package_spec)
-            
-            if base_name in self._merged_dependencies:
-                # 处理版本冲突
-                existing_dep = self._merged_dependencies[base_name]
-                resolved_version = self._resolve_version_conflict(
+
+            if base_name in merged_dependencies:
+                existing_dep = merged_dependencies[base_name]
+                resolved_version = resolve_version_conflict(
                     existing_dep.version_spec, version_spec, base_name
                 )
                 existing_dep.version_spec = resolved_version
                 existing_dep.source_nodes.append(node_name)
             else:
-                # 新依赖
-                self._merged_dependencies[base_name] = DependencyInfo(
+                merged_dependencies[base_name] = DependencyInfo(
                     package_name=base_name,
                     version_spec=version_spec,
                     original_line=package_spec,
                     source_nodes=[node_name]
                 )
 
-    def _filter_merged_dependencies(self) -> Dict[str, DependencyInfo]:
+    def _filter_merged_dependencies(self, merged_dependencies: Dict[str, DependencyInfo]) -> Dict[str, DependencyInfo]:
         """过滤合并后的依赖列表，应用黑名单、已安装包和 git+ 依赖过滤"""
         filtered = {}
-        
+
         skipped_already_installed = []
         skipped_blacklisted = []
         skipped_git_dependencies = []
-        
-        for base_name, dep_info in self._merged_dependencies.items():
+
+        for base_name, dep_info in merged_dependencies.items():
             # 过滤掉所有 git+ 形式的依赖
             if base_name.startswith(('git+', 'hg+', 'svn+', 'bzr+')):
                 skipped_git_dependencies.append(base_name)
+                self._problematic_deps[base_name] = dep_info
                 continue
-                
+
             # 检查黑名单
             if base_name.lower() in {pkg.lower() for pkg in self.blacklist}:
                 skipped_blacklisted.append(base_name)
+                self._problematic_deps[base_name] = dep_info
                 continue
-                
-            # 检查是否已安装
-            # 只跳过无版本要求且已安装的包
-            # 如果有版本要求，则交给pip处理版本升级/降级
+
+            # 已安装且无版本要求则跳过；有版本要求则交给 pip 处理升降级
             if base_name in self._origin_packages and not dep_info.version_spec:
-                # 包已安装且无特定版本要求，跳过安装
-                skipped_already_installed.append(f"{base_name}")
+                skipped_already_installed.append(base_name)
                 continue
-                
+
             filtered[base_name] = dep_info
-        
-        # 打印过滤结果
+
         if skipped_already_installed:
             print(f"[Installer] ## Skipped {len(skipped_already_installed)} already installed packages: {', '.join(skipped_already_installed)}")
-            
+
         if skipped_blacklisted:
             print(f"[Installer] ## Skipped {len(skipped_blacklisted)} blacklisted packages: {', '.join(skipped_blacklisted)}")
-            
+
         if skipped_git_dependencies:
             print(f"[Installer] ## Skipped {len(skipped_git_dependencies)} git+ dependencies (need install manually):")
             for git_dep in skipped_git_dependencies:
                 print(f"[Installer] ##   - {git_dep}")
-        
+
         return filtered
 
-    def _apply_custom_dependency_strategies(self, filtered_deps: Dict[str, DependencyInfo], nodes_to_install: List[str], nodes_map) -> Dict[str, DependencyInfo]:
-        """
-        应用定制化依赖策略钩子，处理特殊插件的依赖需求
-        
-        Args:
-            filtered_deps: 过滤后的依赖字典
-            nodes_to_install: 要安装的节点列表
-            nodes_map: 节点映射信息，包含版本等配置
-            
-        Returns:
-            更新后的依赖字典
-        """
-        print(f"\n[Installer] ## Applying custom dependency strategies...")
-        
-        # 策略1: ComfyUI-nunchaku 特殊处理
-        filtered_deps = self._handle_nunchaku_strategy(filtered_deps, nodes_to_install, nodes_map)
-        
-        # TODO: 在此处添加更多定制化策略
-        # 例如: filtered_deps = self._handle_other_custom_node_strategy(filtered_deps, nodes_to_install, nodes_map)
-        
-        return filtered_deps
-    
-    def _handle_nunchaku_strategy(self, filtered_deps: Dict[str, DependencyInfo], nodes_to_install: List[str], nodes_map) -> Dict[str, DependencyInfo]:
-        """
-        处理 ComfyUI-nunchaku 节点的特殊依赖策略
-        
-        Args:
-            filtered_deps: 过滤后的依赖字典
-            nodes_to_install: 要安装的节点列表
-            nodes_map: 节点映射信息
-            
-        Returns:
-            更新后的依赖字典
-        """
-        nunchaku_node_name = "ComfyUI-nunchaku"
-        
-        # 检查是否包含 ComfyUI-nunchaku 节点
-        if nunchaku_node_name not in nodes_to_install:
-            return filtered_deps
-        
-        print(f"[Installer] ## Found {nunchaku_node_name} node, applying special handling...")
-        
-        # 从 nodes_map 中获取版本信息
-        nunchaku_version = self._extract_nunchaku_version(nodes_map, nunchaku_node_name)
-        
-        if nunchaku_version in ["v1.0.0", "v1.0.1"]:
-            print(f"[Installer] ## Detected nunchaku version {nunchaku_version}, adding custom wheel dependency...")
-            
-            # v1.0.0 和 v1.0.1 统一使用同一个 wheel URL
-            wheel_url = "https://modelscope.cn/models/nunchaku-tech/nunchaku/resolve/master/nunchaku-1.0.0+torch2.8-cp310-cp310-linux_x86_64.whl"
-            
-            # 创建依赖信息对象
-            nunchaku_dep = DependencyInfo(
-                package_name=wheel_url,  # 使用完整的 URL 作为包名
-                version_spec="",          # wheel URL 无需版本规范
-                original_line=wheel_url,
-                source_nodes=[nunchaku_node_name]
-            )
-            
-            # 添加到依赖字典中
-            filtered_deps[wheel_url] = nunchaku_dep
-            
-            print(f"[Installer] ## Added nunchaku wheel: {wheel_url}")
-        else:
-            print(f"[Installer] ## Nunchaku version {nunchaku_version} does not require special handling")
-        
-        return filtered_deps
-    
-    def _extract_nunchaku_version(self, nodes_map, nunchaku_node_name: str) -> str:
-        """
-        从 nodes_map 中提取 nunchaku 节点的版本信息
-        
-        Args:
-            nodes_map: 节点映射信息
-            nunchaku_node_name: nunchaku 节点名称
-            
-        Returns:
-            版本字符串，如 "v1.0.0"
-        """
-        if not nodes_map or nunchaku_node_name not in nodes_map:
-            print(f"[Installer] ## Warning: No version info found for {nunchaku_node_name} in nodes_map")
-            return "unknown"
-        
-        node_config = nodes_map[nunchaku_node_name]
-        
-        try:
-            # 根据提供的结构：node_config.version.value
-            version_info = node_config.get('version', {})
-            if isinstance(version_info, dict):
-                version_value = version_info.get('value', 'unknown')
-                print(f"[Installer] ## Extracted nunchaku version: {version_value}")
-                return version_value
-            else:
-                print(f"[Installer] ## Warning: Invalid version structure in {nunchaku_node_name} config")
-                return "unknown"
-        except (KeyError, AttributeError, TypeError) as e:
-            print(f"[Installer] ## Error extracting version from {nunchaku_node_name}: {e}")
-            print(f"[Installer] ## Node config structure: {node_config}")
-            return "unknown"
-
-    def _generate_requirements_content(self, filtered_deps: Dict[str, DependencyInfo]) -> str:
-        """生成最终的 requirements.txt 内容"""
-        if not filtered_deps:
+    def _generate_requirements_content(self, deps: List[DependencyInfo]) -> str:
+        """生成最终的 requirements.txt 内容并打印日志，调用方需传入已排序的列表"""
+        if not deps:
             print("[Installer] ## No dependencies to install after filtering.")
             return ""
-        
-        print(f"[Installer] ## Generated requirements.txt with {len(filtered_deps)} dependencies:")
+
+        print(f"[Installer] ## Generated requirements list with {len(deps)} dependencies:")
         print("[Installer] ## " + "=" * 60)
-        
-        # 按包名排序
-        sorted_deps = sorted(filtered_deps.items())
+
         requirements_lines = []
-        
-        for base_name, dep_info in sorted_deps:
-            # 构建 requirements.txt 格式的行
-            package_line = f"{base_name}{dep_info.version_spec}" if dep_info.version_spec else base_name
+        for dep in deps:
+            package_line = f"{dep.package_name}{dep.version_spec}" if dep.version_spec else dep.package_name
             requirements_lines.append(package_line)
-            
-            # 添加来源节点注释（只用于日志显示）
-            if len(dep_info.source_nodes) == 1:
-                comment = f"  # required by {dep_info.source_nodes[0]}"
+
+            if len(dep.source_nodes) == 1:
+                comment = f"  # required by {dep.source_nodes[0]}"
             else:
-                # 如果来源节点太多，只显示前几个
-                if len(dep_info.source_nodes) <= 3:
-                    nodes_str = ", ".join(dep_info.source_nodes)
+                if len(dep.source_nodes) <= 3:
+                    nodes_str = ", ".join(dep.source_nodes)
                 else:
-                    nodes_str = ", ".join(dep_info.source_nodes[:3]) + f" and {len(dep_info.source_nodes) - 3} more"
+                    nodes_str = ", ".join(dep.source_nodes[:3]) + f" and {len(dep.source_nodes) - 3} more"
                 comment = f"  # required by {nodes_str}"
-            
-            print(f"[Installer] ## {package_line}{comment}")
-        
+
+            print(f"{package_line}{comment}")
+
         print("[Installer] ## " + "=" * 60)
-        print(f"[Installer] ## Total: {len(filtered_deps)} packages to install")
+        print(f"[Installer] ## Total: {len(deps)} packages to install")
         print("")
-        
+
         return "\n".join(requirements_lines)
 
-    def _install_merged_dependencies(self, requirements_content: str, timeout: float) -> DependencyInstallRecord:
-        """步骤2: 使用 pip install -r 批量安装合并后的依赖"""
-        print(f"\n[Installer] ## Step 2: Installing dependencies with pip install -r (timeout: {timeout}s)...")
-        
-        # 创建安装记录
-        install_record = DependencyInstallRecord(requirements_txt=requirements_content)
-        
-        if not requirements_content.strip():
-            print("[Installer] ## No dependencies to install.")
-            install_record.success = True
-            install_record.duration = 0
-            return install_record
-        
-        start_install_time = time.time()
-        try:
-            # 创建临时 requirements.txt 文件
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-                f.write(requirements_content)
-                temp_requirements_path = f.name
-            
-            try:
-                # 构建 pip install -r 命令
-                install_cmd = self._construct_pip_cmd(["install", "-r", temp_requirements_path])
-                
-                print(f"[Installer] ## Executing: {' '.join(install_cmd)}")
+    def _install_merged_dependencies(self, merged_deps: Dict[str, DependencyInfo], timeout: float, start_time: float) -> DependencyInstallRecord:
+        """
+        步骤2: 两轮批次安装。
 
-                try:
-                    # 不捕获输出，让 pip 日志实时打印到控制台
-                    result = subprocess.run(
-                        install_cmd, 
-                        timeout=timeout,  # 子进程超时
-                        env=self._get_pip_install_env()
-                    )
-                    
-                    if result.returncode == 0:
-                        install_record.success = True
-                        print("[Installer] ## Dependencies installed successfully.")
-                    else:
-                        install_record.success = False
-                        install_record.error_msg = f"pip install failed with return code {result.returncode}"
-                        print(f"[Installer] ## Error: {install_record.error_msg}")
-                        
-                except subprocess.TimeoutExpired:
-                    install_record.success = False
-                    install_record.error_msg = f"pip install timed out after {timeout} seconds"
-                    print(f"[Installer] ## Error: {install_record.error_msg}")
-            finally:
-                # 清理临时文件
-                try:
-                    os.unlink(temp_requirements_path)
-                except OSError:
-                    pass
-                    
+        第一轮按 INSTALL_BATCH_SIZE 分批执行 pip install，整批失败的批次记入 failed_batches。
+        第二轮将 failed_batches 中的依赖展开去重后逐个安装，
+        仍失败的包加入 self._problematic_deps。
+        """
+        print(f"\n[Installer] ## Step 2: Installing dependencies (two-round batch, batch_size={constants.INSTALL_BATCH_SIZE}, timeout={timeout}s)...")
+
+        sorted_deps = sorted(merged_deps.values(), key=lambda d: d.package_name)
+        initial_content = self._generate_requirements_content(sorted_deps)
+        install_record = DependencyInstallRecord(requirements_txt=initial_content)
+
+        if not sorted_deps:
+            print("[Installer] ## No dependencies to install.")
+            return install_record
+
+        start_install_time = time.time()
+
+        try:
+            # 第一轮：分批安装
+            print(f"\n[Installer] ## Round 1: {len(sorted_deps)} deps → {-(-len(sorted_deps) // constants.INSTALL_BATCH_SIZE)} batches of {constants.INSTALL_BATCH_SIZE}")
+            failed_deps = self._install_in_batches(sorted_deps, timeout, start_time)
+
+            # 第二轮：逐个安装失败批次的依赖
+            if failed_deps:
+                print(f"\n[Installer] ## Round 2: {len(failed_deps)} deps to retry individually...")
+                self._install_individually(failed_deps, timeout, start_time)
+            else:
+                print("[Installer] ## Round 1 succeeded for all batches. Round 2 skipped.")
+
+            install_record.success = True
+
         except Exception as e:
             install_record.success = False
             install_record.error_msg = f"Unexpected error during installation: {str(e)}"
             print(f"[Installer] ## Error: {install_record.error_msg}")
-            
+
         finally:
             install_record.duration = round(time.time() - start_install_time, 1)
-            
+            install_record.problematic_deps = list(self._problematic_deps.values())
+
         return install_record
+
+    def _install_in_batches(
+        self,
+        deps: List[DependencyInfo],
+        timeout: float,
+        start_time: float,
+    ) -> List[DependencyInfo]:
+        """
+        第一轮：按 INSTALL_BATCH_SIZE 分批安装，返回所有失败的依赖（平铺列表）。
+
+        批次失败（returncode != 0 或超时）时，整批加入 failed_deps 供第二轮兜底。
+        超时前未执行的批次同样加入，确保每个包都有第二轮的机会。
+        """
+        batches = [deps[i:i + constants.INSTALL_BATCH_SIZE] for i in range(0, len(deps), constants.INSTALL_BATCH_SIZE)]
+        total_batches = len(batches)
+        failed_deps: List[DependencyInfo] = []
+        failed_batch_count = 0
+
+        for i, batch in enumerate(batches):
+            elapsed = time.time() - start_time
+            remaining = timeout - elapsed
+            if remaining <= 0:
+                # 超时：当前及后续批次全部移入 failed_deps
+                for b in batches[i:]:
+                    failed_deps.extend(b)
+                failed_batch_count += total_batches - i
+                print(f"[Installer] ## Round 1: timeout at batch {i + 1}/{total_batches}, "
+                      f"{total_batches - i} batch(es) deferred to Round 2")
+                break
+
+            specs = [
+                f"{dep.package_name}{dep.version_spec}" if dep.version_spec else dep.package_name
+                for dep in batch
+            ]
+            cmd = self._construct_pip_cmd(["install"] + specs)
+            print(f"[Installer] ## Round 1 [{i + 1}/{total_batches}]: pip install {' '.join(specs)}")
+
+            try:
+                result = subprocess.run(cmd, timeout=remaining, env=self._get_pip_install_env())
+                if result.returncode == 0:
+                    print(f"[Installer] ## Round 1 [{i + 1}/{total_batches}]: succeeded")
+                else:
+                    print(f"[Installer] ## Round 1 [{i + 1}/{total_batches}]: failed (returncode={result.returncode}) → Round 2")
+                    failed_deps.extend(batch)
+                    failed_batch_count += 1
+            except subprocess.TimeoutExpired:
+                print(f"[Installer] ## Round 1 [{i + 1}/{total_batches}]: timed out → Round 2")
+                failed_deps.extend(batch)
+                failed_batch_count += 1
+
+        print(f"[Installer] ## Round 1 done: {total_batches - failed_batch_count}/{total_batches} batches succeeded, "
+              f"{len(failed_deps)} dep(s) to retry")
+        return failed_deps
+
+    def _install_individually(
+        self,
+        deps: List[DependencyInfo],
+        timeout: float,
+        start_time: float,
+    ):
+        """
+        第二轮：逐个安装，失败或超时的包加入 self._problematic_deps。
+
+        使用精简源配置（aliyun 主源 + PyPI 官方兜底），通过环境变量覆盖 pip.conf，
+        避免 tsinghua/ustc 镜像覆盖不全时干扰兜底安装。
+        """
+        env = self._get_pip_install_env()
+        env["PIP_INDEX_URL"] = _FALLBACK_INDEX_URL
+        env["PIP_EXTRA_INDEX_URL"] = _FALLBACK_EXTRA_INDEX_URL
+
+        total = len(deps)
+        for idx, dep in enumerate(deps):
+            elapsed = time.time() - start_time
+            remaining = timeout - elapsed
+            if remaining <= 0:
+                for d in deps[idx:]:
+                    self._problematic_deps[d.package_name] = d
+                print(f"[Installer] ## Round 2: timeout reached, {total - idx} package(s) skipped → problematic")
+                return
+
+            spec = f"{dep.package_name}{dep.version_spec}" if dep.version_spec else dep.package_name
+            cmd = self._construct_pip_cmd(["install", spec])
+            print(f"[Installer] ## Round 2 [{idx + 1}/{total}]: pip install {spec}")
+
+            try:
+                result = subprocess.run(cmd, timeout=remaining, env=env)
+                if result.returncode == 0:
+                    print(f"[Installer] ## Round 2 [{idx + 1}/{total}]: {spec} succeeded")
+                else:
+                    print(f"[Installer] ## Round 2 [{idx + 1}/{total}]: {spec} failed → problematic")
+                    self._problematic_deps[dep.package_name] = dep
+            except subprocess.TimeoutExpired:
+                print(f"[Installer] ## Round 2 [{idx + 1}/{total}]: {spec} timed out → problematic")
+                self._problematic_deps[dep.package_name] = dep
 
     def _execute_install_scripts(self, nodes_to_install: List[str], timeout: float, start_time: float) -> List[Dict]:
         """步骤3: 执行各插件的 install.py 脚本，返回安装记录列表"""
-        # 在开始 Step 3 之前检查是否已经超时
         if time.time() - start_time >= timeout:
             print(f"\n[Installer] ## Step 3 skipped: Already timed out ({timeout}s)")
-            return []  # 直接返回空列表，不执行 install.py 脚本
-        
+            return []
+
         print(f"\n[Installer] ## Step 3: Executing install.py scripts...")
-        
+
         script_records = []
         install_scripts_found = 0
-        
+
         for node_name in nodes_to_install:
             if time.time() - start_time >= timeout:
                 raise TimeoutError(f"Timeout ({timeout}s) reached during install.py execution")
-                
+
             node_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes", node_name)
             install_script_path = os.path.join(node_path, "install.py")
-            
+
             if os.path.exists(install_script_path):
                 install_scripts_found += 1
                 print(f"[Installer] ## Executing install.py for node: {node_name}")
                 install_cmd = [constants.VENV_EXECUTABLE, "install.py"]
                 record = self._do_install_script(node_path, node_name, "install.py", install_cmd)
                 script_records.append(record)
-        
+
         print(f"[Installer] ## Executed {install_scripts_found} install.py scripts")
         return script_records
 
+    def _reinstall_comfyui_requirements(self, timeout: float, start_time: float):
+        """
+        步骤4: 重装 ComfyUI 源码依赖。
+
+        插件安装过程中可能降级或覆盖 ComfyUI 自身所依赖的包版本，
+        通过重新执行 pip install -r requirements.txt 将其还原至 ComfyUI 所需版本。
+        """
+        elapsed = time.time() - start_time
+        remaining = timeout - elapsed
+        if remaining <= 0:
+            print(f"\n[Installer] ## Step 4 skipped: Already timed out ({timeout}s)")
+            return
+
+        requirements_path = os.path.join(constants.COMFYUI_DIR, "requirements.txt")
+        if not os.path.exists(requirements_path):
+            print(f"\n[Installer] ## Step 4 skipped: {requirements_path} not found")
+            return
+
+        print(f"\n[Installer] ## Step 4: Reinstalling ComfyUI requirements from {requirements_path}...")
+        cmd = self._construct_pip_cmd(["install", "-r", requirements_path])
+
+        try:
+            result = subprocess.run(cmd, timeout=remaining, env=self._get_pip_install_env())
+            if result.returncode == 0:
+                print("[Installer] ## Step 4: ComfyUI requirements reinstalled successfully")
+            else:
+                print(f"[Installer] ## Step 4: Failed to reinstall ComfyUI requirements (returncode={result.returncode})")
+        except subprocess.TimeoutExpired:
+            print("[Installer] ## Step 4: Timed out while reinstalling ComfyUI requirements")
+
+    def _print_problematic_deps(self):
+        """打印所有疑难依赖，供用户手动安装。"""
+        if not self._problematic_deps:
+            return
+
+        print("\n[Installer] ## ========== Problematic Dependencies ==========")
+        print("[Installer] ## The following packages could not be installed automatically.")
+        print("[Installer] ## You can copy and install them manually:")
+        for dep in self._problematic_deps.values():
+            package_line = f"{dep.package_name}{dep.version_spec}" if dep.version_spec else dep.package_name
+            if len(dep.source_nodes) == 1:
+                comment = f"  # required by {dep.source_nodes[0]}"
+            else:
+                if len(dep.source_nodes) <= 3:
+                    nodes_str = ", ".join(dep.source_nodes)
+                else:
+                    nodes_str = ", ".join(dep.source_nodes[:3]) + f" and {len(dep.source_nodes) - 3} more"
+                comment = f"  # required by {nodes_str}"
+            print(f"{package_line}{comment}")
+        print("[Installer] ## ===============================================")
+
     def _parse_package_spec(self, package_spec: str) -> Tuple[str, str]:
         """
-        解析包规范，提取包名和版本约束
-        
+        解析包规范，提取包名和版本约束。
+        返回的包名已按 PEP 503 规范化（小写、连字符统一）。
+
         Args:
-            package_spec: 如 "torch>=1.0.0", "requests==2.28.0", "numpy", "git+https://github.com/user/repo.git"
-            
+            package_spec: 如 "torch>=1.0.0", "requests==2.28.0", "numpy",
+                          "accelerate >= 1.2.1", "git+https://github.com/user/repo.git"
+
         Returns:
-            Tuple[基础包名, 版本规范]
+            Tuple[规范化后的包名, 版本规范]
         """
         package_spec = package_spec.strip()
-        
-        # 处理 git+ 依赖：直接使用完整 URL 作为包名，版本规范为空
+
         if package_spec.startswith(('git+', 'hg+', 'svn+', 'bzr+')):
             return package_spec, ""
-        
-        # 处理普通包依赖
-        version_pattern = r'^([a-zA-Z0-9._-]+)((?:[><=!]+).*)?$'
-        match = re.match(version_pattern, package_spec)
-        
-        if match:
-            base_name = match.group(1)
-            version_spec = match.group(2) if match.group(2) else ""
-            return base_name, version_spec
-        else:
-            # 如果无法解析，返回原始规范
-            return package_spec, ""
 
-    def _resolve_version_conflict(self, existing_spec: str, new_spec: str, package_name: str) -> str:
-        """
-        解决版本冲突，使用智能策略处理各种冲突情况
-        
-        Args:
-            existing_spec: 现有版本规范
-            new_spec: 新版本规范
-            package_name: 包名（用于日志）
-            
-        Returns:
-            解决后的版本规范
-        """
-        # 边界情况处理
-        if not existing_spec:
-            return new_spec
-        if not new_spec:
-            return existing_spec
-        if existing_spec == new_spec:
-            return existing_spec
-            
-        # 解析两个版本规范
-        existing_parsed = self._parse_version_constraint(existing_spec)
-        new_parsed = self._parse_version_constraint(new_spec)
-        
-        # 应用冲突解决策略
-        resolved_spec = self._apply_conflict_resolution_strategy(
-            existing_parsed, new_parsed, existing_spec, new_spec, package_name
-        )
-        
-        # 简化为一行冲突日志
-        print(f"[Installer] ## Version conflict for {package_name}: '{existing_spec}' vs '{new_spec}' -> '{resolved_spec}'")
-        return resolved_spec
+        # 支持包名与版本操作符之间有空格，如 "accelerate >= 1.2.1"
+        version_pattern = r'^([a-zA-Z0-9._-]+)\s*((?:[><=!]+).*)?$'
+        match = re.match(version_pattern, package_spec)
+
+        if match:
+            raw_name = match.group(1)
+            version_spec = match.group(2).strip() if match.group(2) else ""
+            # PEP 503：包名规范化——小写，连字符/下划线/点统一为连字符
+            normalized_name = re.sub(r'[-_.]+', '-', raw_name).lower()
+            return normalized_name, version_spec
+        else:
+            return package_spec, ""
 
     def _do_install_script(self, node_path: str, node_name: str, script_name: str, install_cmd: List[str]) -> Dict:
         """执行 install.py 脚本并记录结果，返回安装记录字典"""
@@ -565,17 +520,18 @@ class PIPInstaller:
             record.success = False
         finally:
             record.duration = round(time.time() - start_time, 1)
-            
+
         return record.to_dict()
 
     # === 以下方法与原版保持一致 ===
-    
+
     def _try_get_installed_packages(self):
         """
-        获取已安装的包信息
+        获取已安装的包信息，包名按 PEP 503 规范化（小写、连字符统一），
+        与 _parse_package_spec 返回的包名格式保持一致，确保已安装判断准确。
 
         Returns:
-            Dict[str, str]: 包名到版本的映射，例如 {'package1': '1.0.0', 'package2': '2.1.0'}
+            Dict[str, str]: 规范化包名到版本的映射，例如 {'pillow': '10.0.0', 'scikit-learn': '1.3.0'}
         """
         installed_packages = {}
         try:
@@ -586,11 +542,12 @@ class PIPInstaller:
                 if striped_line:
                     parts = line.split()
                     package_name = parts[0]
-                    if package_name == 'Package' or package_name.startswith('-'):  # skip first line of pip list output
+                    if package_name == 'Package' or package_name.startswith('-'):
                         continue
 
                     version = parts[1]
-                    installed_packages[package_name] = version
+                    normalized_name = re.sub(r'[-_.]+', '-', package_name).lower()
+                    installed_packages[normalized_name] = version
 
         except subprocess.CalledProcessError:
             print("[Installer] ## Failed to retrieve the information of installed pip packages.")
@@ -608,9 +565,7 @@ class PIPInstaller:
         return True
 
     def _get_script_env(self):
-        """
-        执行插件的install.py时需要指定必须的环境变量
-        """
+        """执行插件的 install.py 时需要指定必须的环境变量"""
         new_env = os.environ.copy()
 
         if 'COMFYUI_PATH' not in new_env:
@@ -620,32 +575,24 @@ class PIPInstaller:
             new_env['COMFYUI_FOLDERS_BASE_PATH'] = constants.COMFYUI_DIR
 
         return new_env
-    
+
     def _get_pip_install_env(self):
-        """
-        执行pip install -r时需要的环境变量，特别是清除代理设置
-        """
-        new_env = self._get_script_env()  # 先获取基本环境
-        
-        # 清除代理环境变量，避免pip安装时受代理影响
+        """执行 pip install 时需要的环境变量，特别是清除代理设置"""
+        new_env = self._get_script_env()
+
         proxy_vars = ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY']
         for proxy_var in proxy_vars:
             new_env.pop(proxy_var, None)
-        
+
         return new_env
 
     def _get_possible_nodes(self, custom_node_path):
-        # 获取custom_nodes目录下所有可能的插件目录名
         nodes = os.listdir(custom_node_path)
         valid_nodes = []
 
         for node in nodes:
             node_path = os.path.join(custom_node_path, node)
 
-            # 过滤条件：
-            # 1. 必须是文件夹
-            # 2. 不能以.disabled结尾
-            # 3. 不能是__pycache__
             if (os.path.isdir(node_path) and
                     not node.endswith(".disabled") and
                     node != "__pycache__"):
@@ -656,261 +603,22 @@ class PIPInstaller:
     @staticmethod
     def _extract_package_name(line: str) -> str:
         """
-        从requirement.txt的一行中提取有效的包名
-
-        Args:
-            line: requirements.txt中的一行内容，可能包含注释、空格等
-
-        Returns:
-            str: 清理后的包名。如果行无效（空行或纯注释）则返回空字符串
+        从 requirements.txt 的一行中提取有效的包规范。
 
         Examples:
-            'requests==2.28.0' -> 'requests==2.28.0'
+            'requests==2.28.0'            -> 'requests==2.28.0'
             'numpy>=1.20.0 # some comment' -> 'numpy>=1.20.0'
-            '# just a comment' -> ''
-            '  ' -> ''
+            '# just a comment'            -> ''
+            '  '                          -> ''
         """
-        # 首先去除首尾空白
         package_name = line.strip()
 
-        # 如果是空行或者注释行，返回空字符串
         if not package_name or package_name.startswith('#'):
             return ''
 
-        # 移除行内注释部分
         clean_package_name = package_name.split('#')[0].strip()
         return clean_package_name
 
-    def _parse_version_constraint(self, version_spec: str) -> Dict:
-        """
-        解析版本约束，提取操作符和版本号
-        
-        Args:
-            version_spec: 版本规范，如 '>=1.0.0', '==2.1.0', '>=1.0,<2.0'
-            
-        Returns:
-            Dict: {
-                'operators': [('>=', '1.0.0'), ('==', '2.1.0')],
-                'is_exact': bool,  # 是否精确版本
-                'has_exclusion': bool,  # 是否有排除版本
-            }
-        """
-        if not version_spec.strip():
-            return {
-                'operators': [],
-                'is_exact': False,
-                'has_exclusion': False,
-            }
-        
-        # 解析多个约束（用逗号分隔）
-        constraints = [c.strip() for c in version_spec.split(',')]
-        operators = []
-        is_exact = False
-        has_exclusion = False
-        
-        for constraint in constraints:
-            # 匹配操作符和版本号
-            match = re.match(r'^([><=!]+)(.+)$', constraint)
-            if match:
-                op = match.group(1)
-                version = match.group(2).strip()
-                operators.append((op, version))
-                
-                if op == '==':
-                    is_exact = True
-                elif op.startswith('!'):
-                    has_exclusion = True
-        
-        return {
-            'operators': operators,
-            'is_exact': is_exact,
-            'has_exclusion': has_exclusion,
-        }
-    
-    def _apply_conflict_resolution_strategy(self, existing_parsed: Dict, new_parsed: Dict, 
-                                          existing_spec: str, new_spec: str, package_name: str) -> str:
-        """
-        应用冲突解决策略
-        
-        解决优先级：
-        1. 精确版本 vs 精确版本: 选择较新的版本
-           例如: torch==1.13.0 vs torch==2.0.1 -> torch==2.0.1
-        2. 精确版本 vs 范围版本: 优先选择精确版本
-           例如: numpy==1.21.0 vs numpy>=1.20.0 -> numpy==1.21.0
-        3. 范围版本 vs 范围版本: 尝试合并或选择更严格的下界
-           例如: torch>=1.8.0 vs torch>=1.10.0 -> torch>=1.10.0
-        4. 默认策略: 保持第一个遇到的版本约束
-        """
-        
-        # 策略 1: 精确版本 vs 精确版本
-        if existing_parsed['is_exact'] and new_parsed['is_exact']:
-            # 比较两个版本号，选择较新的
-            existing_version = self._extract_version_from_exact(existing_spec)
-            new_version = self._extract_version_from_exact(new_spec)
-            
-            if self._is_version_newer(new_version, existing_version):
-                return new_spec
-            else:
-                return existing_spec
-        
-        # 策略 2: 精确版本 vs 范围版本
-        if existing_parsed['is_exact'] and not new_parsed['is_exact']:
-            return existing_spec
-        elif new_parsed['is_exact'] and not existing_parsed['is_exact']:
-            return new_spec
-
-        # 策略 3: 范围版本 vs 范围版本 - 尝试合并
-        if not existing_parsed['is_exact'] and not new_parsed['is_exact']:
-            # 尝试合并版本范围
-            merged = self._try_merge_version_ranges(existing_spec, new_spec)
-            if merged:
-                return merged
-        
-        # 默认策略: 保持现有的
-        return existing_spec
-    
-    def _extract_version_from_exact(self, version_spec: str) -> str:
-        """从精确版本约束中提取版本号"""
-        match = re.search(r'==([\d\.]+)', version_spec)
-        return match.group(1) if match else version_spec
-    
-    def _is_version_newer(self, version_a: str, version_b: str) -> bool:
-        """
-        简单版本比较，判断 version_a 是否比 version_b 更新
-        注意：这是一个简化的实现，不处理所有复杂情况
-        """
-        try:
-            parts_a = [int(x) for x in version_a.split('.')]
-            parts_b = [int(x) for x in version_b.split('.')]
-            
-            # 补齐到相同长度
-            max_len = max(len(parts_a), len(parts_b))
-            parts_a.extend([0] * (max_len - len(parts_a)))
-            parts_b.extend([0] * (max_len - len(parts_b)))
-            
-            return parts_a > parts_b
-        except ValueError:
-            # 如果解析失败，简单字符串比较
-            return version_a > version_b
-    
-    def _try_merge_version_ranges(self, range_a: str, range_b: str) -> Optional[str]:
-        """
-        使用 packaging 库尝试合并两个版本范围
-        返回合并后的范围，或者 None 如果无法合并
-        
-        # 现在支持的情况：
-        # 情况1: 不同下界版本
-        # range_a = ">=1.8.0", range_b = ">=1.10.0" -> ">=1.10.0"
-        
-        # 情况2: 复杂范围约束
-        # range_a = ">=1.8.0,<2.0.0", range_b = ">=1.10.0,<3.0.0" -> ">=1.10.0,<2.0.0"
-        
-        # 情况3: 不兼容的范围
-        # range_a = ">=2.0.0", range_b = "<1.0.0" -> None (无交集)
-        """
-        # 先尝试使用 packaging 库进行高级合并
-        merged = self._try_merge_with_packaging(range_a, range_b)
-        if merged is not None:
-            return merged
-        
-        # 如果 packaging 失败，回退到简单逻辑
-        return self._try_merge_simple_ranges(range_a, range_b)
-    
-    def _try_merge_with_packaging(self, range_a: str, range_b: str) -> Optional[str]:
-        """
-        使用 packaging.specifiers 进行版本范围合并
-        """
-        try:
-            from packaging.specifiers import SpecifierSet, InvalidSpecifier
-            
-            # 创建版本规范集合
-            spec_a = SpecifierSet(range_a)
-            spec_b = SpecifierSet(range_b)
-            
-            # 计算交集
-            intersection = spec_a & spec_b
-            
-            if intersection:
-                # 有交集，返回合并结果
-                merged_str = str(intersection)
-                
-                # 尝试简化结果（例如：>=1.8.0,>=1.9.0 -> >=1.9.0）
-                simplified = self._simplify_version_spec(merged_str)
-                if simplified != merged_str:
-                    return simplified
-                else:
-                    return merged_str
-            else:
-                # 无交集，无法合并
-                return None
-                
-        except ImportError:
-            return None
-        except InvalidSpecifier as e:
-            return None
-        except Exception as e:
-            return None
-    
-    def _try_merge_simple_ranges(self, range_a: str, range_b: str) -> Optional[str]:
-        """
-        简单的版本范围合并回退逻辑
-        只处理纯下界约束的合并
-        """
-        # 处理纯下界约束的合并
-        if '>=' in range_a and '<' not in range_a and '>=' in range_b and '<' not in range_b:
-            # 两个都是纯下界约束
-            version_a = re.search(r'>=([\d\.]+)', range_a)
-            version_b = re.search(r'>=([\d\.]+)', range_b)
-            
-            if version_a and version_b:
-                if self._is_version_newer(version_a.group(1), version_b.group(1)):
-                    return range_a  # 选择更高的下界
-                else:
-                    return range_b
-        
-        # 更复杂的情况无法处理
-        return None
-    
-    def _simplify_version_spec(self, version_spec: str) -> str:
-        """
-        简化版本规范，例如：>=1.8.0,>=1.9.0 -> >=1.9.0
-        """
-        # 只处理包含多个>=约束的情况
-        if '>=' not in version_spec or ',' not in version_spec:
-            return version_spec
-        
-        # 提取所有>=约束
-        constraints = [c.strip() for c in version_spec.split(',')]
-        ge_constraints = []
-        other_constraints = []
-        
-        for constraint in constraints:
-            if constraint.startswith('>='): 
-                match = re.match(r'>=([\d\.]+)', constraint)
-                if match:
-                    ge_constraints.append((constraint, match.group(1)))
-                else:
-                    other_constraints.append(constraint)
-            else:
-                other_constraints.append(constraint)
-        
-        # 如果有多个>=约束，选择最高的版本
-        if len(ge_constraints) > 1:
-            # 找到最高的版本约束
-            highest_constraint = max(ge_constraints, key=lambda x: self._version_to_tuple(x[1]))
-            simplified_constraints = [highest_constraint[0]] + other_constraints
-            return ','.join(simplified_constraints)
-        
-        return version_spec
-    
-    def _version_to_tuple(self, version: str) -> tuple:
-        """将版本字符串转换为可比较的元组"""
-        try:
-            return tuple(int(x) for x in version.split('.'))
-        except ValueError:
-            # 如果解析失败，返回原字符串作为单元素元组
-            return (version,)
-    
     @staticmethod
     def _construct_pip_cmd(cmd):
         return [constants.VENV_EXECUTABLE, '-m', 'pip'] + cmd

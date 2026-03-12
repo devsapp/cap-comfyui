@@ -1,3 +1,6 @@
+ARG COMFYUI_IMAGE=comfyui:v0304
+FROM ${COMFYUI_IMAGE} AS comfyui_source
+
 FROM python:3.10.16-slim
 
 WORKDIR /root
@@ -10,6 +13,14 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt install -y \
     git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping \
     procps vim unzip zstd
+
+# 安装 cuda-toolkit-12-8: https://developer.nvidia.com/cuda-12-8-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Debian&target_version=12&target_type=deb_local
+# RUN wget https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-debian12-12-8-local_12.8.0-570.86.10-1_amd64.deb && \
+#     dpkg -i cuda-repo-debian12-12-8-local_12.8.0-570.86.10-1_amd64.deb && \
+#     cp /var/cuda-repo-debian12-12-8-local/cuda-*-keyring.gpg /usr/share/keyrings/ && \
+#     apt-get update && \
+#     apt-get -y install cuda-toolkit-12-8 && \
+#     rm -f cuda-repo-debian12-12-8-local_12.8.0-570.86.10-1_amd64.deb
 
 # 安装 ossutil
 RUN curl -o ossutil-2.1.2-linux-amd64.zip https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip && \
@@ -55,6 +66,9 @@ RUN mkdir -p ~/.pip \
 
 # 设置 GitHub 代理监控脚本执行权限
 RUN chmod +x ${AGENT_DIR}/services/proxy/github-proxy-monitor.sh
+
+# 从 comfyui 镜像拷贝内置插件到 built-in 目录
+COPY --from=comfyui_source /root/comfyui/custom_nodes /root/built-in/custom_nodes
 
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

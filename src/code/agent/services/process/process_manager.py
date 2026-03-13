@@ -184,21 +184,6 @@ class ProcessManager(ABC):
         from services.process.websocket.websocket_manager import ws_manager
         ws_manager.close_all_connections(timeout=5)
 
-    def _cleanup_dead_process(self):
-        """清理已死亡的进程资源，防止僵尸进程"""
-        if self.process is not None:
-            try:
-                # 回收僵尸进程
-                self.process.wait(timeout=1)
-            except Exception:
-                pass
-            # 关闭管道
-            if self.process.stdout:
-                self.process.stdout.close()
-            if self.process.stderr:
-                self.process.stderr.close()
-            self.process = None
-
     @abstractmethod
     def _is_ready(self) -> bool:
         """检查进程是否就绪，由子类实现"""

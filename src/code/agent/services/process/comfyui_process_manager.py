@@ -157,8 +157,17 @@ class ComfyUIProcessManager(ProcessManager):
                 log("INFO", "Killing old ComfyUI process before restart")
                 self._kill_and_cleanup()
             else:
-                # 只清理僵尸进程资源
-                self._cleanup_dead_process()
+                # 只回收僵尸进程，不 close pipe。
+                # stdout/stderr close() 会与 stdout_thread 的 readline() 持有的 BufferedReader
+                # 内部锁产生死锁：ComfyUI 被 OOM Kill 后，其孙子进程（custom node worker 等）
+                # 仍持有 pipe 写端，readline() 永久阻塞，close() 因无法获取锁而挂死。
+                # pipe 由各自的 daemon 线程读到 EOF 后自行关闭即可。
+                if self.process is not None:
+                    try:
+                        self.process.wait(timeout=1)
+                    except Exception:
+                        pass
+                    self.process = None
             
             # 重新启动 ComfyUI 进程
             self.start(constants.BOOT_CMD)

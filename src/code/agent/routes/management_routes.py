@@ -98,22 +98,28 @@ class ManagementRoutes:
         def install():
             """
             安装自定义节点依赖的独立接口。
-            请求体格式: {"nodes": {...}, "timeout": 300} 或 {"nodes": null} 或 空请求体
-            - 不提供或 nodes: null -> 安装所有可用插件
-            - nodes: {...} -> 按字典内容安装指定插件
-            - timeout: 安装超时时间（秒），默认使用 constants.DEFAULT_INSTALL_TIMEOUT
+            请求体格式:
+            {
+                "nodes": {...},       # 可选，null 或不提供 -> 安装所有可用插件；{...} -> 按字典内容安装指定插件
+                "timeout": 300,       # 可选，安装超时时间（秒），默认使用 constants.DEFAULT_INSTALL_TIMEOUT
+                "options": {
+                    "custom_nodes_dirs": ["/path/to/custom_nodes", ...]  # 可选，指定插件父目录列表
+                }
+            }
             """
-            # 从请求体获取 nodes_map 和 timeout
             data = request.get_json(force=True, silent=True)
             if isinstance(data, dict):
-                nodes_map = data.get('nodes', None)  # 默认None表示安装所有
-                timeout = data.get('timeout', constants.DEFAULT_INSTALL_TIMEOUT)    # 默认使用常量超时
+                nodes_map = data.get('nodes', None)
+                timeout = data.get('timeout', constants.DEFAULT_INSTALL_TIMEOUT)
+                options = data.get('options', {}) or {}
+                custom_nodes_dirs = options.get('custom_nodes_dirs', None)
             else:
-                nodes_map = None  # 请求体为空或非JSON时，也表示安装所有
-                timeout = constants.DEFAULT_INSTALL_TIMEOUT     # 默认超时时间
+                nodes_map = None
+                timeout = constants.DEFAULT_INSTALL_TIMEOUT
+                custom_nodes_dirs = None
 
             try:
-                result_map = self.service.install_custom_nodes(nodes_map=nodes_map, timeout=timeout)
+                result_map = self.service.install_custom_nodes(nodes_map=nodes_map, timeout=timeout, custom_nodes_dirs=custom_nodes_dirs)
                 return jsonify({
                     "data": result_map,
                     "status": "success",
@@ -123,6 +129,58 @@ class ManagementRoutes:
                 return jsonify({
                     "status": "error",
                     "message": f"Failed to install dependencies: {str(e)}"
+                }), 500
+
+        @self.bp.post('/clone')
+        def clone():
+            """
+            Clone 自定义节点源码的独立接口。
+            请求体格式:
+            {
+                "nodes": {...},           # 必填，非空字典
+                "timeout": 300,           # 可选，全局超时秒数，默认 DEFAULT_INSTALL_TIMEOUT
+                "conflict": "skip",       # 可选，"skip"（默认）或 "override"
+                "options": {
+                    "max_retries": 1,                              # 可选，单个插件 clone 失败后的最大重试次数
+                    "clone_timeout": 30,                           # 可选，单次 clone 命令的超时秒数
+                    "custom_nodes_dirs": ["/path/to/custom_nodes", ...]  # 可选，冲突检测的插件父目录列表
+                }
+            }
+            """
+            data = request.get_json(force=True, silent=True)
+            if not isinstance(data, dict):
+                return jsonify({"status": "error", "message": "Request body must be a JSON object."}), 400
+
+            nodes_map = data.get('nodes')
+            if not isinstance(nodes_map, dict):
+                return jsonify({"status": "error", "message": "'nodes' is required and must be a non-null dict."}), 400
+
+            timeout = data.get('timeout', constants.DEFAULT_INSTALL_TIMEOUT)
+            conflict_strategy = data.get('conflict', 'skip')
+
+            options = data.get('options') or {}
+            max_retries = options.get('max_retries')
+            clone_timeout = options.get('clone_timeout')
+            custom_nodes_dirs = options.get('custom_nodes_dirs')
+
+            try:
+                result_map = self.service.clone_custom_nodes(
+                    nodes_map=nodes_map,
+                    timeout=timeout,
+                    conflict_strategy=conflict_strategy,
+                    max_retries=max_retries,
+                    clone_timeout=clone_timeout,
+                    custom_nodes_dirs=custom_nodes_dirs,
+                )
+                return jsonify({
+                    "data": result_map,
+                    "status": "success",
+                    "message": "Successfully cloned custom nodes."
+                }), 200
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "message": f"Failed to clone custom nodes: {str(e)}"
                 }), 500
 
         @self.bp.post('/shutdown')

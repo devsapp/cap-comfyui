@@ -1,7 +1,7 @@
 import time
 from enum import Enum
 from threading import Lock
-from typing import Dict, Set, Optional
+from typing import Dict, List, Set, Optional
 
 import constants
 from exceptions.exceptions import StateTransitionError
@@ -84,7 +84,41 @@ class ManagementService:
     # 哨兵对象，表示启动时是否跳过依赖安装流程
     _SKIP_INSTALL_SENTINEL = object()
 
-    def install_custom_nodes(self, nodes_map: Optional[Dict] = None, timeout: int = constants.DEFAULT_INSTALL_TIMEOUT) -> Dict:
+    def clone_custom_nodes(
+        self,
+        nodes_map: Dict,
+        timeout: int = constants.DEFAULT_INSTALL_TIMEOUT,
+        conflict_strategy: str = "skip",
+        max_retries: Optional[int] = None,
+        clone_timeout: Optional[float] = None,
+        custom_nodes_dirs: Optional[List] = None,
+    ) -> Dict:
+        """
+        将 nodes_map 中的自定义节点源码 git clone 到 custom_nodes 目录。
+
+        Args:
+            nodes_map:         key=插件名，value=含 source、version 等的配置。调用方须保证为非空字典。
+            timeout:           全局超时秒数，默认使用 constants.DEFAULT_INSTALL_TIMEOUT。
+            conflict_strategy: "skip" | "override"，决定目录已存在时的处理策略，默认 "skip"。
+            max_retries:       单个插件 clone 失败后的最大重试次数，None 表示使用 GitCloner 默认值。
+            clone_timeout:     单次 clone 命令的超时秒数，None 表示使用 GitCloner 默认值。
+            custom_nodes_dirs: 存放插件的父目录列表，用于冲突检测。None = 使用默认目录。
+
+        Returns:
+            Dict: clone_all 的返回结果，包含 details 和 summary。
+        """
+        from services.git.git_cloner import GitCloner, MAX_CLONE_RETRIES, CLONE_TIMEOUT
+        cloner = GitCloner()
+        return cloner.clone_all(
+            nodes_map=nodes_map,
+            timeout=timeout,
+            conflict_strategy=conflict_strategy,
+            max_retries=max_retries if max_retries is not None else MAX_CLONE_RETRIES,
+            clone_timeout=clone_timeout if clone_timeout is not None else CLONE_TIMEOUT,
+            custom_nodes_dirs=custom_nodes_dirs,
+        )
+
+    def install_custom_nodes(self, nodes_map: Optional[Dict] = None, timeout: int = constants.DEFAULT_INSTALL_TIMEOUT, custom_nodes_dirs: Optional[List] = None) -> Dict:
         """
         安装自定义节点的依赖包。
         
@@ -95,13 +129,14 @@ class ManagementService:
                     - 非空字典 (例: {'NodeA': 'v1'}): 只安装字典中指定的有效插件。
                     - 空字典 ({}): 启动安装流程，但不安装任何插件。
             timeout: 安装超时时间（秒），默认使用 constants.DEFAULT_INSTALL_TIMEOUT（10分钟）。
+            custom_nodes_dirs: 存放插件的父目录列表。None = 使用默认的 custom_nodes 目录。
         
         Returns:
             Dict: install_all 的返回结果，包含 baseline、dependencies 和 scripts
         """
         from services.pip.pip_installer import PIPInstaller
         installer = PIPInstaller()
-        return installer.install_all(timeout=timeout, nodes_map=nodes_map)
+        return installer.install_all(timeout=timeout, nodes_map=nodes_map, custom_nodes_dirs=custom_nodes_dirs)
 
     def start(self, snapshot_name: str, nodes_map: Optional[Dict] = _SKIP_INSTALL_SENTINEL) -> Dict:
         """
@@ -145,6 +180,7 @@ class ManagementService:
             if nodes_map is not self._SKIP_INSTALL_SENTINEL:
                 self.sub_status = StartingSubStatus.INSTALLING.value
                 with timer("Install custom_nodes packages") as t_install_process:
+                    # TODO: 根据funart版本判断是否安装内置插件目录的依赖
                     install_result = self.install_custom_nodes(nodes_map)
                     result_map.update(install_result)
                 result_map["time_install_process"] = round(t_install_process.elapsed, 2)

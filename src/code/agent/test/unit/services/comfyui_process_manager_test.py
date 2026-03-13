@@ -538,7 +538,7 @@ def test_restart_failure_dev_mode():
 
 def test_restart_success():
     """
-    测试重启成功的处理（进程已死亡，走 _cleanup_dead_process 分支）
+    测试重启成功的处理（进程已死亡，走僵尸回收分支）
     
     场景：进程重启成功
     预期：状态转换到 RUNNING
@@ -556,18 +556,17 @@ def test_restart_success():
         
         # Mock 相关方法使重启成功
         with patch.object(mgr, '_is_process_running', return_value=False):
-            with patch.object(mgr, '_cleanup_dead_process'):
-                with patch.object(mgr, 'start'):
-                    with patch.object(mgr, 'wait_until_ready'):
-                        # 调用 _do_restart
-                        mgr._do_restart()
-                        
-                        # 验证状态转换：应该转到 REBOOTING，然后转到 RUNNING
-                        assert mock_service._transition_to.call_count == 2
-                        mock_service._transition_to.assert_any_call(BackendStatus.REBOOTING)
-                        # 最后一次调用应该是转到 RUNNING
-                        last_call = mock_service._transition_to.call_args_list[-1]
-                        assert last_call[0][0] == BackendStatus.RUNNING
+            with patch.object(mgr, 'start'):
+                with patch.object(mgr, 'wait_until_ready'):
+                    # 调用 _do_restart
+                    mgr._do_restart()
+                    
+                    # 验证状态转换：应该转到 REBOOTING，然后转到 RUNNING
+                    assert mock_service._transition_to.call_count == 2
+                    mock_service._transition_to.assert_any_call(BackendStatus.REBOOTING)
+                    # 最后一次调用应该是转到 RUNNING
+                    last_call = mock_service._transition_to.call_args_list[-1]
+                    assert last_call[0][0] == BackendStatus.RUNNING
 
 
 def test_restart_with_running_process_uses_kill_and_cleanup():
@@ -623,14 +622,13 @@ def test_restart_does_not_close_websocket_connections():
         mock_service._transition_to = MagicMock()
 
         with patch.object(mgr, '_is_process_running', return_value=False):
-            with patch.object(mgr, '_cleanup_dead_process'):
-                with patch.object(mgr, 'start'):
-                    with patch.object(mgr, 'wait_until_ready'):
-                        with patch('services.process.websocket.websocket_manager.ws_manager') as mock_ws:
-                            mgr._do_restart()
+            with patch.object(mgr, 'start'):
+                with patch.object(mgr, 'wait_until_ready'):
+                    with patch('services.process.websocket.websocket_manager.ws_manager') as mock_ws:
+                        mgr._do_restart()
 
-                            # 验证未关闭 WebSocket 连接
-                            mock_ws.close_all_connections.assert_not_called()
+                        # 验证未关闭 WebSocket 连接
+                        mock_ws.close_all_connections.assert_not_called()
 
 
 def test_stop_closes_websocket_connections():

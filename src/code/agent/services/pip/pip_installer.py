@@ -8,8 +8,6 @@ import constants
 from utils import file_ops
 from services.pip.models import InstallRecord, DependencyInstallRecord, DependencyInfo
 from services.pip.version_resolver import resolve_version_conflict
-from services.pip.dependency_strategies import apply_custom_dependency_strategies
-
 # 逐个安装（fallback 轮）使用的 pip 源：aliyun 主源 + PyPI 官方兜底
 # 通过环境变量覆盖 pip.conf，避免 tsinghua/ustc 源问题干扰兜底安装
 _FALLBACK_INDEX_URL = "https://mirrors.aliyun.com/pypi/simple/"
@@ -32,7 +30,7 @@ class PIPInstaller:
     def get_origin_packages(self):
         return self._origin_packages
 
-    def install_all(self, timeout=constants.DEFAULT_INSTALL_TIMEOUT, nodes_map=None):
+    def install_all(self, timeout=constants.DEFAULT_INSTALL_TIMEOUT, nodes_map=None, custom_nodes_dirs: Optional[List[str]] = None):
         """
         完整安装流程，分四个步骤顺序执行：
 
@@ -47,10 +45,13 @@ class PIPInstaller:
                    确保插件依赖变更不会破坏 ComfyUI 本身的依赖。
 
         Args:
-            timeout:   全局超时秒数，默认 constants.DEFAULT_INSTALL_TIMEOUT（10 分钟）。
-                       Step 2 的每轮 pip 子进程和 Step 3 均受此约束。
-            nodes_map: 节点配置映射。None = 安装所有可用节点；{} = 不安装任何节点；
-                       非空 dict = 只安装其中指定的有效节点。
+            timeout:           全局超时秒数，默认 constants.DEFAULT_INSTALL_TIMEOUT（10 分钟）。
+                               Step 2 的每轮 pip 子进程和 Step 3 均受此约束。
+            nodes_map:         节点配置映射。None = 安装所有可用节点；{} = 不安装任何节点；
+                               非空 dict = 只安装其中指定的有效节点。
+            custom_nodes_dirs: 存放插件的父目录列表（即 custom_nodes 这一层），支持多个。
+                               None = 使用默认的 {COMFYUI_DIR}/custom_nodes 目录。
+                               若多个目录中存在同名插件，以列表中先出现的目录为准。
 
         Returns:
             Dict: {
@@ -59,8 +60,11 @@ class PIPInstaller:
                 "scripts":      [dict, ...],              # Step 3 各插件脚本结果
             }
         """
-        nodes_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes")
-        all_available_nodes = self._get_possible_nodes(nodes_path)
+        if custom_nodes_dirs is None:
+            custom_nodes_dirs = [os.path.join(constants.COMFYUI_DIR, "custom_nodes")]
+
+        node_paths_map = self._build_node_paths_map(custom_nodes_dirs)
+        all_available_nodes = list(node_paths_map.keys())
 
         nodes_to_install = self._determine_nodes_to_install(all_available_nodes, nodes_map)
 
@@ -81,14 +85,14 @@ class PIPInstaller:
 
         try:
             # Step 1: 合并所有 requirements.txt → 过滤 → 定制化策略
-            merged_deps = self._merge_requirements_from_nodes(nodes_to_install, nodes_map, timeout, start_time)
+            merged_deps = self._merge_requirements_from_nodes(nodes_to_install, node_paths_map, timeout, start_time)
 
             # Step 2: 依赖安装
             dependency_record = self._install_merged_dependencies(merged_deps, timeout, start_time)
             result_map["dependencies"] = dependency_record.to_dict()
 
             # Step 3: 逐插件执行 install.py
-            script_records = self._execute_install_scripts(nodes_to_install, timeout, start_time)
+            script_records = self._execute_install_scripts(nodes_to_install, node_paths_map, timeout, start_time)
             result_map["scripts"] = script_records
 
             # Step 4: 重装 ComfyUI 源码依赖，防止插件依赖变更覆盖 ComfyUI 自身依赖
@@ -123,7 +127,7 @@ class PIPInstaller:
             nodes_to_install = sorted(all_available_nodes)
             print(f"\n[Installer] Preparing to install all {len(nodes_to_install)} available nodes.")
         else:
-            requested_nodes = set(nodes_map.keys())
+            requested_nodes = {k.lower() for k in nodes_map.keys()}
             available_nodes_set = set(all_available_nodes)
 
             nodes_to_install = sorted(list(requested_nodes & available_nodes_set))
@@ -137,7 +141,26 @@ class PIPInstaller:
 
         return nodes_to_install
 
-    def _merge_requirements_from_nodes(self, nodes_to_install: List[str], nodes_map, timeout: float, start_time: float) -> Dict[str, DependencyInfo]:
+    def _build_node_paths_map(self, custom_nodes_dirs: List[str]) -> Dict[str, str]:
+        """
+        从多个 custom_nodes 父目录中构建 node_name -> 完整路径 的映射。
+
+        多个目录中存在同名插件时，以列表中先出现的目录为准，并打印警告。
+        不存在的目录会被跳过并打印警告。
+        """
+        node_paths_map: Dict[str, str] = {}
+        for base_path in custom_nodes_dirs:
+            if not os.path.isdir(base_path):
+                print(f"[Installer] Warning: nodes_path '{base_path}' does not exist, skipping.")
+                continue
+            for node_name in self._get_possible_nodes(base_path):
+                full_path = os.path.join(base_path, node_name)
+                normalized_name = node_name.lower()
+                if normalized_name not in node_paths_map:
+                    node_paths_map[normalized_name] = full_path
+        return node_paths_map
+
+    def _merge_requirements_from_nodes(self, nodes_to_install: List[str], node_paths_map: Dict[str, str], timeout: float, start_time: float) -> Dict[str, DependencyInfo]:
         """步骤1: 遍历并合并所有节点的 requirements.txt，应用过滤逻辑（如黑名单），返回过滤后的依赖字典"""
         print(f"\n[Installer] ## Step 1: Merging requirements.txt from {len(nodes_to_install)} nodes...")
 
@@ -146,7 +169,7 @@ class PIPInstaller:
             if time.time() - start_time >= timeout:
                 raise TimeoutError(f"Timeout ({timeout}s) reached during requirements merging")
 
-            node_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes", node_name)
+            node_path = node_paths_map[node_name]
             requirements_path = os.path.join(node_path, "requirements.txt")
 
             if os.path.exists(requirements_path):
@@ -155,7 +178,6 @@ class PIPInstaller:
         print(f"[Installer] ## Merged {len(merged_dependencies)} unique dependencies from requirements.txt files")
 
         merged_deps = self._filter_merged_dependencies(merged_dependencies)
-        merged_deps = apply_custom_dependency_strategies(merged_deps, nodes_to_install, nodes_map)
 
         return merged_deps
 
@@ -396,7 +418,7 @@ class PIPInstaller:
                 print(f"[Installer] ## Round 2 [{idx + 1}/{total}]: {spec} timed out → problematic")
                 self._problematic_deps[dep.package_name] = dep
 
-    def _execute_install_scripts(self, nodes_to_install: List[str], timeout: float, start_time: float) -> List[Dict]:
+    def _execute_install_scripts(self, nodes_to_install: List[str], node_paths_map: Dict[str, str], timeout: float, start_time: float) -> List[Dict]:
         """步骤3: 执行各插件的 install.py 脚本，返回安装记录列表"""
         if time.time() - start_time >= timeout:
             print(f"\n[Installer] ## Step 3 skipped: Already timed out ({timeout}s)")
@@ -411,7 +433,7 @@ class PIPInstaller:
             if time.time() - start_time >= timeout:
                 raise TimeoutError(f"Timeout ({timeout}s) reached during install.py execution")
 
-            node_path = os.path.join(constants.COMFYUI_DIR, "custom_nodes", node_name)
+            node_path = node_paths_map[node_name]
             install_script_path = os.path.join(node_path, "install.py")
 
             if os.path.exists(install_script_path):

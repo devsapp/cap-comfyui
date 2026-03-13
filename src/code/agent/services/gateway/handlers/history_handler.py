@@ -7,7 +7,7 @@ import time
 import traceback
 from collections import OrderedDict
 from typing import Optional, Dict, Any, List
-from flask import request, jsonify
+from flask import request, jsonify, g
 
 from utils.logger import log
 
@@ -35,6 +35,20 @@ class HistoryHandler:
         max_items = self._parse_max_items_param()
         history = self.task_manager.get_history(max_items=max_items)
         return jsonify(history)
+    
+    def handle_post_request(self):
+        """处理 POST /api/history 请求（clear、delete，与 ComfyUI 对齐）"""
+        if not self._is_initialized():
+            return "", 503
+        data = request.get_json(silent=True) or {}
+        user_id = getattr(g, "user_id", "default")
+        if data.get("clear"):
+            self.task_manager.clear_history(user_id)
+        if "delete" in data:
+            to_delete = data["delete"]
+            if isinstance(to_delete, list):
+                self.task_manager.delete_history_items(to_delete, user_id)
+        return "", 200
     
     def _is_initialized(self) -> bool:
         """检查服务是否已正确初始化"""

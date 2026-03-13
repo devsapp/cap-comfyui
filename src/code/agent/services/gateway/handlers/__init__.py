@@ -1,4 +1,5 @@
 from .history_handler import HistoryHandler
+from .interrupt_handler import InterruptHandler
 from .reboot_handler import RebootHandler
 from .queue_handler import QueueHandler
 from .prompt_handler import PromptHandler
@@ -8,6 +9,7 @@ from .ws_handler import WsHandler
 
 __all__ = [
     'HistoryHandler',
+    'InterruptHandler',
     'RebootHandler',
     'QueueHandler',
     'PromptHandler',

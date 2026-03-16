@@ -55,6 +55,14 @@ ENV PATH="${VENV_DIR}/bin:$PATH"
 
 # MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
 
+
+# 从 comfyui 镜像拷贝内置插件到 built-in 目录（comfyui 镜像不变则此层可复用构建缓存）
+COPY --from=comfyui_source /root/comfyui/custom_nodes /root/built-in/custom_nodes
+
+# 写入内置插件版本号，供启动时版本检查使用
+# 版本号需随内置插件列表的实质性变化（增删插件、升级版本）而更新
+RUN echo "1.6.5" > /root/built-in/version.txt
+
 RUN pip install --no-cache-dir huggingface_hub[cli] modelscope
 
 COPY . ${AGENT_DIR}/
@@ -72,13 +80,6 @@ RUN mkdir -p ~/.pip \
 
 # 设置 GitHub 代理监控脚本执行权限
 RUN chmod +x ${AGENT_DIR}/services/proxy/github-proxy-monitor.sh
-
-# 从 comfyui 镜像拷贝内置插件到 built-in 目录
-COPY --from=comfyui_source /root/comfyui/custom_nodes /root/built-in/custom_nodes
-
-# 写入内置插件版本号，供启动时版本检查使用
-# 版本号需随内置插件列表的实质性变化（增删插件、升级版本）而更新
-RUN echo "1.6.5" > /root/built-in/version.txt
 
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

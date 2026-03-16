@@ -1,0 +1,6 @@
+# Development dependencies (可选)
+# Install with: pip install -r requirements-dev.txt
+
+# 代码格式化和检查
+ruff
+mypy

@@ -1,0 +1,101 @@
+{
+  "id": "ef2de7d1-85c6-43f4-a62a-76498b10ba4b",
+  "revision": 0,
+  "last_node_id": 3,
+  "last_link_id": 2,
+  "nodes": [
+    {
+      "id": 3,
+      "type": "Wan2_5_T2I",
+      "pos": [
+        -93.90433502197266,
+        80.66157531738281
+      ],
+      "size": [
+        400,
+        310
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "DDofDD/ComfyUI-FunArt-APIs",
+        "ver": "406d5b0ba76a59fe09819bf443a20161980c553d",
+        "Node name for S&R": "Wan2_5_T2I"
+      },
+      "widgets_values": [
+        "一间有着精致窗户的花店，漂亮的木质门，摆放着花朵",
+        "",
+        "",
+        1440,
+        768,
+        true,
+        473468640,
+        "randomize",
+        false
+      ]
+    },
+    {
+      "id": 2,
+      "type": "PreviewImage",
+      "pos": [
+        409.0791931152344,
+        79.36892700195312
+      ],
+      "size": [
+        336.542724609375,
+        300.55352783203125
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    }
+  ],
+  "links": [
+    [
+      2,
+      3,
+      0,
+      2,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8282431280562189,
+      "offset": [
+        278.2931604322339,
+        112.39108414349423
+      ]
+    },
+    "frontendVersion": "1.25.11"
+  },
+  "version": 0.4
+}

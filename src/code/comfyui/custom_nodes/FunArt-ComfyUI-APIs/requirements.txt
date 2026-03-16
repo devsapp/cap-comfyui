@@ -1,0 +1,6 @@
+# Production dependencies
+dashscope>=1.25.9  # Required for Wan 2.6 model support (shot_type, higher resolution, etc.)
+requests
+
+# Optional dependencies for development
+# Install with: pip install -r requirements.txt -r requirements-dev.txt

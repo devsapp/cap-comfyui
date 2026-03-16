@@ -380,6 +380,30 @@
       "reason": "explicit exclusion",
       "enabled": true,
       "description": "Nodes: Face Swap, Film Interpolation, Latent Lerp, Image Blur, Denoise, Image Compare, Color Correct, and more."
+    },
+    {
+      "id": "comfyui-multigpu",
+      "name": "ComfyUI-MultiGPU",
+      "repository": "https://github.com/pollockjj/ComfyUI-MultiGPU",
+      "reason": "explicit manage for gpus",
+      "enabled": true,
+      "description": "This extension adds CUDA device selection to supported loader nodes in ComfyUI. By monkey-patching ComfyUI’s memory management, each model component (like UNet, Clip, or VAE) can be loaded on a specific GPU. Examples included are multi-GPU workflows for SDXL, FLUX, LTXVideo, and Hunyuan Video for both standard and GGUF loader nodes.",
+    },
+    {
+      "id": "fastvideo",
+      "name": "FastVideo",
+      "repository": "https://github.com/hao-ai-lab/FastVideo",
+      "reason": "explicit manage for gpus",
+      "enabled": true,
+      "description": "A custom node suite for ComfyUI that provides accelerated multi-GPU video generation using [a/FastVideo](https://github.com/hao-ai-lab/FastVideo).",
+    },
+    {
+      "id": "z-tipo-extension",
+      "name": "TIPO-extension",
+      "repository": "https://github.com/KohakuBlueleaf/z-tipo-extension",
+      "reason": "invalid on cpu mode",
+      "enabled": true,
+      "description": "A general extension to utilize TIPO or DanTagGen to do 'text-presampling' based on KGen library: [a/https://github.com/KohakuBlueleaf/KGen](https://github.com/KohakuBlueleaf/KGen)",
     }
   ]
 }

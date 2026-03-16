@@ -1,0 +1,212 @@
+{
+  "id": "af3e54aa-fadc-4b6f-8335-b49cb66a3854",
+  "revision": 0,
+  "last_node_id": 9,
+  "last_link_id": 20,
+  "nodes": [
+    {
+      "id": 4,
+      "type": "LoadImage",
+      "pos": [
+        -264.1908874511719,
+        290.1485595703125
+      ],
+      "size": [
+        270,
+        314
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            18
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "background.png",
+        "image"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "LoadImage",
+      "pos": [
+        -262.95660400390625,
+        -79.53547668457031
+      ],
+      "size": [
+        270,
+        314
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            19
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "clock.png",
+        "image"
+      ]
+    },
+    {
+      "id": 9,
+      "type": "Wan2_5_ImageEdit",
+      "pos": [
+        112.20904541015625,
+        81.02622985839844
+      ],
+      "size": [
+        400,
+        326
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image_1",
+          "type": "IMAGE",
+          "link": 19
+        },
+        {
+          "name": "image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 18
+        },
+        {
+          "name": "image_3",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            20
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "DDofDD/ComfyUI-FunArt-APIs",
+        "ver": "406d5b0ba76a59fe09819bf443a20161980c553d",
+        "Node name for S&R": "Wan2_5_ImageEdit"
+      },
+      "widgets_values": [
+        "将图1中的闹钟放置到图2的餐桌的花瓶旁边位置",
+        "",
+        "",
+        -1,
+        -1,
+        1772955975,
+        "randomize",
+        false
+      ]
+    },
+    {
+      "id": 2,
+      "type": "PreviewImage",
+      "pos": [
+        596.7555541992188,
+        83.06912994384766
+      ],
+      "size": [
+        212.4453125,
+        258
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 20
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    }
+  ],
+  "links": [
+    [
+      18,
+      4,
+      0,
+      9,
+      1,
+      "IMAGE"
+    ],
+    [
+      19,
+      3,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      20,
+      9,
+      0,
+      2,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8706209526443899,
+      "offset": [
+        352.4107849638407,
+        90.56912760916089
+      ]
+    },
+    "frontendVersion": "1.25.11"
+  },
+  "version": 0.4
+}

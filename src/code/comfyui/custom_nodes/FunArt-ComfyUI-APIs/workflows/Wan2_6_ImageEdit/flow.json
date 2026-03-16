@@ -1,0 +1,267 @@
+{
+  "id": "a2372386-5cd5-48ad-9a00-20aeb5e3a079",
+  "revision": 0,
+  "last_node_id": 24,
+  "last_link_id": 27,
+  "nodes": [
+    {
+      "id": 18,
+      "type": "MarkdownNote",
+      "pos": [
+        -498.35593518253927,
+        -127.32129464670895
+      ],
+      "size": [
+        382.31123605015,
+        227.10508984393516
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "使用说明",
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "[百炼官方API文档](https://bailian.console.aliyun.com/cn-beijing/?tab=api#/api/?type=model&url=3001143)\n\n注意事项：\n- api_key 可明文传递；若留空，则默认读取环境变量 DASHSCOPE_API_KEY。\n- 将鼠标悬停于参数项可查看简要说明，完整详情请参阅百炼官方API文档。\n- 可通过运行日志结合官方文档排查问题，联系技术支持时请提供日志中的 task_id。\n- 任务提交后不支持中途取消，建议测试时选用较低分辨率与较短时长。\n- 示例输入文件可从节点源码仓库 workflows 目录中获取，下载后在工作站重新上传或拷贝至 input 目录后即可使用。\n"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 22,
+      "type": "LoadImage",
+      "pos": [
+        -29.168612377367847,
+        -67.78814709698813
+      ],
+      "size": [
+        270,
+        314
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            26
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.77",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "umbrella1.png",
+        "image"
+      ]
+    },
+    {
+      "id": 23,
+      "type": "LoadImage",
+      "pos": [
+        -30.0051319937575,
+        304.93894664929286
+      ],
+      "size": [
+        270,
+        314
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            27
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.77",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "background.png",
+        "image"
+      ]
+    },
+    {
+      "id": 20,
+      "type": "SaveImage",
+      "pos": [
+        815.6260363862106,
+        -130.84770069424627
+      ],
+      "size": [
+        399.47019475957677,
+        369.7512074299615
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 25
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.77"
+      },
+      "widgets_values": [
+        "ComfyUI"
+      ]
+    },
+    {
+      "id": 24,
+      "type": "Wan2_6_ImageEdit",
+      "pos": [
+        340.8467908799413,
+        -124.23699388710024
+      ],
+      "size": [
+        400,
+        364
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 26
+        },
+        {
+          "name": "image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 27
+        },
+        {
+          "name": "image_3",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image_4",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            25
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Wan2_6_ImageEdit"
+      },
+      "widgets_values": [
+        "",
+        "wan2.6-image",
+        "参考图1的风格和图2的背景，生成番茄炒蛋",
+        1024,
+        1024,
+        false,
+        3,
+        919203067,
+        "randomize",
+        false
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      25,
+      24,
+      0,
+      20,
+      0,
+      "IMAGE"
+    ],
+    [
+      26,
+      22,
+      0,
+      24,
+      0,
+      "IMAGE"
+    ],
+    [
+      27,
+      23,
+      0,
+      24,
+      1,
+      "IMAGE"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "输入图片上传（可选）",
+      "bounding": [
+        -58.76237221949708,
+        -155.37726094254106,
+        327.5311501024591,
+        811.3682148869759
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.779830786054577,
+      "offset": [
+        490.4105801978319,
+        408.33477839014
+      ]
+    },
+    "frontendVersion": "1.32.10",
+    "workflowRendererVersion": "LG"
+  },
+  "version": 0.4
+}

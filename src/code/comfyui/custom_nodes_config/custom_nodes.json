@@ -72,15 +72,6 @@
       "version": "6ea2651"
     },
     {
-      "id": "fastvideo",
-      "name": "FastVideo",
-      "repository": "https://github.com/hao-ai-lab/FastVideo",
-      "stars": 3121,
-      "enabled": true,
-      "description": "A custom node suite for ComfyUI that provides accelerated multi-GPU video generation using [a/FastVideo](https://github.com/hao-ai-lab/FastVideo).",
-      "version": "v0.1.7"
-    },
-    {
       "id": "comfyui-impact-pack",
       "name": "ComfyUI Impact Pack",
       "repository": "https://github.com/ltdrdata/ComfyUI-Impact-Pack",
@@ -522,15 +513,6 @@
       "version": "4fb78a6"
     },
     {
-      "id": "comfyui-multigpu",
-      "name": "ComfyUI-MultiGPU",
-      "repository": "https://github.com/pollockjj/ComfyUI-MultiGPU",
-      "stars": 808,
-      "enabled": true,
-      "description": "This extension adds CUDA device selection to supported loader nodes in ComfyUI. By monkey-patching ComfyUI’s memory management, each model component (like UNet, Clip, or VAE) can be loaded on a specific GPU. Examples included are multi-GPU workflows for SDXL, FLUX, LTXVideo, and Hunyuan Video for both standard and GGUF loader nodes.",
-      "version": "ac3df4e"
-    },
-    {
       "id": "VNCCS",
       "name": "VNCCS - Visual Novel Character Creation Suite",
       "repository": "https://github.com/AHEKOT/ComfyUI_VNCCS",
@@ -764,15 +746,6 @@
       "enabled": true,
       "description": "This is a wrapper node for Marigold depth estimation: [https://github.com/prs-eth/Marigold](https://github.com/kijai/ComfyUI-Marigold). Currently using the same diffusers pipeline as in the original implementation, so in addition to the custom node, you need the model in diffusers format.\nNOTE: See details in repo to install.",
       "version": "2adfec7"
-    },
-    {
-      "id": "z-tipo-extension",
-      "name": "TIPO-extension",
-      "repository": "https://github.com/KohakuBlueleaf/z-tipo-extension",
-      "stars": 566,
-      "enabled": true,
-      "description": "A general extension to utilize TIPO or DanTagGen to do 'text-presampling' based on KGen library: [a/https://github.com/KohakuBlueleaf/KGen](https://github.com/KohakuBlueleaf/KGen)",
-      "version": "d6bbb86"
     },
     {
       "id": "comfyui-indextts2",

@@ -1,96 +1,23 @@
-FROM alpine/git:2.36.2 AS codes
+FROM cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v1.6.5
 
 WORKDIR /root
 
 ENV COMFYUI_DIR="/root/comfyui"
+ENV VENV_DIR="/root/venv"
 
-RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
-    cd ${COMFYUI_DIR} && \
-    git checkout "v0.3.77"
-
-# add built-in custom-nodes
-RUN cd ${COMFYUI_DIR}/custom_nodes && \
-    git clone https://github.com/ltdrdata/ComfyUI-Manager.git && \
-    cd ComfyUI-Manager && \
-    git checkout "3.39"
-
-RUN cd ${COMFYUI_DIR}/custom_nodes && \
-    git clone https://github.com/XLabs-AI/x-flux-comfyui.git && \
-    cd x-flux-comfyui && \
-    git checkout "0032855"
-
-RUN cd ${COMFYUI_DIR}/custom_nodes && \
-    git clone https://github.com/welltop-cn/ComfyUI-TeaCache.git
-
-
+# 安装 ComfyUI-deepgpu 插件
 RUN cd ${COMFYUI_DIR}/custom_nodes && \
     wget https://aiacc-inference-public-v2.oss-cn-hangzhou.aliyuncs.com/deepgpu/comfyui/nodes/20251013/ComfyUI-deepgpu.tar.gz && \
-    tar -zxf ComfyUI-deepgpu.tar.gz
+    tar -zxf ComfyUI-deepgpu.tar.gz && \
+    rm -f ComfyUI-deepgpu.tar.gz
 
-COPY custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
-
-
-FROM python:3.10.16-slim AS dependencies
-
-WORKDIR /root
-
-# 升级pip并初始化venv虚拟环境
+# 安装 ComfyUI-deepgpu 插件依赖
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
-    python3 -m venv venv
+    find ${COMFYUI_DIR}/custom_nodes/ComfyUI-deepgpu -type f -name requirements.txt | \
+    xargs -I {} ${VENV_DIR}/bin/pip install -r {} --no-cache-dir
 
-# 安装cu128最新PyTorch及相关包
+# 安装 deepgpu 专用 torch 及相关包（会覆盖基础镜像中的 torch 版本）
 RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir torch torchvision torchaudio \
-    --extra-index-url https://download.pytorch.org/whl/cu128
-
-# 安装 ComfyUI源码 所使用的依赖
-# 方式一: pip install动态拉取comfyui源码中的requirements.txt, 缺点：与codes层耦合，源码有新的commit会导致镜像层重新构建
-ENV COMFYUI_DIR="/root/comfyui"
-COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
-RUN --mount=type=cache,target=/root/.cache/pip \
-   find ${COMFYUI_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
-
-RUN --mount=type=cache,target=/root/.cache/pip \
-    venv/bin/pip install --no-cache-dir \
-    torch==2.8.0 \
-    torchvision==0.23.0 \
-    torchaudio==2.8.0 \
-    deepgpu-torch==0.1.15+torch2.8.0cu128 -f https://aiacc-inference-public-v2.oss-cn-hangzhou.aliyuncs.com/deepgpu/deepytorch/index.html \
-    deepgpu-comfyui==1.3.4 -f https://aiacc-inference-public-v2.oss-cn-hangzhou.aliyuncs.com/deepgpu/comfyui/index.html
-
-
-# 安装 ComfyUI插件 所使用的依赖; codes层变化只会导致插件依赖重新安装，不会导致torch等基础依赖重新安装
-ENV COMFYUI_NODE_DIR="/root/comfyui/custom_nodes"
-COPY --from=codes ${COMFYUI_NODE_DIR} ${COMFYUI_NODE_DIR}
-RUN --mount=type=cache,target=/root/.cache/pip \
-    find ${COMFYUI_NODE_DIR} -type f -name requirements.txt | xargs -I {} venv/bin/pip install -r {} --no-cache-dir
-
-RUN cd ${COMFYUI_NODE_DIR}/x-flux-comfyui && \
-    python setup.py
-
-FROM agent AS agent
-
-FROM python:3.10.16-slim AS base
-
-WORKDIR /root
-
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt update && \
-    apt install -y \
-    git curl wget jq ffmpeg gcc g++ build-essential zstd
-
-ENV WORK_DIR="/root"
-ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
-ENV VENV_DIR="${WORK_DIR}/venv"
-ENV AGENT_DIR="${WORK_DIR}/agent"
-# MNT_DIR is initialized in s.yaml, using env var-'MODEL_ASSET_DIR'
-
-ENV BUILT_IN_DIR="/built-in"
-COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
-COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
-COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
-# TODO add pip path of venv
-
-ENV BACKEND_TYPE="comfyui"
-ENTRYPOINT [ "/bin/bash", "-c", "${AGENT_DIR}/entrypoint.bash" ]
+    ${VENV_DIR}/bin/pip install --no-cache-dir \
+    deepgpu-torch==0.1.20+torch2.9.0cu128 -f https://aiacc-inference-public-v2.oss-cn-hangzhou.aliyuncs.com/deepgpu/deepytorch/index.html \
+    deepgpu-comfyui==1.5.1 -f https://aiacc-inference-public-v2.oss-cn-hangzhou.aliyuncs.com/deepgpu/comfyui/index.html

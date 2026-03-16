@@ -1,4 +1,4 @@
-ARG COMFYUI_IMAGE=comfyui:v0304
+ARG COMFYUI_IMAGE=cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v1.6.5
 FROM ${COMFYUI_IMAGE} AS comfyui_source
 
 FROM python:3.10.16-slim
@@ -69,6 +69,10 @@ RUN chmod +x ${AGENT_DIR}/services/proxy/github-proxy-monitor.sh
 
 # 从 comfyui 镜像拷贝内置插件到 built-in 目录
 COPY --from=comfyui_source /root/comfyui/custom_nodes /root/built-in/custom_nodes
+
+# 写入内置插件版本号，供启动时版本检查使用
+# 版本号需随内置插件列表的实质性变化（增删插件、升级版本）而更新
+RUN echo "1.6.5" > /root/built-in/version.txt
 
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

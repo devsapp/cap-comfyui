@@ -1,8 +1,10 @@
 # 定义变量
 REGION ?= cn-hangzhou
-COMFYUI_IMAGE = comfyui:v0.3.77-beta
+COMFYUI_IMAGE = comfyui:v1.6.5
+COMFYUI_DEEPGPU_IMAGE = comfyui:deepgpu-v1.6.5-v1
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.77-beta
+OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.77-gamma
+OSS_COMFYUI_DEEPGPU_BASE_DIR = base/comfyui/v0.3.77-gamma-deepgpu
 
 .PHONY: upgrade
 upgrade: build upload-base
@@ -42,19 +44,71 @@ upload-base:
 	@mkdir -p tmp
 
 	@echo "Copying files from container..."
-	@# 使用 tar 流式复制并排除 custom_nodes，避免拷贝大量无用文件，提高速度
-	docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - -C /root --exclude 'comfyui/custom_nodes' comfyui venv | tar -x -C ./tmp
+	@# 使用 tar 流式复制并排除 custom_nodes 和 models，避免拷贝大量无用文件，提高速度
+	docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - \
+		--exclude 'comfyui/custom_nodes' \
+		-C /root comfyui venv | tar -x -C ./tmp
 
 	@echo "Creating snapshot..."
 	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst
-	mv ./tmp/comfyui/models ./tmp/ && tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
+	@# 将 models 和 custom_nodes 从 comfyui 目录移出，使其不包含在 comfyui.tar.zst 中
+	mv ./tmp/comfyui/models ./tmp/models
 	mkdir -p ./tmp/custom_nodes
+	tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
 
-	@echo "Uploading files to OSS..." 
+	@echo "Creating .funart/VERSION.txt..."
+	@mkdir -p ./tmp/.funart
+	@echo "1.6.5" > ./tmp/.funart/dependency_version.txt
+
+	@echo "Uploading files to OSS..."
 	ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
 	ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/custom_nodes && \
 	ossutil cp ./tmp/comfyui.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui.tar.zst && \
-	ossutil cp ./tmp/venv.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar.zst
+	ossutil cp ./tmp/venv.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar.zst && \
+	ossutil cp ./tmp/.funart/dependency_version.txt oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/.funart/dependency_version.txt  && \
+	# 将 input 目录拷贝到 OSS 上
+	ossutil cp -r oss://$(OSS_BUCKET)/v0.3.77-alpha/input/ oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/
+	
+	@rm -rf tmp
+	@echo "Upload completed successfully"
+
+# 上传 deepgpu 版本到官方OSS源
+# 与 upload-base 的区别：custom_nodes 中仅保留 ComfyUI-deepgpu，其余插件不保留
+.PHONY: upload-deepgpu-base
+upload-deepgpu-base:
+	@echo "Starting deepgpu upload process..."
+	@rm -rf tmp
+	@mkdir -p tmp
+
+	@echo "Copying files from container..."
+	@# 排除 custom_nodes 和 models，与 upload-base 保持一致
+	docker run --rm --entrypoint tar $(COMFYUI_DEEPGPU_IMAGE) -cf - \
+		--exclude 'comfyui/custom_nodes' \
+		--exclude 'comfyui/models' \
+		-C /root comfyui venv | tar -x -C ./tmp
+
+	@echo "Copying ComfyUI-deepgpu custom node..."
+	@mkdir -p ./tmp/custom_nodes
+	docker run --rm --entrypoint tar $(COMFYUI_DEEPGPU_IMAGE) -cf - \
+		-C /root/comfyui/custom_nodes ComfyUI-deepgpu | tar -x -C ./tmp/custom_nodes
+
+	@echo "Creating snapshot..."
+	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst
+	tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
+
+	@echo "Creating .funart/VERSION.txt..."
+	@mkdir -p ./tmp/.funart
+	@echo "1.6.5" > ./tmp/.funart/dependency_version.txt
+
+	@echo "Uploading files to OSS..."
+	ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_DEEPGPU_BASE_DIR)/custom_nodes && \
+	ossutil cp ./tmp/comfyui.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_DEEPGPU_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui.tar.zst && \
+	ossutil cp ./tmp/venv.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_DEEPGPU_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar.zst && \
+	ossutil cp ./tmp/.funart/dependency_version.txt oss://$(OSS_BUCKET)/$(OSS_COMFYUI_DEEPGPU_BASE_DIR)/.funart/dependency_version.txt && \
+	# 将 input 目录拷贝到 OSS 上
+	ossutil cp -r oss://$(OSS_BUCKET)/v0.3.77-alpha/input/ oss://$(OSS_BUCKET)/$(OSS_COMFYUI_DEEPGPU_BASE_DIR)/ && \
+	ossutil cp -r oss://$(OSS_BUCKET)/v0.3.77-alpha/models/ oss://$(OSS_BUCKET)/$(OSS_COMFYUI_DEEPGPU_BASE_DIR)/
+
 	@rm -rf tmp
 	@echo "Upload completed successfully"
 

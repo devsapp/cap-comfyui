@@ -12,12 +12,20 @@ import shutil
 from utils.logger import log
 import constants
 
+BUILTIN_VERSION_FILE = os.path.join(os.path.dirname(constants.BUILTIN_NODES_DIR), "version.txt")
+INSTALLED_VERSION_FILE = os.path.join(constants.MNT_DIR, ".funart", "dependency_version.txt")
+
 def setup_builtin_custom_nodes(
     comfyui_dir: str = constants.COMFYUI_DIR,
     user_nodes_dir: str = None,
     builtin_src_dir: str = constants.BUILTIN_NODES_DIR,
     builtin_delta_dir: str = constants.BUILTIN_DELTA_NODES_DIR,
 ) -> None:
+    if not os.path.exists(INSTALLED_VERSION_FILE):
+        # 首次启动时，版本文件不存在，跳过内置插件 setup
+        log("INFO", f"[BuiltinCustomNodes] Dependency version file not found at {INSTALLED_VERSION_FILE}, skipping built-in nodes setup.")
+        return
+
     if user_nodes_dir is None:
         user_nodes_dir = os.path.join(constants.MNT_DIR, "custom_nodes")
 
@@ -69,8 +77,65 @@ def setup_builtin_custom_nodes(
             f"[BuiltinCustomNodes] Delta dir ready: {linked} linked, {skipped} skipped (user overrides)",
         )
 
-    # 步骤 4：写入 extra_model_paths.yaml
+    # 步骤 4：按需安装内置插件依赖（安装成功后再写入配置，避免依赖缺失时 ComfyUI 加载残缺的 delta 目录）
+    # TODO: 安装失败也会继续走到下一步
+    _install_builtin_dependencies_if_needed(user_nodes_dir, builtin_src_dir)
+
+    # 步骤 5：写入 extra_model_paths.yaml
     _write_config(comfyui_dir, builtin_delta_dir)
+
+
+def get_builtin_version() -> str:
+    """读取镜像内嵌的内置版本号"""
+    try:
+        with open(BUILTIN_VERSION_FILE) as f:
+            return f.read().strip()
+    except Exception:
+        return "unknown"
+
+
+def get_installed_dependency_version() -> str:
+    """读取 NAS 上记录的已安装版本号，不存在时返回空字符串（视为需要安装）"""
+    try:
+        with open(INSTALLED_VERSION_FILE) as f:
+            return f.read().strip()
+    except Exception:
+        return ""
+
+
+def _save_installed_dependency_version(version: str) -> None:
+    """安装完成后将版本号持久化到 NAS"""
+    try:
+        os.makedirs(os.path.dirname(INSTALLED_VERSION_FILE), exist_ok=True)
+        with open(INSTALLED_VERSION_FILE, "w") as f:
+            f.write(version)
+    except Exception as e:
+        log("ERROR", f"[BuiltinCustomNodes] Failed to save installed version: {e}")
+
+
+def _install_builtin_dependencies_if_needed(user_nodes_dir: str, builtin_src_dir: str) -> None:
+    """按需安装内置插件依赖：版本文件不存在则跳过，版本一致则跳过，版本变化才安装"""
+    # 前置检查在 setup_builtin_custom_nodes 中已完成，此处理论上不会触发，保留作防御性校验
+    if not os.path.exists(INSTALLED_VERSION_FILE):
+        log("INFO", f"[BuiltinCustomNodes] Dependency version file not found at {INSTALLED_VERSION_FILE}, skipping dependency install.")
+        return
+
+    builtin_ver = get_builtin_version()
+    installed_ver = get_installed_dependency_version()
+
+    if builtin_ver == installed_ver:
+        log("INFO", f"[BuiltinCustomNodes] Built-in dependencies are up-to-date (installed={builtin_ver}), skipping install.")
+        return
+
+    log("INFO", f"[BuiltinCustomNodes] Built-in dependency version changed: {installed_ver!r} -> {builtin_ver!r}. Starting dependency install...")
+
+    from services.pip.pip_installer import PIPInstaller
+    installer = PIPInstaller()
+    installer.install_all(custom_nodes_dirs=[user_nodes_dir, builtin_src_dir])
+
+    # 安装成功后持久化版本号；若安装中途失败则不更新，下次启动时会自动重试
+    _save_installed_dependency_version(builtin_ver)
+    log("INFO", f"[BuiltinCustomNodes] Dependency install complete, version updated to {builtin_ver!r}.")
 
 
 def _write_config(comfyui_dir: str, builtin_delta_dir: str) -> None:

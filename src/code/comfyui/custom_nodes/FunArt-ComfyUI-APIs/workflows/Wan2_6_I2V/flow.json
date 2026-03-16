@@ -1,0 +1,268 @@
+{
+  "id": "b788036e-e637-41ed-a094-5c5d926a33d1",
+  "revision": 0,
+  "last_node_id": 20,
+  "last_link_id": 23,
+  "nodes": [
+    {
+      "id": 18,
+      "type": "MarkdownNote",
+      "pos": [
+        -494.9196929259884,
+        -70.2776695481652
+      ],
+      "size": [
+        382.31123605015,
+        227.10508984393516
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "使用说明",
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "[百炼官方API文档](https://bailian.console.aliyun.com/cn-beijing/?tab=api#/api/?type=model&url=2867393)\n\n注意事项：\n- api_key 可明文传递；若留空，则默认读取环境变量 DASHSCOPE_API_KEY。\n- 将鼠标悬停于参数项可查看简要说明，完整详情请参阅百炼官方API文档。\n- 可通过运行日志结合官方文档排查问题，联系技术支持时请提供日志中的 task_id。\n- 任务提交后不支持中途取消，建议测试时选用较低分辨率与较短时长。\n- 示例输入文件可从节点源码仓库 workflows 目录中获取，下载后在工作站重新上传或拷贝至 input 目录后即可使用。\n"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 7,
+      "type": "SaveVideo",
+      "pos": [
+        851.63671875,
+        -77.65300750732422
+      ],
+      "size": [
+        429.45967346215684,
+        377.4655278659582
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 22
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "video/i2v",
+        "mp4",
+        "auto"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "LoadAudio",
+      "pos": [
+        -36.5219244304766,
+        394.7521224073997
+      ],
+      "size": [
+        270,
+        136
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            23
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": [
+        "rap.mp3",
+        null,
+        null
+      ]
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [
+        -27.13327547579059,
+        -68.5738441579831
+      ],
+      "size": [
+        270,
+        314
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            20
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "rap.png",
+        "image"
+      ]
+    },
+    {
+      "id": 20,
+      "type": "Wan2_6_I2V",
+      "pos": [
+        355.4350562818615,
+        -71.16928925904637
+      ],
+      "size": [
+        400,
+        402
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 20
+        },
+        {
+          "name": "audio_input",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 23
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": [
+            22
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Wan2_6_I2V"
+      },
+      "widgets_values": [
+        "",
+        "wan2.6-i2v",
+        "一幅都市奇幻艺术的场景。一个充满动感的涂鸦艺术角色。一个由喷漆所画成的少年，正从一面混凝土墙上活过来。他一边用极快的语速演唱一首英文rap，一边摆着一个经典的、充满活力的说唱歌手姿势。场景设定在夜晚一个充满都市感的铁路桥下。灯光来自一盏孤零零的街灯，营造出电影般的氛围，充满高能量和惊人的细节。视频的音频部分完全由他的rap构成，没有其他对话或杂音。",
+        "",
+        "720P",
+        5,
+        1220322818,
+        "randomize",
+        true,
+        "multi",
+        false,
+        true
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      20,
+      2,
+      0,
+      20,
+      0,
+      "IMAGE"
+    ],
+    [
+      22,
+      20,
+      0,
+      7,
+      0,
+      "VIDEO"
+    ],
+    [
+      23,
+      3,
+      0,
+      20,
+      1,
+      "AUDIO"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Step1 - 输入图片上传",
+      "bounding": [
+        -58.76237221949708,
+        -155.37726094254106,
+        327.1598405838712,
+        425.64094510085044
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "输入音频上传 (可选)",
+      "bounding": [
+        -62.67447892848621,
+        302.4694605961134,
+        331.9936216007395,
+        261.3549723569293
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7798307860545766,
+      "offset": [
+        684.4690270807105,
+        440.8107777137244
+      ]
+    },
+    "frontendVersion": "1.32.10",
+    "workflowRendererVersion": "LG"
+  },
+  "version": 0.4
+}

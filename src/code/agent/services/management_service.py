@@ -165,7 +165,8 @@ class ManagementService:
 
             # 加载快照逻辑
             if str(constants.SKIP_SNAPSHOT_LOADING).lower() == 'true':
-                self._snapshot_mgr.prepare_link()
+                pass
+                # self._snapshot_mgr.prepare_link()
             else:
                 result_map = self._snapshot_mgr.load(snapshot_name)
             

@@ -1,0 +1,202 @@
+{
+  "id": "3b8ac3aa-991e-485a-9230-50fceb265fa9",
+  "revision": 0,
+  "last_node_id": 20,
+  "last_link_id": 22,
+  "nodes": [
+    {
+      "id": 7,
+      "type": "SaveVideo",
+      "pos": [
+        847.2186929915779,
+        -81.43988672882921
+      ],
+      "size": [
+        270,
+        368
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 22
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "video/i2v",
+        "mp4",
+        "auto"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "LoadAudio",
+      "pos": [
+        -15.729152408694441,
+        -18.74904126355145
+      ],
+      "size": [
+        270,
+        136
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            21
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": [
+        "从军行.mp3",
+        null,
+        null
+      ]
+    },
+    {
+      "id": 18,
+      "type": "MarkdownNote",
+      "pos": [
+        -496.490045619033,
+        -75.66645878956075
+      ],
+      "size": [
+        382.31123605015,
+        227.10508984393516
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "使用说明",
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "[百炼官方API文档](https://bailian.console.aliyun.com/cn-beijing/?tab=api#/api/?type=model&url=2865250)\n\n注意事项：\n- api_key 可明文传递；若留空，则默认读取环境变量 DASHSCOPE_API_KEY。\n- 将鼠标悬停于参数项可查看简要说明，完整详情请参阅百炼官方API文档。\n- 可通过运行日志结合官方文档排查问题，联系技术支持时请提供日志中的 task_id。\n- 任务提交后不支持中途取消，建议测试时选用较低分辨率与较短时长。\n- 示例输入文件可从节点源码仓库 workflows 目录中获取，下载后在工作站重新上传或拷贝至 input 目录后即可使用。\n"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 20,
+      "type": "Wan2_6_T2V",
+      "pos": [
+        369.1147828220223,
+        -77.62688272962329
+      ],
+      "size": [
+        400,
+        562
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 21
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": [
+            22
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Wan2_6_T2V"
+      },
+      "widgets_values": [
+        "",
+        "wan2.6-t2v",
+        "一幅史诗级可爱的场景。一只小巧可爱的卡通小猫将军，身穿细节精致的金色盔甲，头戴一个稍大的头盔，勇敢地站在悬崖上。他骑着一匹虽小但英勇的战马，说：“青海长云暗雪山，孤城遥望玉门关。黄沙百战穿金甲，不破楼兰终不还”。悬崖下方，一支由老鼠组成的、数量庞大、无穷无尽的军队正带着临时制作的武器向前冲锋。这是一个戏剧性的、大规模的战斗场景，灵感来自中国古代的战争史诗。远处的雪山上空，天空乌云密布。整体氛围是“可爱”与“霸气”的搞笑和史诗般的融合。",
+        "",
+        "720p: 1:1 (960*960)",
+        5,
+        1694706825,
+        "randomize",
+        true,
+        "multi",
+        false
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      21,
+      3,
+      0,
+      20,
+      0,
+      "AUDIO"
+    ],
+    [
+      22,
+      20,
+      0,
+      7,
+      0,
+      "VIDEO"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 2,
+      "title": "输入音频上传 (可选)",
+      "bounding": [
+        -41.88170690670404,
+        -111.03170307483778,
+        331.9936216007395,
+        261.3549723569293
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7089370782314334,
+      "offset": [
+        480.3545078673279,
+        373.69121136827425
+      ]
+    },
+    "frontendVersion": "1.32.10",
+    "workflowRendererVersion": "LG"
+  },
+  "version": 0.4
+}

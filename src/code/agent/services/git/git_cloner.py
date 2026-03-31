@@ -101,13 +101,14 @@ class GitCloner:
 
         start_time = time.time()
         summary = CloneSummary()
+        self._timed_out = False
 
         # Step 1: 解析 nodes_map
         parsed = _parse_nodes_map(nodes_map)
         if not parsed:
             if nodes_map:
                 log("WARNING", f"{_LOG_PREFIX} nodes_map provided but no valid entries parsed, nothing to clone.")
-            return {"details": {}, "summary": summary.to_dict()}
+            return {"details": {}, "summary": summary.to_dict(), "timed_out": False}
 
         summary.total = len(parsed)
         plugin_list = ", ".join(parsed.keys())
@@ -131,11 +132,12 @@ class GitCloner:
         log("INFO", (
             f"{_LOG_PREFIX} Clone finished in {summary.duration:.2f}s – "
             f"total={summary.total}, cloned={summary.cloned}, overridden={summary.overridden}, "
-            f"skipped={summary.skipped}, failed={summary.failed}"
+            f"skipped={summary.skipped}, failed={summary.failed}, timed_out={self._timed_out}"
         ))
         return {
             "details": {k: v.to_dict() for k, v in details.items()},
             "summary": summary.to_dict(),
+            "timed_out": self._timed_out,
         }
 
     def _process_and_clone_nodes(
@@ -178,6 +180,7 @@ class GitCloner:
         for node_name, info in parsed.items():
             # ── 超时检测：将剩余未处理插件标记为 failed ──────────────────────────
             if time.time() - start_time >= timeout:
+                self._timed_out = True
                 remaining = [n for n in parsed if n not in details]
                 log("WARNING", (
                     f"{_LOG_PREFIX} Global timeout ({timeout}s) reached, "

@@ -41,6 +41,24 @@ def _wait_cleanup_thread(cleanup_thread, timeout: int = 300):
         cleanup_thread.join(timeout=timeout + 10)  # 等待最多timeout+10秒
 
 
+def parse_auto_install_nodes(raw):
+    """
+    将 AUTO_INSTALL_NODES 原始字符串解析为 start() 所需的 nodes_map。
+    "*" → None（安装所有）；非空 JSON dict → dict；其他 → SKIP_INSTALL_SENTINEL（跳过安装）
+    """
+    raw = (raw or '').strip()
+    if raw == '*':
+        return None
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            log("WARNING", f"AUTO_INSTALL_NODES is not valid JSON, skipping node installation: {raw!r}")
+    return constants.SKIP_INSTALL_SENTINEL
+
+
 class Routes:
     def __init__(self):
         self.app = Flask(__name__)
@@ -83,9 +101,9 @@ class Routes:
             
             # 使用环境变量指定的snapshot，默认为latest-dev
             snapshot_name = constants.AUTO_LAUNCH_SNAPSHOT_NAME
-            # AUTO_INSTALL=true 时安装所有插件依赖，否则跳过安装（默认）
-            nodes_map = None if constants.AUTO_INSTALL else service.SKIP_INSTALL_SENTINEL
-            log("INFO", f"Initializing function with ComfyUI mode: {constants.COMFYUI_MODE}, snapshot: {snapshot_name}, auto_install: {constants.AUTO_INSTALL}")
+            nodes_map = parse_auto_install_nodes(constants.AUTO_INSTALL_NODES)
+            install_desc = 'all' if nodes_map is None else f'{len(nodes_map)} node(s)' if isinstance(nodes_map, dict) else 'skip'
+            log("INFO", f"Initializing function with ComfyUI mode: {constants.COMFYUI_MODE}, snapshot: {snapshot_name}, install_nodes: {install_desc}")
             service.start(snapshot_name, nodes_map=nodes_map)
 
             if (

@@ -815,5 +815,113 @@ class TestModels(unittest.TestCase):
             self.assertIn(key, d)
 
 
+# ── timed_out 字段追踪 ────────────────────────────────────────────────────────
+
+class TestTimedOutTracking(unittest.TestCase):
+    """验证 clone_all / _process_and_clone_nodes 中 _timed_out 状态与返回值的一致性"""
+
+    def setUp(self):
+        self.cloner = GitCloner()
+
+    @patch("services.git.git_cloner.constants")
+    def test_clone_all_empty_map_timed_out_false(self, mock_constants):
+        """空 nodes_map → 提前返回，timed_out=False"""
+        mock_constants.DEFAULT_INSTALL_TIMEOUT = 900
+        result = self.cloner.clone_all(nodes_map={})
+        self.assertFalse(result["timed_out"])
+
+    @patch("services.git.git_cloner.constants")
+    def test_clone_all_none_map_timed_out_false(self, mock_constants):
+        """None nodes_map → 提前返回，timed_out=False"""
+        mock_constants.DEFAULT_INSTALL_TIMEOUT = 900
+        result = self.cloner.clone_all(nodes_map=None)
+        self.assertFalse(result["timed_out"])
+
+    @patch("services.git.git_cloner.constants")
+    def test_clone_all_invalid_entries_timed_out_false(self, mock_constants):
+        """全部条目校验失败 → 提前返回，timed_out=False"""
+        mock_constants.DEFAULT_INSTALL_TIMEOUT = 900
+        result = self.cloner.clone_all(nodes_map={"Bad": "not-a-dict"})
+        self.assertFalse(result["timed_out"])
+
+    @patch("services.git.git_cloner.constants")
+    @patch.object(GitCloner, "_process_and_clone_nodes")
+    def test_clone_all_normal_timed_out_false(self, mock_process, mock_constants):
+        """正常 clone 成功 → timed_out=False"""
+        mock_constants.DEFAULT_INSTALL_TIMEOUT = 900
+        mock_process.return_value = {
+            "NodeA": CloneDetail(status=STATUS_CLONED),
+        }
+        nodes_map = {
+            "NodeA": {"name": "NodeA", "source": {"type": "github", "cloneUrl": "https://a.git"}},
+        }
+        result = self.cloner.clone_all(nodes_map=nodes_map)
+        self.assertFalse(result["timed_out"])
+        self.assertFalse(self.cloner._timed_out)
+
+    @patch("services.git.git_cloner.constants")
+    @patch.object(GitCloner, "_get_existing_lower", return_value={})
+    @patch.object(GitCloner, "_clone_single_node")
+    @patch("services.git.git_cloner.time.time", return_value=9999.0)
+    def test_process_timeout_sets_timed_out_true(self, _time, mock_clone, _lower, mock_constants):
+        """全局超时 → _timed_out=True"""
+        mock_constants.COMFYUI_DIR = "/comfyui"
+        parsed = {"NodeA": _make_info(), "NodeB": _make_info()}
+
+        self.cloner._timed_out = False
+        self.cloner._process_and_clone_nodes(parsed, CONFLICT_SKIP, timeout=1, start_time=0)
+
+        self.assertTrue(self.cloner._timed_out)
+        mock_clone.assert_not_called()
+
+    @patch("services.git.git_cloner.constants")
+    @patch.object(GitCloner, "_get_existing_lower", return_value={})
+    @patch.object(GitCloner, "_clone_single_node")
+    @patch("services.git.git_cloner.time.time")
+    def test_partial_timeout_sets_timed_out_true(self, mock_time, mock_clone, _lower, mock_constants):
+        """第一个节点正常处理，第二个节点超时 → _timed_out=True"""
+        mock_constants.COMFYUI_DIR = "/comfyui"
+        mock_time.side_effect = [0.0, 9999.0]
+        mock_clone.return_value = CloneDetail(status=STATUS_CLONED)
+        parsed = {"NodeA": _make_info(), "NodeB": _make_info()}
+
+        self.cloner._timed_out = False
+        self.cloner._process_and_clone_nodes(parsed, CONFLICT_SKIP, timeout=100, start_time=0)
+
+        self.assertTrue(self.cloner._timed_out)
+
+    @patch("services.git.git_cloner.constants")
+    @patch.object(GitCloner, "_get_existing_lower", return_value={})
+    @patch.object(GitCloner, "_clone_single_node")
+    @patch("services.git.git_cloner.time.time")
+    def test_no_timeout_keeps_timed_out_false(self, mock_time, mock_clone, _lower, mock_constants):
+        """所有节点正常处理 → _timed_out 保持 False"""
+        mock_constants.COMFYUI_DIR = "/comfyui"
+        mock_time.side_effect = [0.0, 0.0]
+        mock_clone.return_value = CloneDetail(status=STATUS_CLONED)
+        parsed = {"NodeA": _make_info(), "NodeB": _make_info()}
+
+        self.cloner._timed_out = False
+        self.cloner._process_and_clone_nodes(parsed, CONFLICT_SKIP, timeout=9999, start_time=0)
+
+        self.assertFalse(self.cloner._timed_out)
+
+    @patch("services.git.git_cloner.constants")
+    @patch.object(GitCloner, "_get_existing_lower", return_value={})
+    @patch.object(GitCloner, "_clone_single_node")
+    @patch("services.git.git_cloner.time.time")
+    def test_clone_all_timeout_returns_timed_out_true(self, mock_time, mock_clone, _lower, mock_constants):
+        """clone_all 整体超时场景 → 返回值中 timed_out=True"""
+        mock_constants.DEFAULT_INSTALL_TIMEOUT = 900
+        mock_constants.COMFYUI_DIR = "/comfyui"
+        # 第一次 time.time() 用于 clone_all 的 start_time；后续用于循环中的超时检测
+        mock_time.side_effect = [0.0, 9999.0, 9999.0]
+        nodes_map = {
+            "NodeA": {"name": "NodeA", "source": {"type": "github", "cloneUrl": "https://a.git"}},
+        }
+        result = self.cloner.clone_all(nodes_map=nodes_map, timeout=1)
+        self.assertTrue(result["timed_out"])
+
+
 if __name__ == "__main__":
     unittest.main()

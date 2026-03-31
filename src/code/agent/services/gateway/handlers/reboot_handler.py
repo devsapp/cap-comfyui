@@ -191,7 +191,7 @@ class RebootHandler:
                             
                             # 重新启动本地服务（不安装依赖），使用 CPU 传递的 snapshot
                             log("DEBUG", f"Starting service with snapshot: {snapshot_from_cpu}")
-                            service.start(snapshot_from_cpu, nodes_map=service.SKIP_INSTALL_SENTINEL)
+                            service.start(snapshot_from_cpu, nodes_map=constants.SKIP_INSTALL_SENTINEL)
                             log("DEBUG", "Service started")
                             
                             # 重启成功

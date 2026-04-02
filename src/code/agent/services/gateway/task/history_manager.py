@@ -5,10 +5,11 @@ History 管理模块
 import time
 import threading
 import traceback
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from collections import defaultdict
 
 from utils.logger import log
+from services.gateway.task.utils.prompt_utils import parse_prompt_body
 
 
 class HistoryManager:
@@ -151,6 +152,50 @@ class HistoryManager:
                 log("ERROR", f"[HistoryManager] Error in remove_history_item for {prompt_id}: {e}\n{traceback.format_exc()}")
                 return False
     
+    def remove_if_owned(self, prompt_id: str, user_id: str) -> bool:
+        """
+        原子地校验归属并删除 history item，消除先 get 再 remove 的 TOCTOU 竞态。
+
+        Returns:
+            bool: item 存在且属于 user_id 并成功删除时返回 True，否则 False。
+        """
+        with self._lock:
+            try:
+                history_item = self.history.get(prompt_id)
+                if not history_item or history_item.get("user_id") != user_id:
+                    return False
+                self.history.pop(prompt_id, None)
+                self._history_by_user[user_id].pop(prompt_id, None)
+                log("DEBUG", f"[HistoryManager] Removed history_item for prompt_id {prompt_id}")
+                return True
+            except Exception as e:
+                log("ERROR", f"[HistoryManager] Error in remove_if_owned for {prompt_id}: {e}\n{traceback.format_exc()}")
+                return False
+
+    def wipe_history_for_user(self, user_id: str) -> int:
+        """
+        清空指定用户的全部历史记录（与 ComfyUI wipe_history 语义对齐，多租户下按用户清空）
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            int: 被移除的条目数
+        """
+        with self._lock:
+            try:
+                user_history = self._history_by_user.get(user_id, {})
+                count = len(user_history)
+                for prompt_id in list(user_history.keys()):
+                    self.history.pop(prompt_id, None)
+                self._history_by_user[user_id] = {}
+                if count > 0:
+                    log("DEBUG", f"[HistoryManager] Wiped {count} history items for user {user_id}")
+                return count
+            except Exception as e:
+                log("ERROR", f"[HistoryManager] Error in wipe_history_for_user for {user_id}: {e}\n{traceback.format_exc()}")
+                return 0
+    
     def init_history_item(self, prompt_id: str, prompt_body: dict, client_id: str, 
                          user_id: str, message: dict) -> bool:
         """
@@ -225,23 +270,8 @@ class HistoryManager:
         Returns:
             dict: 构造好的 history_item
         """
-        # 提取 prompt 节点定义和 outputs_to_execute
-        outputs_to_execute = []
-        prompt_dict = prompt_body or {}
-        
-        # 处理 prompt_body 可能是不同格式的情况
-        if isinstance(prompt_dict, dict):
-            # 情况1: prompt_body 是包含 prompt 字段的对象，如 {prompt: {...}, outputs_to_execute: [...]}
-            if "prompt" in prompt_dict and isinstance(prompt_dict.get("prompt"), dict):
-                outputs_to_execute = prompt_dict.get("outputs_to_execute", [])
-                prompt_dict = prompt_dict["prompt"]
-            # 情况2: prompt_body 本身就是节点定义的字典（最常见的情况）
-            # 这种情况下 outputs_to_execute 通常为空，由 ComfyUI 自动推断
-        
-        # 构造 extra_data
-        extra_data = {}
-        if client_id:
-            extra_data["client_id"] = client_id
+        # 解析 prompt_body（与原生 ComfyUI 一致：未传 outputs_to_execute 时由服务端推断，见 execution.py validate_prompt）
+        prompt_dict, outputs_to_execute, extra_data = parse_prompt_body(prompt_body, client_id)
         
         # 使用时间戳作为序号（确保唯一性）
         sequence_number = int(time.time() * 1000000) % 1000000000  # 微秒时间戳
@@ -257,6 +287,7 @@ class HistoryManager:
                 timestamp = int(timestamp * 1000)
             else:
                 timestamp = int(timestamp)
+        extra_data["create_time"] = timestamp
         
         # 构造 prompt 数组，格式：[number, prompt_id, prompt_dict, extra_data, outputs_to_execute]
         return {
@@ -446,11 +477,14 @@ class HistoryManager:
                 if prompt_id in self.history:
                     return False
                 
+                prompt_dict, outputs_to_execute, extra_data = parse_prompt_body(prompt_body, client_id)
+                extra_data["create_time"] = int(time.time() * 1000)
+                
                 log("INFO", f"[HistoryManager] Late-initializing history_item for prompt_id {prompt_id}")
                 history_item = {
                     "meta": {},
                     "outputs": {},
-                    "prompt": [0, prompt_id, prompt_body or {}, {"client_id": client_id}, []],
+                    "prompt": [0, prompt_id, prompt_dict, extra_data, outputs_to_execute],
                     "status": {
                         "status_str": "running",
                         "completed": False,

@@ -6,5 +6,7 @@ oss2
 flask-cors
 chardet
 watchdog
+alibabacloud_tea_openapi>=0.3.0
+alibabacloud_tea_util>=0.3.0
 packaging
 pydantic

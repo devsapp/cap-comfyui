@@ -158,56 +158,65 @@ class TaskManager:
         # HistoryManager 已经是线程安全的，不需要额外加锁
         return self._history_manager.get_history(user_id, max_items, offset)
     
+    def clear_history(self, user_id: str) -> int:
+        """
+        清空指定用户的全部历史记录（与 ComfyUI POST /history clear 对齐）
+        
+        Args:
+            user_id: 用户ID（通常为当前请求用户）
+            
+        Returns:
+            int: 被移除的条目数
+        """
+        return self._history_manager.wipe_history_for_user(user_id)
+    
+    def delete_history_items(self, prompt_ids: List[str], user_id: str) -> int:
+        """
+        删除指定 prompt_id 列表的历史记录，仅删除属于该用户的条目（与 ComfyUI POST /history delete 对齐）
+        
+        Args:
+            prompt_ids: 要删除的 prompt_id 列表
+            user_id: 当前用户ID，只删除归属为该用户的记录
+            
+        Returns:
+            int: 实际删除的条目数
+        """
+        removed = 0
+        for prompt_id in prompt_ids:
+            if self._history_manager.remove_if_owned(prompt_id, user_id):
+                removed += 1
+        return removed
+    
     def clear_queue(self) -> int:
         """
-        清空队列：删除当前用户的 PENDING 任务和所有已完成任务（COMPLETED/FAILED）
-        不删除 RUNNING 状态的任务（正在执行）
-
-        Returns:
-            int: 清理的任务数量
+        清空队列：仅删除当前用户的 PENDING 任务（与 ComfyUI wipe_queue 对齐）
+        不删除 RUNNING、COMPLETED、FAILED 状态的任务。
         """
+
         user_id = getattr(g, 'user_id', 'default')
-        tasks_to_cleanup = []  # 存储需要清理的任务信息（在锁外清理 history）
-        
-        # 在锁内：收集、删除任务，更新计数器
+        tasks_to_cleanup = []  # 被移除的 PENDING 任务 id，用于在锁外清理 history
+
         with self._lock:
-            # 获取当前用户的所有任务
             user_tasks = [task for task in self._tasks.values() if task.user_id == user_id]
-            
             pending_count = 0
-            completed_count = 0
             cleared_count = 0
-            
+
             for task in user_tasks:
-                # 只删除 PENDING 和已完成的任务
                 if task.status == TaskStatus.PENDING:
                     if self._tasks.pop(task.task_id, None):
                         cleared_count += 1
                         pending_count += 1
                         tasks_to_cleanup.append(task.task_id)
-                        
-                elif task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
-                    if self._tasks.pop(task.task_id, None):
-                        cleared_count += 1
-                        completed_count += 1
-                        tasks_to_cleanup.append(task.task_id)
-            
-            # 更新已完成任务计数器
-            if completed_count > 0:
-                self._completed_task_count = max(0, self._completed_task_count - completed_count)
-            
-            # 更新运行中任务计数（只需减去被清理的 PENDING 任务）
+
             if pending_count > 0:
-                self._running_count_by_user[user_id] -= pending_count
-        
-        # 清理 history
+                self._running_count_by_user[user_id] = max(0, self._running_count_by_user.get(user_id, 0) - pending_count)
+
         for task_id in tasks_to_cleanup:
             self._history_manager.remove_history_item(task_id)
 
-        # 广播队列状态更新
         if cleared_count > 0:
             TaskStatusBroadcaster.broadcast_queue_status()
-            log("INFO", f"[TaskManager] User {user_id} cleared {cleared_count} tasks (including {completed_count} completed)")
+            log("INFO", f"[TaskManager] User {user_id} cleared {cleared_count} pending tasks from queue")
 
         return cleared_count
     
@@ -259,6 +268,15 @@ class TaskManager:
         
         return True
     
+    def get_current_user_pending_task_ids(self) -> List[str]:
+        """返回当前用户所有 PENDING 状态的 task_id 列表（用于 queue clear 前对每个调 StopAsyncTask）。"""
+        user_id = getattr(g, 'user_id', 'default')
+        with self._lock:
+            return [
+                t.task_id for t in self._tasks.values()
+                if t.user_id == user_id and t.status == TaskStatus.PENDING
+            ]
+
     
     def _start_polling(self, task_id: str) -> None:
         """
@@ -598,12 +616,8 @@ class TaskManager:
             # 在锁外删除 history（避免长时间持锁）
             removed_history_count = 0
             for task_id, task in tasks_to_remove:
-                # 防御性检查：确保 history 的 user_id 与 task 一致
-                # （使用 HistoryManager 的线程安全方法）
-                history_item = self._history_manager.get_history_item(task.task_id)
-                if history_item and history_item.get('user_id') == task.user_id:
-                    if self._history_manager.remove_history_item(task.task_id):
-                        removed_history_count += 1
+                if self._history_manager.remove_if_owned(task.task_id, task.user_id):
+                    removed_history_count += 1
             
             if removed_count > 0:
                 log("INFO", f"[TaskManager] Cleaned up {removed_count} old tasks and {removed_history_count} history items (keeping latest {self._max_completed_tasks}, current count: {self._completed_task_count})")

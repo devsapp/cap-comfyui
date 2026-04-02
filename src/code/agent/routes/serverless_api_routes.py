@@ -16,6 +16,7 @@ from services.serverlessapi.serverless_api_service import (
     ComfyUIException,
     ServerlessApiService,
 )
+from services.serverlessapi.task_status_handler import TaskStatusHandler
 
 
 class ServerlessApiRoutes:
@@ -25,6 +26,7 @@ class ServerlessApiRoutes:
     def __init__(self):
         self.bp = Blueprint("serverless_api", __name__, url_prefix="/api/serverless")
         self.service = ServerlessApiService()
+        self.task_status_handler = TaskStatusHandler()
         self.sock = Sock()
         self.sock.bp = self.bp
         self.setup_routes()
@@ -69,6 +71,16 @@ class ServerlessApiRoutes:
                 }, 400
 
             return self.service.get_status_from_store(task_id)
+
+        @self.bp.get("/task/<task_id>")
+        @cross_origin()
+        def get_task(task_id):
+            return self.task_status_handler.handle_get_task(task_id)
+
+        @self.bp.get("/tasks")
+        @cross_origin()
+        def list_tasks():
+            return self.task_status_handler.handle_list_tasks()
 
         if constants.COMFYUI_MODE != "cpu":
             @self.bp.post("/run")

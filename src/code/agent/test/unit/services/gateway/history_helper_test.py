@@ -486,6 +486,35 @@ class TestHistoryAtomicOperations:
         assert success is False
         assert "prompt-456" not in task_manager._history_manager.history
     
+    def test_remove_if_owned_removes_when_user_matches(self, task_manager, app):
+        """remove_if_owned 归属匹配时原子删除，返回 True"""
+        hm = task_manager._history_manager
+        item = {"prompt": [1, "p1", {}, {}, []], "outputs": {}, "status": {}, "meta": {}, "user_id": "u1"}
+        hm.add_history_item("p1", item)
+
+        result = hm.remove_if_owned("p1", "u1")
+
+        assert result is True
+        assert "p1" not in hm.history
+        assert "p1" not in hm._history_by_user.get("u1", {})
+
+    def test_remove_if_owned_rejects_wrong_user(self, task_manager, app):
+        """remove_if_owned 归属不匹配时不删除，返回 False"""
+        hm = task_manager._history_manager
+        item = {"prompt": [1, "p2", {}, {}, []], "outputs": {}, "status": {}, "meta": {}, "user_id": "owner"}
+        hm.add_history_item("p2", item)
+
+        result = hm.remove_if_owned("p2", "attacker")
+
+        assert result is False
+        assert "p2" in hm.history
+
+    def test_remove_if_owned_returns_false_for_nonexistent(self, task_manager, app):
+        """remove_if_owned 对不存在的 prompt_id 返回 False"""
+        hm = task_manager._history_manager
+        result = hm.remove_if_owned("no-such-id", "u1")
+        assert result is False
+
     def test_remove_history_item_atomic(self, task_manager, app):
         """测试 _remove_history_item 的原子性"""
         with app.test_request_context():
@@ -666,6 +695,40 @@ class TestHistoryManagerUnit:
         assert success is True
         assert "prompt-1" not in history_manager.history
         assert "prompt-1" not in history_manager._history_by_user["user-bob"]
+    
+    def test_wipe_history_for_user_removes_all_for_that_user_and_returns_count(self, history_manager):
+        """wipe_history_for_user 清空指定用户全部历史并返回删除条数"""
+        for i in range(3):
+            item = {
+                "prompt": [i, f"prompt-u1-{i}", {}, {}, []],
+                "outputs": {},
+                "status": {"completed": True},
+                "meta": {},
+                "user_id": "user-one"
+            }
+            history_manager.add_history_item(f"prompt-u1-{i}", item)
+        assert len(history_manager.get_history("user-one")) == 3
+        
+        count = history_manager.wipe_history_for_user("user-one")
+        
+        assert count == 3
+        assert history_manager.get_history("user-one") == {}
+        assert "prompt-u1-0" not in history_manager.history
+        assert "prompt-u1-1" not in history_manager.history
+        assert "prompt-u1-2" not in history_manager.history
+    
+    def test_wipe_history_for_user_leaves_other_users_untouched(self, history_manager):
+        """wipe_history_for_user 只清空指定用户，不影响其他用户"""
+        item_a = {"prompt": [1, "a", {}, {}, []], "outputs": {}, "status": {"completed": True}, "meta": {}, "user_id": "user-a"}
+        item_b = {"prompt": [2, "b", {}, {}, []], "outputs": {}, "status": {"completed": True}, "meta": {}, "user_id": "user-b"}
+        history_manager.add_history_item("prompt-a", item_a)
+        history_manager.add_history_item("prompt-b", item_b)
+        
+        history_manager.wipe_history_for_user("user-a")
+        
+        assert history_manager.get_history("user-a") == {}
+        assert history_manager.get_history("user-b") == {"prompt-b": item_b}
+        assert "prompt-b" in history_manager.history
     
     def test_update_history_status(self, history_manager):
         """测试更新历史状态"""
@@ -883,7 +946,67 @@ class TestHistoryManagerEdgeCases:
         # 验证 outputs_to_execute 被正确提取
         assert history_item["prompt"][4] == ["1", "2"]
         assert history_item["prompt"][2] == {"1": {"class_type": "Test"}}
-    
+
+    def test_build_history_item_infers_outputs_to_execute_when_empty(self, history_manager):
+        """未传 outputs_to_execute 时从工作流推断（与原生 ComfyUI validate_prompt 一致）"""
+        prompt_body = {"1": {"class_type": "KSampler"}, "2": {"class_type": "SaveImage"}, "3": {"class_type": "PreviewImage"}}
+        message = {"type": "execution_start", "data": {"prompt_id": "p1", "timestamp": 1609459200000}}
+        history_item = history_manager._build_history_item(
+            prompt_id="p1", prompt_body=prompt_body, client_id="c1", user_id="u1", message=message
+        )
+        assert set(history_item["prompt"][4]) == {"2", "3"}
+        assert history_item["prompt"][2] == prompt_body
+
+    def test_build_history_item_real_request_infers_saveimage_output(self, history_manager):
+        """真实请求体（client_id + prompt + extra_data，无 outputs_to_execute）推断出 SaveImage 节点 id"""
+        # 与前端 POST /api/prompt 请求体结构一致，仅保留与推断相关的节点
+        prompt_body = {
+            "client_id": "funart_client_1772681440709",
+            "prompt": {
+                "3": {
+                    "inputs": {
+                        "seed": 140131851720022,
+                        "steps": 30,
+                        "cfg": 4,
+                        "sampler_name": "res_multistep",
+                        "scheduler": "simple",
+                        "denoise": 1,
+                        "model": ["11", 0],
+                        "positive": ["26:7", 0],
+                        "negative": ["25:7", 0],
+                        "latent_image": ["13", 0],
+                    },
+                    "class_type": "KSampler",
+                    "_meta": {"title": "K采样器"},
+                },
+                "4": {
+                    "inputs": {"ckpt_name": "NetaYumev35_pretrained_all_in_one.safetensors"},
+                    "class_type": "CheckpointLoaderSimple",
+                    "_meta": {"title": "Checkpoint加载器（简易）"},
+                },
+                "8": {
+                    "inputs": {"samples": ["3", 0], "vae": ["4", 2]},
+                    "class_type": "VAEDecode",
+                    "_meta": {"title": "VAE解码"},
+                },
+                "9": {
+                    "inputs": {"filename_prefix": "NetaYume_Lumina_3.5", "images": ["8", 0]},
+                    "class_type": "SaveImage",
+                    "_meta": {"title": "保存图像"},
+                },
+                "11": {"inputs": {"shift": 4, "model": ["4", 0]}, "class_type": "ModelSamplingAuraFlow", "_meta": {"title": "采样算法（AuraFlow）"}},
+                "13": {"inputs": {"width": 1024, "height": 1024, "batch_size": 1}, "class_type": "EmptySD3LatentImage", "_meta": {"title": "空Latent图像（SD3）"}},
+            },
+            "extra_data": {"extra_pnginfo": {"workflow": {"id": "9ae6082b-c7f4-433c-9971-7a8f65a3ea65"}}},
+        }
+        message = {"type": "execution_start", "data": {"prompt_id": "p1", "timestamp": 1609459200000}}
+        history_item = history_manager._build_history_item(
+            prompt_id="p1", prompt_body=prompt_body, client_id="funart_client_1772681440709", user_id="u1", message=message
+        )
+        assert history_item["prompt"][4] == ["9"]
+        assert "9" in history_item["prompt"][2]
+        assert history_item["prompt"][2]["9"]["class_type"] == "SaveImage"
+
     def test_build_history_item_with_small_timestamp(self, history_manager):
         """测试时间戳小于 10000000000 的情况（秒级时间戳）"""
         message = {
@@ -1199,6 +1322,25 @@ class TestHistoryManagerEdgeCases:
         assert "prompt-none" in history_manager.history
         # 验证 prompt_body 被替换为 {}
         assert history_manager.history["prompt-none"]["prompt"][2] == {}
+
+    def test_late_init_history_item_preserves_outputs_to_execute(self, history_manager):
+        """late_init_history_item 从 prompt_body 解析并保留 outputs_to_execute（与 _build_history_item 一致）"""
+        prompt_body = {
+            "prompt": {"1": {"class_type": "KSampler"}, "2": {"class_type": "SaveImage"}},
+            "outputs_to_execute": ["1", "2"]
+        }
+        success = history_manager.late_init_history_item(
+            task_id="task-1",
+            prompt_id="prompt-ote",
+            prompt_body=prompt_body,
+            client_id="client-1",
+            user_id="user-test"
+        )
+        assert success is True
+        assert "prompt-ote" in history_manager.history
+        prompt_arr = history_manager.history["prompt-ote"]["prompt"]
+        assert prompt_arr[2] == {"1": {"class_type": "KSampler"}, "2": {"class_type": "SaveImage"}}
+        assert prompt_arr[4] == ["1", "2"]
 
 
 class TestHistoryManagerFullCoverage:

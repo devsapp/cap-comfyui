@@ -330,3 +330,27 @@ class TestDataFormat:
             assert result["prompt-failed"]["status"]["status_str"] == "error"
             assert result["prompt-failed"]["status"]["completed"] is True
 
+
+class TestHandlePostRequest:
+    """测试 POST /api/history（clear、delete，与 ComfyUI 对齐）"""
+    
+    def test_post_history_clear_calls_clear_history_and_returns_200(self, app, handler_with_mocks, mock_task_manager):
+        """POST body 含 clear: true 时调用 clear_history(current_user) 并返回 200"""
+        mock_task_manager.clear_history = Mock(return_value=2)
+        with app.test_request_context('/api/history', method='POST', json={"clear": True}):
+            g.user_id = 'user-post-clear'
+            response = handler_with_mocks.handle_post_request()
+        
+        assert response[1] == 200
+        mock_task_manager.clear_history.assert_called_once_with('user-post-clear')
+    
+    def test_post_history_delete_calls_delete_history_items_and_returns_200(self, app, handler_with_mocks, mock_task_manager):
+        """POST body 含 delete: [id1, id2] 时调用 delete_history_items(ids, current_user) 并返回 200"""
+        mock_task_manager.delete_history_items = Mock(return_value=2)
+        with app.test_request_context('/api/history', method='POST', json={"delete": ["id1", "id2"]}):
+            g.user_id = 'user-post-del'
+            response = handler_with_mocks.handle_post_request()
+        
+        assert response[1] == 200
+        mock_task_manager.delete_history_items.assert_called_once_with(["id1", "id2"], 'user-post-del')
+

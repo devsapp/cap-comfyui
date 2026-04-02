@@ -162,6 +162,11 @@ PREWARM_PROMPT = os.getenv("PREWARM_PROMPT", "")
 # GPU 函数的 URL，当 COMFYUI_MODE="cpu" 时使用
 GPU_FUNCTION_URL = os.getenv("GPU_FUNCTION_URL", "")
 
+# FC OpenAPI（StopAsyncTask）配置
+FC_ACCOUNT_ID = os.getenv("FC_ACCOUNT_ID", "")
+FC_REGION = os.getenv("FC_REGION", "cn-hangzhou")
+FC_FUNCTION_NAME = os.getenv("FC_FUNCTION_NAME", "")
+
 # HTTP Header 常量
 HEADER_SNAPSHOT_NAME = "X-FunArt-Snapshot"
 HEADER_FC_INVOCATION_TYPE = "X-FC-Invocation-Type"

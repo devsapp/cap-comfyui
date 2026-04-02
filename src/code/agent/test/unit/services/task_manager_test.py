@@ -490,8 +490,149 @@ class TestDataConsistency:
             assert set(task_manager._history_manager.history.keys()) == set(task_manager._history_manager._history_by_user["user-test"].keys())
 
 
+class TestClearHistoryAndDeleteHistoryItems:
+    """测试 clear_history 与 delete_history_items（与 ComfyUI POST /history 对齐）"""
+    
+    def test_clear_history_removes_only_that_user_history(self, task_manager, app):
+        """clear_history(user_id) 只清空该用户历史，返回删除条数"""
+        with app.test_request_context():
+            g.user_id = "user-clear"
+        for i in range(2):
+            item = {
+                "prompt": [i, f"p-clear-{i}", {}, {}, []],
+                "outputs": {},
+                "status": {"completed": True},
+                "meta": {},
+                "user_id": "user-clear"
+            }
+            task_manager._history_manager.add_history_item(f"p-clear-{i}", item)
+        other = {"prompt": [0, "p-other", {}, {}, []], "outputs": {}, "status": {"completed": True}, "meta": {}, "user_id": "user-other"}
+        task_manager._history_manager.add_history_item("p-other", other)
+        
+        count = task_manager.clear_history("user-clear")
+        
+        assert count == 2
+        with app.test_request_context():
+            g.user_id = "user-clear"
+            assert task_manager.get_history() == {}
+            g.user_id = "user-other"
+            assert task_manager.get_history() == {"p-other": other}
+    
+    def test_delete_history_items_only_removes_owned_items(self, task_manager, app):
+        """delete_history_items(ids, user_id) 只删除属于该用户的条目，返回实际删除数"""
+        item_a1 = {"prompt": [1, "pa1", {}, {}, []], "outputs": {}, "status": {"completed": True}, "meta": {}, "user_id": "user-del"}
+        item_a2 = {"prompt": [2, "pa2", {}, {}, []], "outputs": {}, "status": {"completed": True}, "meta": {}, "user_id": "user-del"}
+        item_b = {"prompt": [3, "pb", {}, {}, []], "outputs": {}, "status": {"completed": True}, "meta": {}, "user_id": "user-other"}
+        task_manager._history_manager.add_history_item("pa1", item_a1)
+        task_manager._history_manager.add_history_item("pa2", item_a2)
+        task_manager._history_manager.add_history_item("pb", item_b)
+        
+        removed = task_manager.delete_history_items(["pa1", "pb", "pa2"], "user-del")
+        
+        assert removed == 2
+        assert task_manager._history_manager.get_history_item("pa1") is None
+        assert task_manager._history_manager.get_history_item("pa2") is None
+        assert task_manager._history_manager.get_history_item("pb") is not None
+
+
+class TestClearQueueAlignment:
+    """测试 clear_queue 与 ComfyUI POST /queue clear 对齐（只清 PENDING，不清 COMPLETED/FAILED）"""
+    
+    def test_clear_queue_only_clears_pending_not_completed_or_failed(self, task_manager, app):
+        """clear_queue 只清除当前用户的 PENDING 任务，保留 COMPLETED/FAILED（与 ComfyUI wipe_queue 语义一致）"""
+        with app.test_request_context():
+            g.user_id = "user-queue-clear"
+            pending_task = Task(
+                task_id="pending-1",
+                client_id="c1",
+                prompt_body={"prompt": {}},
+                user_id="user-queue-clear",
+                status=TaskStatus.PENDING,
+            )
+            completed_task = Task(
+                task_id="completed-1",
+                client_id="c1",
+                prompt_body={"prompt": {}},
+                user_id="user-queue-clear",
+                status=TaskStatus.COMPLETED,
+            )
+            failed_task = Task(
+                task_id="failed-1",
+                client_id="c1",
+                prompt_body={"prompt": {}},
+                user_id="user-queue-clear",
+                status=TaskStatus.FAILED,
+            )
+            with task_manager._lock:
+                task_manager._tasks["pending-1"] = pending_task
+                task_manager._tasks["completed-1"] = completed_task
+                task_manager._tasks["failed-1"] = failed_task
+                task_manager._running_count_by_user["user-queue-clear"] = 0
+            task_manager._history_manager.add_history_item("pending-1", {"user_id": "user-queue-clear", "status": {"completed": False}})
+            task_manager._history_manager.add_history_item("completed-1", {"user_id": "user-queue-clear", "status": {"completed": True}})
+
+            cleared = task_manager.clear_queue()
+
+            assert cleared == 1
+            assert "pending-1" not in task_manager._tasks
+            assert "completed-1" in task_manager._tasks
+            assert "failed-1" in task_manager._tasks
+            assert task_manager._history_manager.get_history_item("pending-1") is None
+            assert task_manager._history_manager.get_history_item("completed-1") is not None
+
+
+class TestGetCurrentUserPendingTaskIds:
+    """测试 get_current_user_pending_task_ids"""
+
+    def test_get_current_user_pending_task_ids_returns_only_current_user_pending(self, task_manager, app):
+        """get_current_user_pending_task_ids 只返回当前用户的 PENDING task_id 列表"""
+        pend1 = Task(
+            task_id="pend1",
+            client_id="c1",
+            prompt_body={"prompt": {}},
+            user_id="user-me",
+            status=TaskStatus.PENDING,
+        )
+        pend2 = Task(
+            task_id="pend2",
+            client_id="c1",
+            prompt_body={"prompt": {}},
+            user_id="user-me",
+            status=TaskStatus.PENDING,
+        )
+        run_me = Task(
+            task_id="run-me",
+            client_id="c1",
+            prompt_body={"prompt": {}},
+            user_id="user-me",
+            status=TaskStatus.RUNNING,
+        )
+        pend_other = Task(
+            task_id="pend-other",
+            client_id="c1",
+            prompt_body={"prompt": {}},
+            user_id="user-other",
+            status=TaskStatus.PENDING,
+        )
+        with task_manager._lock:
+            task_manager._tasks["pend1"] = pend1
+            task_manager._tasks["pend2"] = pend2
+            task_manager._tasks["run-me"] = run_me
+            task_manager._tasks["pend-other"] = pend_other
+            task_manager._running_count_by_user["user-me"] = 1
+            task_manager._running_count_by_user["user-other"] = 0
+
+        with app.test_request_context():
+            g.user_id = "user-me"
+            ids = task_manager.get_current_user_pending_task_ids()
+
+        assert len(ids) == 2
+        assert "pend1" in ids
+        assert "pend2" in ids
+        assert "run-me" not in ids
+        assert "pend-other" not in ids
+
 class TestHandleMessage:
-    """测试 handle_message 方法"""
     
     @pytest.fixture
     def sample_task(self, task_manager, app):

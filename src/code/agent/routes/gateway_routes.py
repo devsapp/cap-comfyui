@@ -18,6 +18,7 @@ from services.gateway.handlers.queue_handler import QueueHandler
 from services.gateway.handlers.prompt_handler import PromptHandler
 from services.gateway.handlers.serverless_handler import ServerlessHandler
 from services.gateway.handlers.history_handler import HistoryHandler
+from services.gateway.handlers.interrupt_handler import InterruptHandler
 from services.gateway.handlers.reboot_handler import RebootHandler
 from services.gateway.handlers.userdata_handler import UserdataHandler
 from services.gateway.handlers.ws_handler import WsHandler
@@ -46,6 +47,7 @@ class GatewayRoutes:
         self.prompt_handler = PromptHandler(task_manager)
         self.serverless_handler = ServerlessHandler()
         self.history_handler = HistoryHandler()
+        self.interrupt_handler = InterruptHandler()
         self.userdata_handler = UserdataHandler()
         self.ws_handler = WsHandler()
         self.serverless_ws_handler = ServerlessWsHandler(constants.GPU_FUNCTION_URL)
@@ -70,6 +72,7 @@ class GatewayRoutes:
             self._register_prompt_handler()
             self._register_serverless_run_handler()
             self._register_history_handler()
+            self._register_interrupt_handler()
             # 通过环境变量控制是否禁用工作流保存
             if constants.DISABLE_FLOW_SAVE:
                 self._register_userdata_handler()
@@ -222,10 +225,18 @@ class GatewayRoutes:
             return self.serverless_handler.handle_post_request()
     
     def _register_history_handler(self):
-        @self.bp.route("/history", methods=["GET"])
+        @self.bp.route("/history", methods=["GET", "POST"])
         @handle_exceptions(error_type="history_operation_error", log_prefix="History")
         def handle_history():
-            return self.history_handler.handle_get_request()
+            if request.method == "GET":
+                return self.history_handler.handle_get_request()
+            return self.history_handler.handle_post_request()
+    
+    def _register_interrupt_handler(self):
+        @self.bp.route("/interrupt", methods=["POST"])
+        @handle_exceptions(error_type="interrupt_operation_error", log_prefix="Interrupt")
+        def handle_interrupt():
+            return self.interrupt_handler.handle_post()
     
     def _register_reboot_handler(self):
         @self.bp.route("/manager/reboot", methods=["GET", "POST"])

@@ -20,9 +20,11 @@ from services.gateway.handlers.serverless_handler import ServerlessHandler
 from services.gateway.handlers.history_handler import HistoryHandler
 from services.gateway.handlers.interrupt_handler import InterruptHandler
 from services.gateway.handlers.reboot_handler import RebootHandler
+from services.gateway.handlers.task_status_handler import TaskStatusHandler
 from services.gateway.handlers.userdata_handler import UserdataHandler
 from services.gateway.handlers.ws_handler import WsHandler
 from services.gateway.handlers.serverless_ws_handler import ServerlessWsHandler
+from services.serverlessapi.serverless_api_service import ServerlessApiService
 from utils.user_identity import set_user_identity_or_default
 
 
@@ -46,6 +48,7 @@ class GatewayRoutes:
         self.queue_handler = QueueHandler(task_manager)
         self.prompt_handler = PromptHandler(task_manager)
         self.serverless_handler = ServerlessHandler()
+        self.task_status_handler = TaskStatusHandler(ServerlessApiService())
         self.history_handler = HistoryHandler()
         self.interrupt_handler = InterruptHandler()
         self.userdata_handler = UserdataHandler()
@@ -71,6 +74,7 @@ class GatewayRoutes:
             self._register_queue_handler()
             self._register_prompt_handler()
             self._register_serverless_run_handler()
+            self._register_task_status_handler()
             self._register_history_handler()
             self._register_interrupt_handler()
             # 通过环境变量控制是否禁用工作流保存
@@ -224,6 +228,15 @@ class GatewayRoutes:
             """
             return self.serverless_handler.handle_post_request()
     
+    def _register_task_status_handler(self):
+        @self.bp.get("/serverless/task/<task_id>")
+        def get_task(task_id):
+            return self.task_status_handler.handle_get_task(task_id)
+
+        @self.bp.get("/serverless/tasks")
+        def list_tasks():
+            return self.task_status_handler.handle_list_tasks()
+
     def _register_history_handler(self):
         @self.bp.route("/history", methods=["GET", "POST"])
         @handle_exceptions(error_type="history_operation_error", log_prefix="History")

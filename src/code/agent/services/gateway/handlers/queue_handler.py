@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from flask import Response, copy_current_request_context, jsonify, request
 
 from utils.logger import log
-from services.fc_openapi.fc_client import stop_async_task
+from utils.fc_openapi.fc_client import stop_async_task
 from services.gateway.task.utils.prompt_utils import parse_prompt_body
 
 # 单次 clear 最多对多少个 PENDING 调 StopAsyncTask，避免请求阻塞过久；其余仍由 clear_queue 本地清除

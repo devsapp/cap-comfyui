@@ -2,7 +2,6 @@ from enum import Enum
 import os
 import socket
 
-from utils.logger import log
 from utils.args import build_boot_command
 
 TYPE_COMFYUI = 'comfyui'
@@ -25,8 +24,14 @@ SHARED_MODELS_DIR = os.getenv('SHARED_MODELS_DIR', '/mnt/shared/models')
 SKIP_SNAPSHOT_LOADING = os.getenv('SKIP_SNAPSHOT_LOADING')
 # API函数启动时是否跳过加载NAS中的custom_nodes.zip到实例磁盘，若跳过则可能遇到部分插件在多个实例并发读写NAS中插件目录时的冲突情况
 SKIP_NODES_LOADING = os.getenv('SKIP_NODES_LOADING', '').lower() == 'true'
-# 初始化时是否安装所有 custom_nodes 插件依赖，默认不安装；线上服务强制为 False，仅开发阶段且值为 'true'/'True' 时才安装
-AUTO_INSTALL = (not USE_API_MODE) and os.getenv('AUTO_INSTALL', '').lower() == 'true'
+
+# 哨兵对象，用于区分启动工作站时"未传 nodes_map（跳过插件安装）"和"传了 None（安装所有插件）"
+SKIP_INSTALL_SENTINEL = object()
+
+# 启动时的插件自动安装策略，由管控侧通过 UpdateFunction 写入：
+# "*" → 安装所有存量插件依赖；JSON dict → clone + install 指定插件；其他 → 不安装
+AUTO_INSTALL_NODES = os.getenv('AUTO_INSTALL_NODES', '')
+
 # 第一轮分批安装每批的包数，可通过环境变量 INSTALL_BATCH_SIZE 覆盖
 INSTALL_BATCH_SIZE = int(os.getenv('INSTALL_BATCH_SIZE', '20'))
 BUILTIN_NODES_DIR = os.getenv("BUILTIN_NODES_DIR", "/root/built-in/custom_nodes")

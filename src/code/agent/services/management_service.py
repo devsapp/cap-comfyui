@@ -1,3 +1,4 @@
+import os
 import time
 from enum import Enum
 from threading import Lock
@@ -81,9 +82,6 @@ class ManagementService:
     def cur_snapshot_name(self) -> Optional[str]:
         return self._snapshot_mgr.snapshot_name
 
-    # 哨兵对象，表示启动时是否跳过依赖安装流程
-    _SKIP_INSTALL_SENTINEL = object()
-
     def clone_custom_nodes(
         self,
         nodes_map: Dict,
@@ -138,7 +136,7 @@ class ManagementService:
         installer = PIPInstaller()
         return installer.install_all(timeout=timeout, nodes_map=nodes_map, custom_nodes_dirs=custom_nodes_dirs)
 
-    def start(self, snapshot_name: str, nodes_map: Optional[Dict] = _SKIP_INSTALL_SENTINEL) -> Dict:
+    def start(self, snapshot_name: str, nodes_map: Optional[Dict] = constants.SKIP_INSTALL_SENTINEL) -> Dict:
         """
         启动ComfyUI服务。
 
@@ -177,12 +175,19 @@ class ManagementService:
                 setup_builtin_custom_nodes()
                 setup_shared_models()
 
-            # 安装缺失插件依赖
-            if nodes_map is not self._SKIP_INSTALL_SENTINEL:
+            # 线上服务(API模式)无条件跳过插件安装，只有项目开发时才需要
+            if constants.USE_API_MODE:
+                nodes_map = constants.SKIP_INSTALL_SENTINEL
+
+            # clone + install 插件依赖
+            if nodes_map is not constants.SKIP_INSTALL_SENTINEL:
                 self.sub_status = StartingSubStatus.INSTALLING.value
                 with timer("Install custom_nodes packages") as t_install_process:
-                    # TODO: 根据funart版本判断是否安装内置插件目录的依赖
-                    install_result = self.install_custom_nodes(nodes_map)
+                    custom_nodes_dirs = [os.path.join(constants.COMFYUI_DIR, "custom_nodes"), constants.BUILTIN_DELTA_NODES_DIR]
+                    if isinstance(nodes_map, dict) and nodes_map:
+                        clone_result = self.clone_custom_nodes(nodes_map, custom_nodes_dirs=custom_nodes_dirs, timeout=300)
+                        result_map["clone_result"] = clone_result
+                    install_result = self.install_custom_nodes(nodes_map, custom_nodes_dirs=custom_nodes_dirs) # 默认15min超时时间
                     result_map.update(install_result)
                 result_map["time_install_process"] = round(t_install_process.elapsed, 2)
 
@@ -251,6 +256,3 @@ class ManagementService:
         result_map.update(stop_result_map)
         return result_map
 
-    @property
-    def SKIP_INSTALL_SENTINEL(self):
-        return self._SKIP_INSTALL_SENTINEL

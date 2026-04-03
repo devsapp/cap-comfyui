@@ -31,10 +31,10 @@ class ManagementRoutes:
             if isinstance(data, dict):
                 # - 如果请求体是有效的JSON字典，则尝试获取 'nodes'。否则，置为哨兵值跳过依赖安装
                 # 注意: "nodes": null时，nodes_map为None，表示全部安装
-                nodes_map = data.get('nodes', self.service.SKIP_INSTALL_SENTINEL)
+                nodes_map = data.get('nodes', constants.SKIP_INSTALL_SENTINEL)
             else:
                 # - 请求体为空、不是JSON、或者是JSON但不是字典(例如 "[]" 或 "null")时，跳过依赖安装。
-                nodes_map = self.service.SKIP_INSTALL_SENTINEL
+                nodes_map = constants.SKIP_INSTALL_SENTINEL
 
             # --- 步骤 3: 调用 service 方法 ---
             result_map = self.service.start(snap, nodes_map=nodes_map)

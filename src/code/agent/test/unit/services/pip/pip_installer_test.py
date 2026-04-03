@@ -925,5 +925,129 @@ class TestReinstallComfyuiRequirements(_Base):
         self.assertAlmostEqual(used_timeout, 590, delta=2)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 16. timed_out 字段追踪
+# ─────────────────────────────────────────────────────────────────────────────
+class TestTimedOutTracking(_Base):
+    """验证 install_all 及各步骤中 _timed_out 状态追踪的正确性"""
+
+    def test_no_nodes_returns_timed_out_false(self):
+        """没有节点时直接返回，timed_out=False"""
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        with patch("builtins.print"):
+            result = installer.install_all(timeout=60, nodes_map={})
+        self.assertIn("timed_out", result)
+        self.assertFalse(result["timed_out"])
+
+    def test_normal_install_timed_out_false(self):
+        """正常安装完成 → timed_out=False"""
+        self._make_node("node-a", requirements="requests\n")
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        with patch("subprocess.run",
+                   return_value=subprocess.CompletedProcess(args=[], returncode=0)), \
+             patch.object(installer, "_execute_install_scripts", return_value=[]), \
+             patch.object(installer, "_reinstall_comfyui_requirements"), \
+             patch("builtins.print"):
+            result = installer.install_all(timeout=600, nodes_map=None)
+        self.assertFalse(result["timed_out"])
+        self.assertFalse(installer._timed_out)
+
+    def test_timeout_in_merge_sets_timed_out_true(self):
+        """merge 阶段超时 → timed_out=True"""
+        self._make_node("slow-node", requirements="requests\n")
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        with patch("time.time", side_effect=[0] + [9999] * 20), \
+             patch("builtins.print"):
+            result = installer.install_all(timeout=1, nodes_map=None)
+        self.assertTrue(result["timed_out"])
+        self.assertTrue(installer._timed_out)
+
+    def test_batch_timeout_sets_timed_out_true(self):
+        """第一轮批次安装超时 → _timed_out=True"""
+        self._make_node("node-a", requirements="requests\nnumpy\n")
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+
+        call_count = [0]
+        def mock_time():
+            call_count[0] += 1
+            if call_count[0] <= 3:
+                return 0.0
+            return 9999.0
+
+        with patch("time.time", side_effect=mock_time), \
+             patch("subprocess.run",
+                   return_value=subprocess.CompletedProcess(args=[], returncode=0)), \
+             patch.object(installer, "_execute_install_scripts", return_value=[]), \
+             patch.object(installer, "_reinstall_comfyui_requirements"), \
+             patch("builtins.print"):
+            self.mock_constants.INSTALL_BATCH_SIZE = 1
+            result = installer.install_all(timeout=1, nodes_map=None)
+        self.assertTrue(installer._timed_out)
+
+    def test_round2_timeout_sets_timed_out_true(self):
+        """第二轮逐个安装超时 → _timed_out=True，剩余包进入 problematic_deps"""
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        installer._timed_out = False
+        installer._problematic_deps = {}
+        deps = [self._dep("pkg-a"), self._dep("pkg-b")]
+
+        # start_time 远在过去 → remaining <= 0，立即超时
+        past_start = time.time() - 9999
+        with patch("builtins.print"):
+            installer._install_individually(deps, timeout=1, start_time=past_start)
+
+        self.assertTrue(installer._timed_out)
+        self.assertEqual(len(installer._problematic_deps), 2)
+
+    def test_step3_skipped_on_timeout_sets_timed_out_true(self):
+        """Step 3（install.py 脚本执行）因超时被跳过 → _timed_out=True"""
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        installer._timed_out = False
+
+        past_time = time.time() - 9999
+        with patch("builtins.print"):
+            result = installer._execute_install_scripts(
+                ["node-a"], {"node-a": "/fake/path"}, timeout=1, start_time=past_time
+            )
+        self.assertEqual(result, [])
+        self.assertTrue(installer._timed_out)
+
+    def test_step4_skipped_on_timeout_sets_timed_out_true(self):
+        """Step 4（重装 ComfyUI 依赖）因超时被跳过 → _timed_out=True"""
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        installer._timed_out = False
+
+        past_time = time.time() - 9999
+        with patch("builtins.print"):
+            installer._reinstall_comfyui_requirements(timeout=1, start_time=past_time)
+        self.assertTrue(installer._timed_out)
+
+    def test_timed_out_reset_each_install_all_call(self):
+        """每次 install_all 调用 → _timed_out 重新初始化为 False"""
+        with patch("services.pip.pip_installer.subprocess.check_output",
+                   return_value="Package Version\n"):
+            installer = PIPInstaller()
+        installer._timed_out = True
+
+        with patch("builtins.print"):
+            result = installer.install_all(timeout=60, nodes_map={})
+        self.assertFalse(result["timed_out"])
+        self.assertFalse(installer._timed_out)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

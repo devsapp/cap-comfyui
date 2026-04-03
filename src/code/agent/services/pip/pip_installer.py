@@ -8,10 +8,9 @@ import constants
 from utils import file_ops
 from services.pip.models import InstallRecord, DependencyInstallRecord, DependencyInfo
 from services.pip.version_resolver import resolve_version_conflict
-# 逐个安装（fallback 轮）使用的 pip 源：aliyun 主源 + PyPI 官方兜底
+# 逐个安装（fallback 轮）使用的 pip 源：仅 aliyun 源
 # 通过环境变量覆盖 pip.conf，避免 tsinghua/ustc 源问题干扰兜底安装
 _FALLBACK_INDEX_URL = "https://mirrors.aliyun.com/pypi/simple/"
-_FALLBACK_EXTRA_INDEX_URL = "https://pypi.org/simple/"
 
 
 class PIPInstaller:
@@ -69,6 +68,7 @@ class PIPInstaller:
         nodes_to_install = self._determine_nodes_to_install(all_available_nodes, nodes_map)
 
         self._problematic_deps: Dict[str, DependencyInfo] = {}
+        self._timed_out = False
 
         result_map = {
             "baseline": self._origin_packages,
@@ -78,6 +78,7 @@ class PIPInstaller:
 
         if not nodes_to_install:
             print("\n[Installer] No nodes to install. Skipping.")
+            result_map["timed_out"] = False
             return result_map
 
         print(f"\n[Installer] Starting installation for {len(nodes_to_install)} nodes...")
@@ -99,12 +100,13 @@ class PIPInstaller:
             self._reinstall_comfyui_requirements(timeout, start_time)
 
         except TimeoutError as e:
+            self._timed_out = True
             print(f"\n[Installer] {e}")
 
         self._print_problematic_deps()
 
         total_duration = time.time() - start_time
-        print(f"\n[Installer] Installation completed. Total time: {total_duration:.1f}s")
+        print(f"\n[Installer] Installation completed. Total time: {total_duration:.1f}s (timed_out={self._timed_out})")
 
         dep_success = result_map["dependencies"]["success"] if result_map["dependencies"] else True
         script_success_count = len([r for r in result_map["scripts"] if r["success"]])
@@ -113,6 +115,7 @@ class PIPInstaller:
         print(f"[Installer] Dependencies: {'Success' if dep_success else 'Failed'}")
         print(f"[Installer] Scripts: {script_success_count}/{script_total_count} successful")
 
+        result_map["timed_out"] = self._timed_out
         return result_map
 
     def _determine_nodes_to_install(self, all_available_nodes: List[str], nodes_map) -> List[str]:
@@ -346,6 +349,7 @@ class PIPInstaller:
             remaining = timeout - elapsed
             if remaining <= 0:
                 # 超时：当前及后续批次全部移入 failed_deps
+                self._timed_out = True
                 for b in batches[i:]:
                     failed_deps.extend(b)
                 failed_batch_count += total_batches - i
@@ -386,18 +390,19 @@ class PIPInstaller:
         """
         第二轮：逐个安装，失败或超时的包加入 self._problematic_deps。
 
-        使用精简源配置（aliyun 主源 + PyPI 官方兜底），通过环境变量覆盖 pip.conf，
+        使用精简源配置（仅 aliyun 源），通过环境变量覆盖 pip.conf，
         避免 tsinghua/ustc 镜像覆盖不全时干扰兜底安装。
         """
         env = self._get_pip_install_env()
         env["PIP_INDEX_URL"] = _FALLBACK_INDEX_URL
-        env["PIP_EXTRA_INDEX_URL"] = _FALLBACK_EXTRA_INDEX_URL
+        env.pop("PIP_EXTRA_INDEX_URL", None)
 
         total = len(deps)
         for idx, dep in enumerate(deps):
             elapsed = time.time() - start_time
             remaining = timeout - elapsed
             if remaining <= 0:
+                self._timed_out = True
                 for d in deps[idx:]:
                     self._problematic_deps[d.package_name] = d
                 print(f"[Installer] ## Round 2: timeout reached, {total - idx} package(s) skipped → problematic")
@@ -421,6 +426,7 @@ class PIPInstaller:
     def _execute_install_scripts(self, nodes_to_install: List[str], node_paths_map: Dict[str, str], timeout: float, start_time: float) -> List[Dict]:
         """步骤3: 执行各插件的 install.py 脚本，返回安装记录列表"""
         if time.time() - start_time >= timeout:
+            self._timed_out = True
             print(f"\n[Installer] ## Step 3 skipped: Already timed out ({timeout}s)")
             return []
 
@@ -456,6 +462,7 @@ class PIPInstaller:
         elapsed = time.time() - start_time
         remaining = timeout - elapsed
         if remaining <= 0:
+            self._timed_out = True
             print(f"\n[Installer] ## Step 4 skipped: Already timed out ({timeout}s)")
             return
 

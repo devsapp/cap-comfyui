@@ -45,14 +45,14 @@ class TestFormatTask:
         assert out["endTime"] == 200
         assert out["durationMs"] == 50
 
-    def test_duration_from_end_minus_start_when_duration_ms_missing(self):
+    def test_duration_is_none_when_duration_ms_missing(self):
         out = _format_task({
             "taskId": "t1",
             "status": "Succeeded",
             "startedTime": 1000,
             "endTime": 1500,
         })
-        assert out["durationMs"] == 500
+        assert out["durationMs"] is None
 
     def test_empty_dict_returns_defaults(self):
         out = _format_task({})

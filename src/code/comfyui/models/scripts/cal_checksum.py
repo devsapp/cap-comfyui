@@ -14,6 +14,7 @@
 使用方法：
     python3 cal_checksum.py /path/to/models models_20251225.json
     python3 cal_checksum.py /path/to/models models_20251225.json --dir unet
+    python3 cal_checksum.py /path/to/models models_20251225.json --json-only
 """
 
 import argparse
@@ -304,6 +305,7 @@ def main():
   %(prog)s /root/models models_20251225.json
   %(prog)s /root/models models_20251225.json --dir unet
   %(prog)s ~/ComfyUI/models models_20251225.json --dir loras
+  %(prog)s /root/models models_20251225.json --json-only
         """
     )
     
@@ -322,7 +324,13 @@ def main():
         dest='subdir',
         help='只验证指定子目录（如 unet, loras, vae 等）'
     )
-    
+
+    parser.add_argument(
+        '--json-only',
+        action='store_true',
+        help='只验证 JSON 文件中列出的模型，而非扫描整个目录'
+    )
+
     args = parser.parse_args()
     
     print("=" * 80)
@@ -345,16 +353,27 @@ def main():
     print()
     
     # 查找模型文件
-    print(f"🔎 扫描目录: {args.base_dir}")
-    if args.subdir:
-        print(f"   子目录: {args.subdir}")
-    
-    model_files = find_model_files(args.base_dir, args.subdir)
-    
+    if args.json_only:
+        print(f"🔎 仅验证 JSON 中列出的模型（共 {len(models_mapping)} 个）")
+        base_path = Path(args.base_dir)
+        model_files = []
+        for filename, info in models_mapping.items():
+            directory = info.get('directory', '')
+            full_path = str(base_path / directory / filename)
+            if not Path(full_path).exists():
+                print(f"  ⚠️  文件不存在，跳过: {directory}/{filename}")
+                continue
+            model_files.append((full_path, directory, filename))
+    else:
+        print(f"🔎 扫描目录: {args.base_dir}")
+        if args.subdir:
+            print(f"   子目录: {args.subdir}")
+        model_files = find_model_files(args.base_dir, args.subdir)
+
     if not model_files:
         print("⚠️  未找到任何模型文件")
         return
-    
+
     print(f"✓ 找到 {len(model_files)} 个模型文件")
     print()
     

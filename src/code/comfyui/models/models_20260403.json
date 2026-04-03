@@ -1,0 +1,22 @@
+{
+  "flux-2-klein-9b.safetensors": {
+    "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9B/resolve/main/flux-2-klein-9b.safetensors",
+    "directory": "unet"
+  },
+  "flux-2-klein-4b.safetensors": {
+    "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/main/flux-2-klein-4b.safetensors",
+    "directory": "unet"
+  },
+  "qwen_image_edit_2511_fp8mixed.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Flux-2-klein-9b-fp8.safetensors": {
+    "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8/resolve/main/flux-2-klein-9b-fp8.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Flux-2-klein-4b-fp8.safetensors": {
+    "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/resolve/main/flux-2-klein-4b-fp8.safetensors",
+    "directory": "diffusion_models"
+  }
+}

@@ -1,1492 +1,499 @@
 {
-  "qwen_image_edit_2509_fp8_e4m3fn.safetensors": {
-    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors",
-    "directory": "unknown",
-    "node_types": [
-      "33e101ba-5dc4-4252-b3eb-2a67387cb931",
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "02_qwen_Image_edit_subgraphed.json",
-      "image_qwen_image_edit_2509.json"
-    ]
-  },
-  "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors": {
-    "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
-    "directory": "unknown",
-    "node_types": [
-      "33e101ba-5dc4-4252-b3eb-2a67387cb931",
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "02_qwen_Image_edit_subgraphed.json",
-      "image_qwen_image_edit_2509.json"
-    ]
-  },
-  "hunyuan_3d_v2.1.safetensors": {
-    "url": "https://huggingface.co/Comfy-Org/hunyuan3D_2.1_repackaged/resolve/main/hunyuan_3d_v2.1.safetensors",
-    "directory": "unknown",
-    "node_types": [
-      "ImageOnlyCheckpointLoader",
-      "d7344a5a-fd0d-4b8a-b5e1-1237e5b21937"
-    ],
-    "used_in_templates": [
-      "04_hunyuan_3d_2.1_subgraphed.json",
-      "3d_hunyuan3d-v2.1.json"
-    ]
-  },
   "hunyuan3d-dit-v2_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/hunyuan3D_2.0_repackaged/resolve/main/split_files/hunyuan3d-dit-v2_fp16.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "ImageOnlyCheckpointLoader"
-    ],
-    "used_in_templates": [
-      "3d_hunyuan3d_image_to_model.json"
-    ]
+    "directory": "checkpoints"
   },
   "hunyuan3d-dit-v2-mv_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/hunyuan3D_2.0_repackaged/resolve/main/split_files/hunyuan3d-dit-v2-mv_fp16.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "ImageOnlyCheckpointLoader"
-    ],
-    "used_in_templates": [
-      "3d_hunyuan3d_multiview_to_model.json"
-    ]
+    "directory": "checkpoints"
   },
   "hunyuan3d-dit-v2-mv-turbo_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/hunyuan3D_2.0_repackaged/resolve/main/split_files/hunyuan3d-dit-v2-mv-turbo_fp16.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "ImageOnlyCheckpointLoader"
-    ],
-    "used_in_templates": [
-      "3d_hunyuan3d_multiview_to_model_turbo.json"
-    ]
+    "directory": "checkpoints"
   },
   "ace_step_v1_3.5b.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/ACE-Step_ComfyUI_repackaged/blob/main/all_in_one/ace_step_v1_3.5b.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "audio_ace_step_1_m2m_editing.json",
-      "audio_ace_step_1_t2a_instrumentals.json",
-      "audio_ace_step_1_t2a_song.json"
-    ]
+    "directory": "checkpoints"
   },
   "stable-audio-open-1.0.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/stable-audio-open-1.0_repackaged/resolve/main/stable-audio-open-1.0.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "audio_stable_audio_example.json"
-    ]
+    "directory": "checkpoints"
   },
   "t5-base.safetensors": {
     "url": "https://huggingface.co/ComfyUI-Wiki/t5-base/resolve/main/t5-base.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader"
-    ],
-    "used_in_templates": [
-      "audio_stable_audio_example.json"
-    ]
+    "directory": "clip"
   },
   "DreamShaper_8_pruned.safetensors": {
     "url": "https://huggingface.co/Lykon/DreamShaper/resolve/main/DreamShaper_8_pruned.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "controlnet_example.json"
-    ]
+    "directory": "checkpoints"
   },
   "vae-ft-mse-840000-ema-pruned.safetensors": {
     "url": "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors?download=true",
-    "directory": "vae",
-    "node_types": [
-      "6b0ed7ac-f476-44c9-9dad-b3f23ef985f8",
-      "VAELoader",
-      "d4b3d2cf-e436-4abb-84b8-47133c37745a"
-    ],
-    "used_in_templates": [
-      "controlnet_example.json",
-      "flux_depth_lora_example.json",
-      "sd3.5_large_depth.json"
-    ]
+    "directory": "vae"
   },
   "control_v11p_sd15_scribble_fp16.safetensors": {
     "url": "https://huggingface.co/comfyanonymous/ControlNet-v1-1_fp16_safetensors/resolve/main/control_v11p_sd15_scribble_fp16.safetensors?download=true",
-    "directory": "controlnet",
-    "node_types": [
-      "ControlNetLoader"
-    ],
-    "used_in_templates": [
-      "controlnet_example.json"
-    ]
+    "directory": "controlnet"
   },
   "v1-5-pruned-emaonly-fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-v1-5-archive/resolve/main/v1-5-pruned-emaonly-fp16.safetensors?download=true",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "default.json",
-      "image2image.json"
-    ]
+    "directory": "checkpoints"
   },
   "architecturerealmix_v11.safetensors": {
     "url": "https://civitai.com/api/download/models/431755?type=Model&format=SafeTensor&size=full&fp=fp16",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "depth_controlnet.json"
-    ]
+    "directory": "checkpoints"
   },
   "control_v11f1p_sd15_depth_fp16.safetensors": {
     "url": "https://huggingface.co/comfyanonymous/ControlNet-v1-1_fp16_safetensors/resolve/main/control_v11f1p_sd15_depth_fp16.safetensors",
-    "directory": "controlnet",
-    "node_types": [
-      "ControlNetLoader"
-    ],
-    "used_in_templates": [
-      "depth_controlnet.json"
-    ]
+    "directory": "controlnet"
   },
   "clip_l.safetensors": {
     "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors?download=true",
-    "directory": "clip",
-    "node_types": [
-      "DualCLIPLoader"
-    ],
-    "used_in_templates": [
-      "flux_canny_model_example.json",
-      "flux_depth_lora_example.json",
-      "flux_dev_full_text_to_image.json",
-      "flux_fill_outpaint_example.json",
-      "flux_redux_model_example.json",
-      "flux_schnell_full_text_to_image.json",
-      "hunyuan_video_text_to_video.json"
-    ]
+    "directory": "clip"
   },
   "t5xxl_fp16.safetensors": {
     "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors?download=true",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader",
-      "DualCLIPLoader"
-    ],
-    "used_in_templates": [
-      "flux_canny_model_example.json",
-      "flux_depth_lora_example.json",
-      "flux_dev_full_text_to_image.json",
-      "flux_fill_outpaint_example.json",
-      "flux_redux_model_example.json",
-      "flux_schnell_full_text_to_image.json",
-      "ltxv_image_to_video.json",
-      "ltxv_text_to_video.json"
-    ]
+    "directory": "clip"
   },
   "flux1-canny-dev.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/split_files/diffusion_models/flux1-canny-dev.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "flux_canny_model_example.json"
-    ]
+    "directory": "unet"
   },
   "ae.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "flux_canny_model_example.json",
-      "flux_depth_lora_example.json",
-      "flux_dev_full_text_to_image.json",
-      "flux_fill_outpaint_example.json",
-      "flux_redux_model_example.json",
-      "flux_schnell_full_text_to_image.json",
-      "hidream_e1_full.json",
-      "hidream_i1_dev.json",
-      "hidream_i1_fast.json",
-      "hidream_i1_full.json",
-      "image_chroma_text_to_image.json",
-      "image_omnigen2_image_edit.json",
-      "image_z_image_turbo.json"
-    ]
+    "directory": "vae"
   },
   "flux1-depth-dev-lora.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/split_files/loras/flux1-depth-dev-lora.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "flux_depth_lora_example.json"
-    ]
+    "directory": "loras"
   },
   "flux1-dev-fp8.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "flux_depth_lora_example.json"
-    ]
-  },
-  "lotus-depth-d-v1-1.safetensors": {
-    "url": "https://huggingface.co/Comfy-Org/lotus/resolve/main/lotus-depth-d-v1-1.safetensors",
-    "directory": "unknown",
-    "node_types": [
-      "6b0ed7ac-f476-44c9-9dad-b3f23ef985f8",
-      "d4b3d2cf-e436-4abb-84b8-47133c37745a"
-    ],
-    "used_in_templates": [
-      "flux_depth_lora_example.json",
-      "sd3.5_large_depth.json"
-    ]
+    "directory": "unet"
   },
   "flux1-dev.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "flux_dev_full_text_to_image.json",
-      "flux_redux_model_example.json"
-    ]
+    "directory": "unet"
   },
   "flux1-fill-dev.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/split_files/diffusion_models/flux1-fill-dev.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "flux_fill_outpaint_example.json"
-    ]
+    "directory": "unet"
   },
   "flux1-redux-dev.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Flux1-Redux-Dev/resolve/main/flux1-redux-dev.safetensors",
-    "directory": "style_models",
-    "node_types": [
-      "StyleModelLoader"
-    ],
-    "used_in_templates": [
-      "flux_redux_model_example.json"
-    ]
+    "directory": "style_models"
   },
   "sigclip_vision_patch14_384.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/sigclip_vision_384/resolve/main/sigclip_vision_patch14_384.safetensors",
-    "directory": "clip_vision",
-    "node_types": [
-      "CLIPVisionLoader"
-    ],
-    "used_in_templates": [
-      "flux_redux_model_example.json",
-      "video_hunyuan_video_1.5_720p_i2v.json"
-    ]
+    "directory": "clip_vision"
   },
   "flux1-schnell-fp8.safetensors": {
     "url": "",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "flux_schnell.json"
-    ]
+    "directory": "checkpoints"
   },
   "flux1-schnell.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux1-schnell/resolve/main/flux1-schnell.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "flux_schnell_full_text_to_image.json"
-    ]
+    "directory": "unet"
   },
   "hidream_e1_full_bf16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_e1_full_bf16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "hidream_e1_full.json"
-    ]
+    "directory": "unet"
   },
   "clip_g_hidream.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/blob/main/split_files/text_encoders/clip_g_hidream.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "QuadrupleCLIPLoader"
-    ],
-    "used_in_templates": [
-      "hidream_e1_full.json",
-      "hidream_i1_dev.json",
-      "hidream_i1_fast.json",
-      "hidream_i1_full.json"
-    ]
+    "directory": "clip"
   },
   "clip_l_hidream.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/blob/main/split_files/text_encoders/clip_l_hidream.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "QuadrupleCLIPLoader"
-    ],
-    "used_in_templates": [
-      "hidream_e1_full.json",
-      "hidream_i1_dev.json",
-      "hidream_i1_fast.json",
-      "hidream_i1_full.json"
-    ]
+    "directory": "clip"
   },
   "t5xxl_fp8_e4m3fn_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/blob/main/split_files/text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader",
-      "QuadrupleCLIPLoader"
-    ],
-    "used_in_templates": [
-      "hidream_e1_full.json",
-      "hidream_i1_dev.json",
-      "hidream_i1_fast.json",
-      "hidream_i1_full.json",
-      "image_chroma_text_to_image.json"
-    ]
+    "directory": "clip"
   },
   "llama_3.1_8b_instruct_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/blob/main/split_files/text_encoders/llama_3.1_8b_instruct_fp8_scaled.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "QuadrupleCLIPLoader"
-    ],
-    "used_in_templates": [
-      "hidream_e1_full.json",
-      "hidream_i1_dev.json",
-      "hidream_i1_fast.json",
-      "hidream_i1_full.json"
-    ]
+    "directory": "clip"
   },
   "hidream_i1_dev_fp8.safetensors": {
     "url": "",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "hidream_i1_dev.json"
-    ]
+    "directory": "unet"
   },
   "hidream_i1_fast_fp8.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_fast_fp8.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "hidream_i1_fast.json"
-    ]
+    "directory": "unet"
   },
   "hidream_i1_full_fp8.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_full_fp8.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "hidream_i1_full.json"
-    ]
+    "directory": "unet"
   },
   "llava_llama3_fp8_scaled.safetensors": {
     "url": "",
-    "directory": "clip",
-    "node_types": [
-      "DualCLIPLoader"
-    ],
-    "used_in_templates": [
-      "hunyuan_video_text_to_video.json"
-    ]
+    "directory": "clip"
   },
   "hunyuan_video_t2v_720p_bf16.safetensors": {
     "url": "",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "hunyuan_video_text_to_video.json"
-    ]
+    "directory": "unet"
   },
   "hunyuan_video_vae_bf16.safetensors": {
     "url": "",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "hunyuan_video_text_to_video.json"
-    ]
+    "directory": "vae"
   },
   "Chroma1-HD-fp8_scaled_rev2.safetensors": {
     "url": "https://huggingface.co/silveroxides/Chroma1-HD-fp8-scaled/resolve/main/Chroma1-HD-fp8_scaled_rev2.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "image_chroma_text_to_image.json"
-    ]
+    "directory": "unet"
   },
   "flux2-vae.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "image_flux2.json",
-      "image_flux2_fp8.json"
-    ]
+    "directory": "vae"
   },
   "mistral_3_small_flux2_bf16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/text_encoders/mistral_3_small_flux2_bf16.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader"
-    ],
-    "used_in_templates": [
-      "image_flux2.json"
-    ]
+    "directory": "clip"
   },
   "flux2_dev_fp8mixed.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/diffusion_models/flux2_dev_fp8mixed.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "image_flux2.json",
-      "image_flux2_fp8.json"
-    ]
+    "directory": "unet"
   },
   "flux2_berthe_morisot.safetensors": {
     "url": "https://huggingface.co/ostris/flux2_berthe_morisot/resolve/main/flux2_berthe_morisot.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "image_flux2.json"
-    ]
+    "directory": "loras"
   },
   "mistral_3_small_flux2_fp8.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/text_encoders/mistral_3_small_flux2_fp8.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader"
-    ],
-    "used_in_templates": [
-      "image_flux2_fp8.json"
-    ]
+    "directory": "clip"
   },
   "NetaYumev35_pretrained_all_in_one.safetensors": {
     "url": "https://huggingface.co/duongve/NetaYume-Lumina-Image-2.0/resolve/main/NetaYumev35_pretrained_all_in_one.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "image_netayume_lumina_t2i.json"
-    ]
+    "directory": "checkpoints"
   },
   "qwen_2.5_vl_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Omnigen2_ComfyUI_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_fp16.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader"
-    ],
-    "used_in_templates": [
-      "image_omnigen2_image_edit.json"
-    ]
+    "directory": "clip"
   },
   "omnigen2_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Omnigen2_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/omnigen2_fp16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "image_omnigen2_image_edit.json"
-    ]
+    "directory": "unet"
   },
   "qwen_image_vae.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "image_qwen_image.json",
-      "image_qwen_image_controlnet_patch.json",
-      "image_qwen_image_edit_2509.json",
-      "image_qwen_image_instantx_inpainting_controlnet.json",
-      "image_qwen_image_union_control_lora.json"
-    ]
+    "directory": "vae"
   },
   "qwen_2.5_vl_7b_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader",
-      "DualCLIPLoader"
-    ],
-    "used_in_templates": [
-      "image_qwen_image.json",
-      "image_qwen_image_controlnet_patch.json",
-      "image_qwen_image_edit_2509.json",
-      "image_qwen_image_instantx_inpainting_controlnet.json",
-      "image_qwen_image_union_control_lora.json",
-      "video_hunyuan_video_1.5_720p_i2v.json",
-      "video_hunyuan_video_1.5_720p_t2v.json"
-    ]
+    "directory": "clip"
   },
   "Qwen-Image-Lightning-8steps-V1.0.safetensors": {
     "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Lightning-8steps-V1.0.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "image_qwen_image.json"
-    ]
+    "directory": "loras"
   },
   "qwen_image_fp8_e4m3fn.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_fp8_e4m3fn.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "image_qwen_image.json",
-      "image_qwen_image_controlnet_patch.json",
-      "image_qwen_image_instantx_inpainting_controlnet.json",
-      "image_qwen_image_union_control_lora.json"
-    ]
+    "directory": "unet"
   },
   "qwen_image_canny_diffsynth_controlnet.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-DiffSynth-ControlNets/resolve/main/split_files/model_patches/qwen_image_canny_diffsynth_controlnet.safetensors",
-    "directory": "controlnet",
-    "node_types": [
-      "ModelPatchLoader"
-    ],
-    "used_in_templates": [
-      "image_qwen_image_controlnet_patch.json"
-    ]
+    "directory": "controlnet"
   },
   "Qwen-Image-Lightning-4steps-V1.0.safetensors": {
     "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Lightning-4steps-V1.0.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "image_qwen_image_controlnet_patch.json",
-      "image_qwen_image_instantx_inpainting_controlnet.json",
-      "image_qwen_image_union_control_lora.json"
-    ]
-  },
-  "Qwen-Image-Edit-2509-Relight.safetensors": {
-    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Image-Edit-2509-Relight.safetensors",
-    "directory": "unknown",
-    "node_types": [
-      "3a756f48-801b-48eb-80dd-279f32d09b12"
-    ],
-    "used_in_templates": [
-      "image_qwen_image_edit_2509_relight.json"
-    ]
+    "directory": "loras"
   },
   "Qwen-Image-InstantX-ControlNet-Inpainting.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-InstantX-ControlNets/resolve/main/split_files/controlnet/Qwen-Image-InstantX-ControlNet-Inpainting.safetensors",
-    "directory": "controlnet",
-    "node_types": [
-      "ControlNetLoader"
-    ],
-    "used_in_templates": [
-      "image_qwen_image_instantx_inpainting_controlnet.json"
-    ]
+    "directory": "controlnet"
   },
   "qwen_image_union_diffsynth_lora.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-DiffSynth-ControlNets/resolve/main/split_files/loras/qwen_image_union_diffsynth_lora.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "image_qwen_image_union_control_lora.json"
-    ]
+    "directory": "loras"
   },
   "wan2.1_i2v_480p_14B_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_i2v_480p_14B_fp16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "image_to_video_wan.json"
-    ]
+    "directory": "unet"
   },
   "umt5_xxl_fp8_e4m3fn_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader"
-    ],
-    "used_in_templates": [
-      "image_to_video_wan.json",
-      "text_to_video_wan.json",
-      "video_humo.json",
-      "video_wan2.1_alpha_t2v_14B.json",
-      "video_wan2.1_fun_camera_v1.1_1.3B.json",
-      "video_wan2.1_fun_camera_v1.1_14B.json",
-      "video_wan2_2_14B_animate.json",
-      "video_wan2_2_14B_flf2v.json",
-      "video_wan2_2_14B_fun_camera.json",
-      "video_wan2_2_14B_fun_control.json",
-      "video_wan2_2_14B_fun_inpaint.json",
-      "video_wan2_2_14B_i2v.json",
-      "video_wan2_2_14B_s2v.json",
-      "video_wan2_2_14B_t2v.json",
-      "video_wan2_2_5B_fun_control.json",
-      "video_wan2_2_5B_fun_inpaint.json",
-      "video_wan2_2_5B_ti2v.json",
-      "video_wan_ati.json",
-      "video_wan_vace_14B_ref2v.json",
-      "video_wan_vace_14B_t2v.json",
-      "video_wan_vace_14B_v2v.json",
-      "video_wan_vace_flf2v.json",
-      "video_wan_vace_inpainting.json",
-      "video_wan_vace_outpainting.json",
-      "video_wanmove_480p.json",
-      "wan2.1_flf2v_720_f16.json",
-      "wan2.1_fun_control.json",
-      "wan2.1_fun_inp.json"
-    ]
+    "directory": "clip"
   },
   "wan_2.1_vae.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "image_to_video_wan.json",
-      "text_to_video_wan.json",
-      "video_humo.json",
-      "video_wan2.1_fun_camera_v1.1_1.3B.json",
-      "video_wan2.1_fun_camera_v1.1_14B.json",
-      "video_wan2_2_14B_animate.json",
-      "video_wan2_2_14B_flf2v.json",
-      "video_wan2_2_14B_fun_camera.json",
-      "video_wan2_2_14B_fun_control.json",
-      "video_wan2_2_14B_fun_inpaint.json",
-      "video_wan2_2_14B_i2v.json",
-      "video_wan2_2_14B_s2v.json",
-      "video_wan2_2_14B_t2v.json",
-      "video_wan_ati.json",
-      "video_wan_vace_14B_ref2v.json",
-      "video_wan_vace_14B_t2v.json",
-      "video_wan_vace_14B_v2v.json",
-      "video_wan_vace_flf2v.json",
-      "video_wan_vace_inpainting.json",
-      "video_wan_vace_outpainting.json",
-      "video_wanmove_480p.json",
-      "wan2.1_flf2v_720_f16.json",
-      "wan2.1_fun_control.json",
-      "wan2.1_fun_inp.json"
-    ]
+    "directory": "vae"
   },
   "clip_vision_h.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors",
-    "directory": "clip_vision",
-    "node_types": [
-      "CLIPVisionLoader"
-    ],
-    "used_in_templates": [
-      "image_to_video_wan.json",
-      "video_wan2.1_fun_camera_v1.1_1.3B.json",
-      "video_wan2.1_fun_camera_v1.1_14B.json",
-      "video_wan2_2_14B_animate.json",
-      "video_wan_ati.json",
-      "video_wanmove_480p.json",
-      "wan2.1_flf2v_720_f16.json",
-      "wan2.1_fun_control.json",
-      "wan2.1_fun_inp.json"
-    ]
+    "directory": "clip_vision"
   },
   "qwen_3_4b.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader"
-    ],
-    "used_in_templates": [
-      "image_z_image_turbo.json"
-    ]
+    "directory": "clip"
   },
   "z_image_turbo_bf16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_bf16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "image_z_image_turbo.json"
-    ]
+    "directory": "unet"
   },
   "pixel_art_style_z_image_turbo.safetensors": {
     "url": "https://huggingface.co/tarn59/pixel_art_style_lora_z_image_turbo/resolve/main/pixel_art_style_z_image_turbo.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "image_z_image_turbo.json"
-    ]
+    "directory": "loras"
   },
   "512-inpainting-ema.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/stable_diffusion_2.1_repackaged/resolve/main/512-inpainting-ema.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "inpaint_example.json",
-      "inpaint_model_outpainting.json"
-    ]
+    "directory": "checkpoints"
   },
   "dreamshaper_8.safetensors": {
     "url": "https://civitai.com/api/download/models/128713?type=Model&format=SafeTensor&size=pruned&fp=fp16",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "lora.json",
-      "lora_multiple.json"
-    ]
+    "directory": "checkpoints"
   },
   "blindbox_v1_mix.safetensors": {
     "url": "https://civitai.com/api/download/models/32988?type=Model&format=SafeTensor&size=full&fp=fp16",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoader"
-    ],
-    "used_in_templates": [
-      "lora.json",
-      "lora_multiple.json"
-    ]
+    "directory": "loras"
   },
   "MoXinV1.safetensors": {
     "url": "https://civitai.com/api/download/models/14856?type=Model&format=SafeTensor&size=full&fp=fp16",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoader"
-    ],
-    "used_in_templates": [
-      "lora.json",
-      "lora_multiple.json"
-    ]
+    "directory": "loras"
   },
   "ltx-video-2b-v0.9.5.safetensors": {
     "url": "https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltx-video-2b-v0.9.5.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "ltxv_image_to_video.json"
-    ]
+    "directory": "checkpoints"
   },
   "ltx-video-2b-v0.9.safetensors": {
     "url": "",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "ltxv_text_to_video.json"
-    ]
+    "directory": "checkpoints"
   },
   "sd3.5_large_controlnet_blur.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-controlnets_ComfyUI_repackaged/resolve/main/split_files/controlnet/sd3.5_large_controlnet_blur.safetensors",
-    "directory": "controlnet",
-    "node_types": [
-      "ControlNetLoader"
-    ],
-    "used_in_templates": [
-      "sd3.5_large_blur.json"
-    ]
+    "directory": "controlnet"
   },
   "sd3.5_large_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/sd3.5_large_fp8_scaled.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "sd3.5_large_blur.json",
-      "sd3.5_large_canny_controlnet_example.json",
-      "sd3.5_large_depth.json",
-      "sd3.5_simple_example.json"
-    ]
+    "directory": "checkpoints"
   },
   "sd3.5_large_controlnet_canny.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-controlnets_ComfyUI_repackaged/resolve/main/split_files/controlnet/sd3.5_large_controlnet_canny.safetensors",
-    "directory": "controlnet",
-    "node_types": [
-      "ControlNetLoader"
-    ],
-    "used_in_templates": [
-      "sd3.5_large_canny_controlnet_example.json"
-    ]
+    "directory": "controlnet"
   },
   "sd3.5_large_controlnet_depth.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-controlnets_ComfyUI_repackaged/resolve/main/split_files/controlnet/sd3.5_large_controlnet_depth.safetensors",
-    "directory": "controlnet",
-    "node_types": [
-      "ControlNetLoader"
-    ],
-    "used_in_templates": [
-      "sd3.5_large_depth.json"
-    ]
+    "directory": "controlnet"
   },
   "sd_xl_refiner_1.0.safetensors": {
     "url": "",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "sdxl_refiner_prompt_example.json",
-      "sdxl_simple_example.json"
-    ]
+    "directory": "checkpoints"
   },
   "sd_xl_base_1.0.safetensors": {
     "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "sdxl_refiner_prompt_example.json",
-      "sdxl_revision_text_prompts.json",
-      "sdxl_simple_example.json",
-      "txt_to_image_to_video.json"
-    ]
+    "directory": "checkpoints"
   },
   "clip_vision_g.safetensors": {
     "url": "https://huggingface.co/comfyanonymous/clip_vision_g/resolve/main/clip_vision_g.safetensors",
-    "directory": "clip_vision",
-    "node_types": [
-      "CLIPVisionLoader"
-    ],
-    "used_in_templates": [
-      "sdxl_revision_text_prompts.json"
-    ]
+    "directory": "clip_vision"
   },
   "sd_xl_turbo_1.0_fp16.safetensors": {
     "url": "",
-    "directory": "checkpoints",
-    "node_types": [
-      "CheckpointLoaderSimple"
-    ],
-    "used_in_templates": [
-      "sdxlturbo_example.json"
-    ]
+    "directory": "checkpoints"
   },
   "wan2.1_t2v_1.3B_fp16.safetensors": {
     "url": "",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "text_to_video_wan.json"
-    ]
+    "directory": "unet"
   },
   "svd_xt.safetensors": {
     "url": "",
-    "directory": "checkpoints",
-    "node_types": [
-      "ImageOnlyCheckpointLoader"
-    ],
-    "used_in_templates": [
-      "txt_to_image_to_video.json"
-    ]
+    "directory": "checkpoints"
   },
   "lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_humo.json",
-      "video_wan2_2_14B_animate.json",
-      "video_wanmove_480p.json"
-    ]
+    "directory": "loras"
   },
   "humo_17B_fp8_e4m3fn.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HuMo_ComfyUI/resolve/main/split_files/diffusion_models/humo_17B_fp8_e4m3fn.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_humo.json"
-    ]
+    "directory": "unet"
   },
   "whisper_large_v3_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HuMo_ComfyUI/resolve/main/split_files/audio_encoders/whisper_large_v3_fp16.safetensors",
-    "directory": "audio",
-    "node_types": [
-      "AudioEncoderLoader"
-    ],
-    "used_in_templates": [
-      "video_humo.json"
-    ]
+    "directory": "audio"
   },
   "byt5_small_glyphxl_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/byt5_small_glyphxl_fp16.safetensors",
-    "directory": "clip",
-    "node_types": [
-      "DualCLIPLoader"
-    ],
-    "used_in_templates": [
-      "video_hunyuan_video_1.5_720p_i2v.json",
-      "video_hunyuan_video_1.5_720p_t2v.json"
-    ]
+    "directory": "clip"
   },
   "hunyuanvideo15_latent_upsampler_1080p.safetensors": {
     "url": "",
-    "directory": "upscale_models",
-    "node_types": [
-      "LatentUpscaleModelLoader"
-    ],
-    "used_in_templates": [
-      "video_hunyuan_video_1.5_720p_i2v.json",
-      "video_hunyuan_video_1.5_720p_t2v.json"
-    ]
+    "directory": "upscale_models"
   },
   "hunyuanvideo1.5_1080p_sr_distilled_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/diffusion_models/hunyuanvideo1.5_1080p_sr_distilled_fp16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_hunyuan_video_1.5_720p_i2v.json",
-      "video_hunyuan_video_1.5_720p_t2v.json"
-    ]
+    "directory": "unet"
   },
   "hunyuanvideo15_vae_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/vae/hunyuanvideo15_vae_fp16.safetensors",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "video_hunyuan_video_1.5_720p_i2v.json",
-      "video_hunyuan_video_1.5_720p_t2v.json"
-    ]
+    "directory": "vae"
   },
   "hunyuanvideo1.5_720p_i2v_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/diffusion_models/hunyuanvideo1.5_720p_i2v_fp16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_hunyuan_video_1.5_720p_i2v.json"
-    ]
+    "directory": "unet"
   },
   "hunyuanvideo1.5_720p_t2v_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/diffusion_models/hunyuanvideo1.5_720p_t2v_fp16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_hunyuan_video_1.5_720p_t2v.json"
-    ]
+    "directory": "unet"
   },
   "wan2.1_t2v_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2.1_alpha_t2v_14B.json"
-    ]
+    "directory": "unet"
   },
   "wan_alpha_2.1_rgba_lora.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/loras/wan_alpha_2.1_rgba_lora.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_wan2.1_alpha_t2v_14B.json"
-    ]
+    "directory": "loras"
   },
   "wan_alpha_2.1_vae_rgb_channel.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_alpha_2.1_vae_rgb_channel.safetensors",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "video_wan2.1_alpha_t2v_14B.json"
-    ]
+    "directory": "vae"
   },
   "wan_alpha_2.1_vae_alpha_channel.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_alpha_2.1_vae_alpha_channel.safetensors",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "video_wan2.1_alpha_t2v_14B.json"
-    ]
+    "directory": "vae"
   },
   "lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_wan2.1_alpha_t2v_14B.json"
-    ]
+    "directory": "loras"
   },
   "wan2.1_fun_camera_v1.1_1.3B_bf16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_fun_camera_v1.1_1.3B_bf16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2.1_fun_camera_v1.1_1.3B.json"
-    ]
+    "directory": "unet"
   },
   "wan2.1_fun_camera_v1.1_14B_bf16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_fun_camera_v1.1_14B_bf16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2.1_fun_camera_v1.1_14B.json"
-    ]
+    "directory": "unet"
   },
   "sam2_hiera_base_plus.safetensors": {
     "url": "",
-    "directory": "sams",
-    "node_types": [
-      "DownloadAndLoadSAM2Model"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_animate.json"
-    ]
-  },
-  "dw-ll_ucoco_384_bs5.torchscript.pt": {
-    "url": "",
-    "directory": "unknown",
-    "node_types": [
-      "DWPreprocessor"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_animate.json"
-    ]
+    "directory": "sams"
   },
   "WanAnimate_relight_lora_fp16.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_relight/WanAnimate_relight_lora_fp16.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_animate.json"
-    ]
+    "directory": "loras"
   },
   "Wan2_2-Animate-14B_fp8_e4m3fn_scaled_KJ.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/Wan22Animate/Wan2_2-Animate-14B_fp8_e4m3fn_scaled_KJ.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_animate.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_flf2v.json",
-      "video_wan2_2_14B_i2v.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_flf2v.json",
-      "video_wan2_2_14B_i2v.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_flf2v.json",
-      "video_wan2_2_14B_fun_camera.json",
-      "video_wan2_2_14B_fun_control.json",
-      "video_wan2_2_14B_fun_inpaint.json",
-      "video_wan2_2_14B_i2v.json"
-    ]
+    "directory": "loras"
   },
   "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_flf2v.json",
-      "video_wan2_2_14B_fun_camera.json",
-      "video_wan2_2_14B_fun_control.json",
-      "video_wan2_2_14B_fun_inpaint.json",
-      "video_wan2_2_14B_i2v.json"
-    ]
+    "directory": "loras"
   },
   "wan2.2_fun_camera_high_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_camera_high_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_fun_camera.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_fun_camera_low_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_camera_low_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_fun_camera.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_fun_control_high_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_control_high_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_fun_control.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_fun_control_low_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_control_low_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_fun_control.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_fun_inpaint_high_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_inpaint_high_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_fun_inpaint.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_fun_inpaint_low_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_inpaint_low_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_fun_inpaint.json"
-    ]
+    "directory": "unet"
   },
   "wav2vec2_large_english_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors",
-    "directory": "audio",
-    "node_types": [
-      "AudioEncoderLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_s2v.json"
-    ]
+    "directory": "audio"
   },
   "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_s2v.json",
-      "video_wan2_2_14B_t2v.json"
-    ]
+    "directory": "loras"
   },
   "wan2.2_s2v_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_s2v.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_t2v.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_t2v.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_14B_t2v.json"
-    ]
+    "directory": "loras"
   },
   "wan2.2_vae.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan2.2_vae.safetensors",
-    "directory": "vae",
-    "node_types": [
-      "VAELoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_5B_fun_control.json",
-      "video_wan2_2_5B_fun_inpaint.json",
-      "video_wan2_2_5B_ti2v.json"
-    ]
+    "directory": "vae"
   },
   "wan2.2_fun_control_5B_bf16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_control_5B_bf16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_5B_fun_control.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_fun_inpaint_5B_bf16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_inpaint_5B_bf16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_5B_fun_inpaint.json"
-    ]
+    "directory": "unet"
   },
   "wan2.2_ti2v_5B_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan2_2_5B_ti2v.json"
-    ]
+    "directory": "unet"
   },
   "Wan2_1-I2V-ATI-14B_fp8_e4m3fn.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-ATI-14B_fp8_e4m3fn.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan_ati.json"
-    ]
+    "directory": "unet"
   },
   "wan2.1_vace_1.3B_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_vace_1.3B_fp16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan_vace_14B_ref2v.json",
-      "video_wan_vace_14B_t2v.json",
-      "video_wan_vace_14B_v2v.json",
-      "video_wan_vace_flf2v.json",
-      "video_wan_vace_inpainting.json",
-      "video_wan_vace_outpainting.json"
-    ]
+    "directory": "unet"
   },
   "Wan21_CausVid_bidirect2_T2V_1_3B_lora_rank32.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy/blob/main/Wan21_CausVid_bidirect2_T2V_1_3B_lora_rank32.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoader"
-    ],
-    "used_in_templates": [
-      "video_wan_vace_14B_ref2v.json",
-      "video_wan_vace_14B_t2v.json",
-      "video_wan_vace_14B_v2v.json",
-      "video_wan_vace_flf2v.json",
-      "video_wan_vace_inpainting.json",
-      "video_wan_vace_outpainting.json"
-    ]
+    "directory": "loras"
   },
   "umt5_xxl_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors?download=true",
-    "directory": "clip",
-    "node_types": [
-      "CLIPLoader"
-    ],
-    "used_in_templates": [
-      "video_wan_vace_14B_ref2v.json",
-      "video_wan_vace_14B_t2v.json",
-      "video_wan_vace_14B_v2v.json",
-      "video_wan_vace_flf2v.json",
-      "video_wan_vace_inpainting.json",
-      "video_wan_vace_outpainting.json"
-    ]
+    "directory": "clip"
   },
   "wan2.1_vace_14B_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_vace_14B_fp16.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wan_vace_14B_ref2v.json",
-      "video_wan_vace_14B_t2v.json",
-      "video_wan_vace_14B_v2v.json",
-      "video_wan_vace_flf2v.json",
-      "video_wan_vace_inpainting.json",
-      "video_wan_vace_outpainting.json"
-    ]
+    "directory": "unet"
   },
   "Wan21_CausVid_14B_T2V_lora_rank32.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy/blob/main/Wan21_CausVid_14B_T2V_lora_rank32.safetensors",
-    "directory": "loras",
-    "node_types": [
-      "LoraLoader",
-      "LoraLoaderModelOnly"
-    ],
-    "used_in_templates": [
-      "video_wan_vace_14B_ref2v.json",
-      "video_wan_vace_14B_t2v.json",
-      "video_wan_vace_14B_v2v.json",
-      "video_wan_vace_flf2v.json",
-      "video_wan_vace_inpainting.json",
-      "video_wan_vace_outpainting.json"
-    ]
+    "directory": "loras"
   },
   "Wan21-WanMove_fp8_scaled_e4m3fn_KJ.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/WanMove/Wan21-WanMove_fp8_scaled_e4m3fn_KJ.safetensors",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "video_wanmove_480p.json"
-    ]
+    "directory": "unet"
   },
   "wan2.1_flf2v_720p_14B_fp16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_flf2v_720p_14B_fp16.safetensors?download=true",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "wan2.1_flf2v_720_f16.json"
-    ]
+    "directory": "unet"
   },
   "wan2.1_fun_control_1.3B_bf16.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_fun_control_1.3B_bf16.safetensors?download=true",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "wan2.1_fun_control.json"
-    ]
+    "directory": "unet"
   },
   "wan2.1_fun_inp_1.3B_bf16.safetensors": {
     "url": "",
-    "directory": "unet",
-    "node_types": [
-      "UNETLoader"
-    ],
-    "used_in_templates": [
-      "wan2.1_fun_inp.json"
-    ]
+    "directory": "unet"
   },
   "qwen_image_edit_fp8_e4m3fn.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_fp8_e4m3fn.safetensors",

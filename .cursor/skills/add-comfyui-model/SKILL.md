@@ -40,9 +40,7 @@ description: 为 ComfyUI 托管平台新增共享模型。创建增量模型列�
 ```bash
 apt-get install tmux
 cd /mnt/art-funart-model-pusher-rp8y/cap-comfyui/src/code/comfyui/models
-tmux new-session -s model
-export HF_ENDPOINT="https://hf-mirror.com"
-./scripts/download_models.sh models_YYYYMMDD.json /mnt/funart-dev/models --use-mirror
+tmux new-session -s model "bash -c 'export HF_ENDPOINT=https://hf-mirror.com && ./scripts/download_models.sh models_YYYYMMDD.json /mnt/funart-dev/models --use-mirror; exec bash'"
 ```
 
 > 将 `models_YYYYMMDD.json` 替换为刚创建的文件名。

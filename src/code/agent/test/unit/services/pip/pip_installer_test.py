@@ -32,6 +32,7 @@ class _Base(unittest.TestCase):
         self.mock_constants = self._patch_constants.start()
         self.mock_constants.COMFYUI_DIR = self.comfyui_dir
         self.mock_constants.VENV_EXECUTABLE = "/fake/venv/bin/python"
+        self.mock_constants.PIP_FALLBACK_INDEX_URL = "https://mirrors.aliyun.com/pypi/simple/"
 
     def tearDown(self):
         self._patch_constants.stop()
@@ -569,6 +570,33 @@ class TestEnvironmentHandling(_Base):
         self.assertNotIn("http_proxy", env)
         self.assertIn("PATH", env)
 
+    def test_fallback_pip_env_sets_index_url(self):
+        """fallback env 应设置 PIP_INDEX_URL 为 constants.PIP_FALLBACK_INDEX_URL"""
+        with patch("os.environ.copy", return_value={"PATH": "/usr/bin"}):
+            env = self.inst._get_fallback_pip_env()
+        self.assertEqual(env["PIP_INDEX_URL"], "https://mirrors.aliyun.com/pypi/simple/")
+
+    def test_fallback_pip_env_removes_extra_index_url(self):
+        """fallback env 应移除 PIP_EXTRA_INDEX_URL，避免其他源干扰"""
+        base = {"PATH": "/usr/bin", "PIP_EXTRA_INDEX_URL": "https://other.mirror/simple/"}
+        with patch("os.environ.copy", return_value=base.copy()):
+            env = self.inst._get_fallback_pip_env()
+        self.assertNotIn("PIP_EXTRA_INDEX_URL", env)
+
+    def test_fallback_pip_env_removes_proxy(self):
+        """fallback env 继承 _get_pip_install_env 的代理清除逻辑"""
+        with patch("os.environ.copy", return_value=self._base_env.copy()):
+            env = self.inst._get_fallback_pip_env()
+        for var in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
+            self.assertNotIn(var, env)
+
+    def test_fallback_pip_env_keeps_non_proxy_vars(self):
+        """fallback env 保留非代理环境变量"""
+        with patch("os.environ.copy", return_value=self._base_env.copy()):
+            env = self.inst._get_fallback_pip_env()
+        self.assertIn("PATH", env)
+        self.assertIn("HOME", env)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 11. _do_install_script
@@ -912,6 +940,22 @@ class TestReinstallComfyuiRequirements(_Base):
         self.assertNotIn("http_proxy", used_env)
         self.assertNotIn("HTTPS_PROXY", used_env)
         self.assertIn("PATH", used_env)
+
+    def test_uses_fallback_index_url(self):
+        """Step 4 应使用 fallback 源，不受 pip.conf 中其他镜像源影响"""
+        self._make_comfyui_requirements()
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        base_env = {
+            "PATH": "/usr/bin",
+            "PIP_EXTRA_INDEX_URL": "https://some.other.mirror/simple/",
+        }
+        with patch("subprocess.run", return_value=mock_result) as mock_run, \
+             patch("os.environ.copy", return_value=base_env.copy()), \
+             patch("builtins.print"):
+            self.inst._reinstall_comfyui_requirements(timeout=600, start_time=time.time())
+        used_env = mock_run.call_args[1]["env"]
+        self.assertEqual(used_env["PIP_INDEX_URL"], "https://mirrors.aliyun.com/pypi/simple/")
+        self.assertNotIn("PIP_EXTRA_INDEX_URL", used_env)
 
     def test_remaining_timeout_passed_to_subprocess(self):
         """subprocess.run 的 timeout 参数应等于剩余时间（总超时 - 已耗时）"""

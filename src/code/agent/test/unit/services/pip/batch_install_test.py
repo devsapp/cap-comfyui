@@ -42,6 +42,7 @@ def _make_installer():
          patch("services.pip.pip_installer.constants") as c:
         c.COMFYUI_DIR = "/tmp/fake"
         c.VENV_EXECUTABLE = "/fake/python"
+        c.PIP_FALLBACK_INDEX_URL = "https://mirrors.aliyun.com/pypi/simple/"
         return PIPInstaller()
 
 

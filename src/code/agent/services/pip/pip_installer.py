@@ -8,9 +8,6 @@ import constants
 from utils import file_ops
 from services.pip.models import InstallRecord, DependencyInstallRecord, DependencyInfo
 from services.pip.version_resolver import resolve_version_conflict
-# 逐个安装（fallback 轮）使用的 pip 源：仅 aliyun 源
-# 通过环境变量覆盖 pip.conf，避免 tsinghua/ustc 源问题干扰兜底安装
-_FALLBACK_INDEX_URL = "https://mirrors.aliyun.com/pypi/simple/"
 
 
 class PIPInstaller:
@@ -393,9 +390,7 @@ class PIPInstaller:
         使用精简源配置（仅 aliyun 源），通过环境变量覆盖 pip.conf，
         避免 tsinghua/ustc 镜像覆盖不全时干扰兜底安装。
         """
-        env = self._get_pip_install_env()
-        env["PIP_INDEX_URL"] = _FALLBACK_INDEX_URL
-        env.pop("PIP_EXTRA_INDEX_URL", None)
+        env = self._get_fallback_pip_env()
 
         total = len(deps)
         for idx, dep in enumerate(deps):
@@ -475,7 +470,7 @@ class PIPInstaller:
         cmd = self._construct_pip_cmd(["install", "-r", requirements_path])
 
         try:
-            result = subprocess.run(cmd, timeout=remaining, env=self._get_pip_install_env())
+            result = subprocess.run(cmd, timeout=remaining, env=self._get_fallback_pip_env())
             if result.returncode == 0:
                 print("[Installer] ## Step 4: ComfyUI requirements reinstalled successfully")
             else:
@@ -614,6 +609,13 @@ class PIPInstaller:
             new_env.pop(proxy_var, None)
 
         return new_env
+
+    def _get_fallback_pip_env(self):
+        """使用 fallback 源的 pip 环境，确保不受 pip.conf 中其他镜像源影响"""
+        env = self._get_pip_install_env()
+        env["PIP_INDEX_URL"] = constants.PIP_FALLBACK_INDEX_URL
+        env.pop("PIP_EXTRA_INDEX_URL", None)
+        return env
 
     def _get_possible_nodes(self, custom_node_path):
         nodes = os.listdir(custom_node_path)

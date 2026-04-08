@@ -615,6 +615,8 @@ class PIPInstaller:
         env = self._get_pip_install_env()
         env["PIP_INDEX_URL"] = constants.PIP_FALLBACK_INDEX_URL
         env.pop("PIP_EXTRA_INDEX_URL", None)
+        env["PIP_CONFIG_FILE"] = os.devnull
+        env["PIP_TRUSTED_HOST"] = constants.PIP_TRUSTED_HOSTS
         return env
 
     def _get_possible_nodes(self, custom_node_path):

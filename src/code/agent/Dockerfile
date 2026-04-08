@@ -6,9 +6,9 @@ FROM python:3.10.16-slim
 WORKDIR /root
 
 RUN --mount=type=cache,target=/var/cache/apt \
-    # 本地构建时可取消注释以使用阿里云镜像源加速
-    # sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    # sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list && \
+    # 本地构建时需使用阿里镜像源加速
+    sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list && \
     apt update && \
     apt install -y \
     git curl wget jq ffmpeg gcc g++ build-essential libgl1 libglib2.0-0 iputils-ping \
@@ -45,6 +45,13 @@ RUN mkdir ~/.rembg && \
     cd ~/.rembg && \
     wget https://huggingface.co/tomjackson2023/rembg/resolve/main/u2net.onnx
 
+# 从 comfyui 镜像拷贝内置插件到 built-in 目录
+COPY --from=comfyui_source /root/built-in/custom_nodes /root/built-in/custom_nodes
+
+# 写入内置插件版本号，供启动时版本检查使用
+# 版本号需随内置插件列表的实质性变化（增删插件、升级版本）而更新
+RUN echo "1.6.5" > /root/built-in/version.txt
+
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"
 ENV SD_DIR="${WORK_DIR}/stable-diffusion-webui"
@@ -72,13 +79,6 @@ RUN mkdir -p ~/.pip \
 
 # 设置 GitHub 代理监控脚本执行权限
 RUN chmod +x ${AGENT_DIR}/services/proxy/github-proxy-monitor.sh
-
-# 从 comfyui 镜像拷贝内置插件到 built-in 目录
-COPY --from=comfyui_source /root/comfyui/custom_nodes /root/built-in/custom_nodes
-
-# 写入内置插件版本号，供启动时版本检查使用
-# 版本号需随内置插件列表的实质性变化（增删插件、升级版本）而更新
-RUN echo "1.6.5" > /root/built-in/version.txt
 
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash
 ENTRYPOINT [ "/bin/bash", "-c", "agent/entrypoint.bash" ]

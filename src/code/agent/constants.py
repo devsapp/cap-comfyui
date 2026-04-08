@@ -37,6 +37,7 @@ INSTALL_BATCH_SIZE = int(os.getenv('INSTALL_BATCH_SIZE', '20'))
 # 自动安装缺失依赖时，兜底安装使用的 pip 源，
 # 避免 tsinghua/ustc 源 403 等问题干扰关键安装，默认使用阿里源
 PIP_FALLBACK_INDEX_URL = os.getenv('PIP_FALLBACK_INDEX_URL', 'https://mirrors.aliyun.com/pypi/simple/')
+PIP_TRUSTED_HOSTS = 'mirrors.aliyun.com pypi.tuna.tsinghua.edu.cn pypi.mirrors.ustc.edu.cn'
 BUILTIN_NODES_DIR = os.getenv("BUILTIN_NODES_DIR", "/root/built-in/custom_nodes")
 BUILTIN_DELTA_NODES_DIR = os.getenv("BUILTIN_DELTA_NODES_DIR", "/root/built-in/custom_nodes_delta")
 SNAPSHOT_DIR = MNT_DIR + '/snapshots'

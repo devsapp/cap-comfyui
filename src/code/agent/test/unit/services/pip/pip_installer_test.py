@@ -33,6 +33,7 @@ class _Base(unittest.TestCase):
         self.mock_constants.COMFYUI_DIR = self.comfyui_dir
         self.mock_constants.VENV_EXECUTABLE = "/fake/venv/bin/python"
         self.mock_constants.PIP_FALLBACK_INDEX_URL = "https://mirrors.aliyun.com/pypi/simple/"
+        self.mock_constants.PIP_TRUSTED_HOSTS = "mirrors.aliyun.com pypi.tuna.tsinghua.edu.cn pypi.mirrors.ustc.edu.cn"
 
     def tearDown(self):
         self._patch_constants.stop()
@@ -583,6 +584,21 @@ class TestEnvironmentHandling(_Base):
             env = self.inst._get_fallback_pip_env()
         self.assertNotIn("PIP_EXTRA_INDEX_URL", env)
 
+    def test_fallback_pip_env_bypasses_pip_conf(self):
+        """fallback env 应将 PIP_CONFIG_FILE 设为 os.devnull，完全绕过 pip.conf"""
+        with patch("os.environ.copy", return_value={"PATH": "/usr/bin"}):
+            env = self.inst._get_fallback_pip_env()
+        self.assertEqual(env["PIP_CONFIG_FILE"], os.devnull)
+
+    def test_fallback_pip_env_sets_trusted_hosts(self):
+        """fallback env 应设置 PIP_TRUSTED_HOST，补回 pip.conf 中的信任主机"""
+        with patch("os.environ.copy", return_value={"PATH": "/usr/bin"}):
+            env = self.inst._get_fallback_pip_env()
+        self.assertEqual(
+            env["PIP_TRUSTED_HOST"],
+            "mirrors.aliyun.com pypi.tuna.tsinghua.edu.cn pypi.mirrors.ustc.edu.cn",
+        )
+
     def test_fallback_pip_env_removes_proxy(self):
         """fallback env 继承 _get_pip_install_env 的代理清除逻辑"""
         with patch("os.environ.copy", return_value=self._base_env.copy()):
@@ -956,6 +972,8 @@ class TestReinstallComfyuiRequirements(_Base):
         used_env = mock_run.call_args[1]["env"]
         self.assertEqual(used_env["PIP_INDEX_URL"], "https://mirrors.aliyun.com/pypi/simple/")
         self.assertNotIn("PIP_EXTRA_INDEX_URL", used_env)
+        self.assertEqual(used_env["PIP_CONFIG_FILE"], os.devnull)
+        self.assertIn("mirrors.aliyun.com", used_env["PIP_TRUSTED_HOST"])
 
     def test_remaining_timeout_passed_to_subprocess(self):
         """subprocess.run 的 timeout 参数应等于剩余时间（总超时 - 已耗时）"""

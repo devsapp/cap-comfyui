@@ -1,0 +1,6 @@
+{
+  "qwen_3_4b_fp4_flux2.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors",
+    "directory": "clip"
+  }
+}

@@ -2,5 +2,21 @@
   "qwen_3_4b_fp4_flux2.safetensors": {
     "url": "https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors",
     "directory": "clip"
+  },
+  "clip_vision_vit_h.safetensors": {
+    "url": "https://huggingface.co/lllyasviel/misc/resolve/main/clip_vision_vit_h.safetensors",
+    "directory": "clip_vision"
+  },
+  "Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors": {
+    "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22-Lightning/old/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors",
+    "directory": "loras"
+  },
+  "FastWan_T2V_14B_480p_lora_rank_128_bf16.safetensors": {
+    "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/FastWan/FastWan_T2V_14B_480p_lora_rank_128_bf16.safetensors",
+    "directory": "loras"
+  },
+  "Wan21_PusaV1_LoRA_14B_rank512_bf16.safetensors": {
+    "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Pusa/Wan21_PusaV1_LoRA_14B_rank512_bf16.safetensors",
+    "directory": "loras"
   }
 }

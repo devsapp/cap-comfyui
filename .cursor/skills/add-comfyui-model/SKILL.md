@@ -42,18 +42,44 @@ push 完成后，**必须**输出以下提示：
 
 ---
 
-**下一步：登录线上机器下载模型**
+**下一步：登录线上机器完成以下操作**
 
 账号：`fc-ide-staging`
 函数计算控制台：https://fcnext.console.aliyun.com/cn-hangzhou/functions/art-funart-model-pusher-rp8y?tab=detail&section=logging
 
-在线上机器执行以下命令：
+**① 下载模型**
 
 ```bash
 apt-get install tmux
 cd /mnt/art-funart-model-pusher-rp8y/cap-comfyui/src/code/comfyui/models
 git pull
 tmux new-session -s model "bash -c 'export HF_ENDPOINT=https://hf-mirror.com && ./scripts/download_models.sh models_YYYYMMDD.json /mnt/funart-dev/models --use-mirror; exec bash'"
+```
+
+**② 校验 checksum**
+
+下载完成后，验证文件完整性：
+
+```bash
+cd /mnt/art-funart-model-pusher-rp8y/cap-comfyui/src/code/comfyui/models
+export HF_ENDPOINT="https://hf-mirror.com"
+python3 scripts/cal_checksum.py /mnt/funart-dev/models models_YYYYMMDD.json --json-only
+```
+
+确认所有模型 SHA256 ✅ 一致后，再进行同步。
+
+**③ 同步模型到 prod**
+
+先 dry-run 确认将执行的命令：
+
+```bash
+make sync-models-to-prod-dry-run
+```
+
+确认无误后，正式同步：
+
+```bash
+make sync-models-to-prod
 ```
 
 > 将 `models_YYYYMMDD.json` 替换为刚创建的文件名。

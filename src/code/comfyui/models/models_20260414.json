@@ -43,8 +43,4 @@
     "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b.safetensors",
     "directory": "clip"
   },
-  "model.safetensors": {
-    "url": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/model.safetensors",
-    "directory": "LLM/Florence-2-base-ft"
-  }
 }

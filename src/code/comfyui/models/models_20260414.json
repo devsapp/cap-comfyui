@@ -18,5 +18,33 @@
   "Wan21_PusaV1_LoRA_14B_rank512_bf16.safetensors": {
     "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Pusa/Wan21_PusaV1_LoRA_14B_rank512_bf16.safetensors",
     "directory": "loras"
+  },
+  "qwen_3_8b.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-9b/resolve/main/split_files/text_encoders/qwen_3_8b.safetensors",
+    "directory": "clip"
+  },
+  "flux.1-turbo-alpha.safetensors": {
+    "url": "https://huggingface.co/Muapi/flux.1-turbo-alpha/resolve/main/flux.1-turbo-alpha.safetensors",
+    "directory": "loras"
+  },
+  "FLUX.1-dev-ControlNet-Union-Pro-2.0.safetensors": {
+    "url": "https://huggingface.co/Shakker-Labs/FLUX.1-dev-ControlNet-Union-Pro-2.0/resolve/main/diffusion_pytorch_model.safetensors",
+    "directory": "controlnet/flux_cn"
+  },
+  "flux.1-fill-dev-OneReward-transformer_fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/OneReward_repackaged/resolve/main/split_files/diffusion_models/flux.1-fill-dev-OneReward-transformer_fp16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "qwen_2.5_vl_7b.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b.safetensors",
+    "directory": "clip"
+  },
+  "model.safetensors": {
+    "url": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/model.safetensors",
+    "directory": "LLM/Florence-2-base-ft"
   }
 }

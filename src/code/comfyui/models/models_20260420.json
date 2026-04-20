@@ -1,0 +1,10 @@
+{
+  "uso-flux1-projector-v1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/USO_1.0_Repackaged/resolve/main/split_files/model_patches/uso-flux1-projector-v1.safetensors",
+    "directory": "model_patches"
+  },
+  "uso-flux1-dit-lora-v1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/USO_1.0_Repackaged/resolve/main/split_files/loras/uso-flux1-dit-lora-v1.safetensors",
+    "directory": "loras"
+  }
+}

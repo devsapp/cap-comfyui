@@ -1,0 +1,22 @@
+{
+  "qwen_image_edit_2511_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "uso-flux1-dit-lora-v1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/USO_1.0_Repackaged/resolve/main/split_files/loras/uso-flux1-dit-lora-v1.safetensors",
+    "directory": "loras"
+  },
+  "uso-flux1-projector-v1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/USO_1.0_Repackaged/resolve/main/split_files/model_patches/uso-flux1-projector-v1.safetensors",
+    "directory": "model_patches"
+  }
+}

@@ -9,10 +9,10 @@ ENV COMFYUI_DIR="/root/comfyui"
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
-    git checkout "v0.3.77"
+    git checkout "v0.19.4"
 
 # 复制插件列表配置文件
-COPY code/comfyui/custom_nodes_config/custom_nodes.json /tmp/custom_nodes.json
+COPY comfyui/custom_nodes_config/custom_nodes.json /tmp/custom_nodes.json
 
 # 批量安装自定义节点插件
 # 从 custom_nodes.json 读取插件列表，循环安装启用的插件
@@ -80,7 +80,7 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     fi
 
 # 拷贝自研插件（如果有）
-COPY code/comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+COPY comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
 
 FROM python:3.10.16-slim AS dependencies
 
@@ -116,7 +116,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 安装 ComfyUI 插件的依赖
 # 使用 ManagementService.install_custom_nodes - 智能合并依赖，处理冲突（需要 agent 代码）
 ENV AGENT_DIR="/root/agent"
-COPY code/agent ${AGENT_DIR}
+COPY agent ${AGENT_DIR}
 
 # 安装 agent 的依赖（供 ManagementService 运行，使用主 Python 环境）
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -132,10 +132,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # 重新安装 ComfyUI 依赖以修复被插件修改的版本，并修正特定版本冲突
 RUN --mount=type=cache,target=/root/.cache/pip \
-    # 重新安装 ComfyUI 依赖
-    /root/venv/bin/pip install -r ${COMFYUI_DIR}/requirements.txt --no-cache-dir && \
-    # 安装 transformers 依赖, transformers 5.0.0 与 comfyui0.3.77 不兼容
-    /root/venv/bin/pip install transformers==4.56.2 --no-cache-dir && \
+    # 与官方 requirements 一致使用 cu128 索引，避免 torch 被换成 CPU 版导致后续 wheel 失败
+    /root/venv/bin/pip install -r ${COMFYUI_DIR}/requirements.txt --no-cache-dir \
+        --extra-index-url https://download.pytorch.org/whl/cu128 && \
     /root/venv/bin/pip install setproctitle dill scikit-image -i https://mirrors.bfsu.edu.cn/pypi/web/simple/ && \
     # /root/venv/bin/pip install flash_attn && \
     # 再次强制安装指定版本的 PyTorch，防止被插件依赖覆盖
@@ -161,7 +160,7 @@ RUN \
     git curl wget jq ffmpeg gcc g++ build-essential zstd && \
     rm -rf /var/lib/apt/lists/*
 
-COPY code/agent ${AGENT_DIR}
+COPY agent ${AGENT_DIR}
 
 RUN python3 -m venv ${AGENT_DIR}/venv
 
@@ -186,6 +185,9 @@ ENV AGENT_DIR="${WORK_DIR}/agent"
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
+
+# 与 aliyunfc/funart-comfyui 约定一致：agent 镜像构建时会 COPY --from=COMFYUI_IMAGE /root/built-in/custom_nodes
+RUN mkdir -p /root/built-in && cp -a "${COMFYUI_DIR}/custom_nodes" /root/built-in/custom_nodes
 
 ENV BACKEND_TYPE="comfyui"
 

@@ -9,6 +9,7 @@
 | 文件 | 类型 | 用途 |
 |------|------|------|
 | `get_topn.py` | 脚本 | 从网络拉取最新数据，生成 Top N 插件列表 |
+| `update_custom_nodes_versions.py` | 脚本 | 批量解析各插件仓库的 Git 引用，回写 `custom_nodes.json` 中的 `version` |
 | `custom_nodes.json` | 配置 | 镜像内置核心插件列表（49 个） |
 | `excluded_custom_nodes.json` | 配置 | 排除列表，记录不内置的插件及原因 |
 | `custom_nodes_top100.json` | 数据 | 按 Stars 排序的 Top 100 插件列表 |
@@ -132,6 +133,29 @@ cp custom_nodes_config/custom_nodes_top_150_2026-03-05.json \
 
 - 脚本会调用 GitHub API 获取每个插件的版本信息，建议配置 `GITHUB_TOKEN` 或通过 `gh` CLI 登录以避免限速
 - 生成的文件仅供人工审核，确认后才应替换 `custom_nodes.json`
+
+---
+
+## update_custom_nodes_versions.py — 批量更新插件 `version`
+
+用 **`git ls-remote`** 查远程仓库（不克隆），按规则算出新的 `version` 写回 **`custom_nodes.json`**。镜像构建里会对 `version` 做 **`git checkout`**（`latest` / 空串除外），所以跑完脚本等于批量换钉的版本。
+
+**当前 `version` 怎么被改写：**
+
+| 你写的 `version` | 脚本会改成 |
+|------------------|------------|
+| `latest` 或空 | 远程默认分支最新提交的 **SHA 前 12 位** |
+| 其它（commit 前缀、tag 名、任意占位字符串等） | 远程若有 **semver 标签**，则改成 **版本号最大的 tag**；否则改成默认分支 **SHA 前 12 位** |
+
+说明：配置里只保留 **短 commit** 或 **版本号 tag** 即可；不要写分支名 `main` / `master`，否则也会按上表第二行被解析成 **tag 或 SHA**。
+
+依赖：**本机 `git`**、Python **`packaging`**（`pip install packaging`）。默认并行 8 个仓库；有解析失败的条目会跳过并 **退出码 1**。
+
+```bash
+cd custom_nodes_config
+python3 update_custom_nodes_versions.py           # 写回 custom_nodes.json
+python3 update_custom_nodes_versions.py --dry-run  # 只看变更，不写文件
+```
 
 ---
 

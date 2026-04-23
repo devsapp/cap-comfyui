@@ -1,4 +1,4 @@
-ARG COMFYUI_IMAGE=cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v1.6.5
+ARG COMFYUI_IMAGE=cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app/image-generation-comfyui-agent:v1.3.10
 FROM ${COMFYUI_IMAGE} AS comfyui_source
 
 FROM python:3.10.16-slim
@@ -50,7 +50,7 @@ COPY --from=comfyui_source /root/built-in/custom_nodes /root/built-in/custom_nod
 
 # 写入内置插件版本号，供启动时版本检查使用
 # 版本号需随内置插件列表的实质性变化（增删插件、升级版本）而更新
-RUN echo "1.6.5" > /root/built-in/version.txt
+RUN echo "1.6.7" > /root/built-in/version.txt
 
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"

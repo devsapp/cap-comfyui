@@ -19,6 +19,7 @@ from utils import file_ops
 from uuid import uuid4, UUID
 from flask import request
 from services.serverlessapi.input_cleaner import wake as wake_input_cleaner
+from services.metrics.task_event_emitter import TaskEventEmitter
 
 
 class ComfyUIException(Exception):
@@ -661,6 +662,9 @@ class ServerlessApiService:
         """
 
         try:
+            executing_timestamp_ms = TaskEventEmitter.emit_executing(task_id)
+            log("INFO", f"[ServerlessAPI] Starting execution with task_id: {task_id}")
+
             # 验证请求体必须是 dict
             if not isinstance(request_body, dict):
                 raise ComfyUIException(
@@ -884,6 +888,7 @@ class ServerlessApiService:
             log("DEBUG", f"saving result to store for task_id: {task_id}")
             self.put_status_to_store(task_id, json.dumps(result))
             log("INFO", f"finished running prompt: {prompt_id}")
+            TaskEventEmitter.emit_completed(task_id, "succeeded", executing_timestamp_ms=executing_timestamp_ms)
             return result
         except ComfyUIException as e:
             self.put_status_to_store(
@@ -891,6 +896,7 @@ class ServerlessApiService:
                 json.dumps(e.response()),
             )
 
+            TaskEventEmitter.emit_completed(task_id, "failed", executing_timestamp_ms=executing_timestamp_ms, error_type=e.code, error_message=str(e))
             raise e
         except Exception as e:
             self.put_status_to_store(
@@ -904,4 +910,5 @@ class ServerlessApiService:
                 ),
             )
 
+            TaskEventEmitter.emit_completed(task_id, "failed", executing_timestamp_ms=executing_timestamp_ms, error_type=constants.ERROR_CODE.UNCLASSIFY.value, error_message=str(e))
             raise e

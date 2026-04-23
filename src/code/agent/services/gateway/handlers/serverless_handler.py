@@ -8,6 +8,7 @@ from flask import request, jsonify
 
 import constants
 from utils.logger import log
+from services.metrics.task_event_emitter import TaskEventEmitter
 
 
 class ServerlessHandler:
@@ -79,6 +80,8 @@ class ServerlessHandler:
             
             log("INFO", f"[ServerlessHandler][{task_id}] Forwarding {'async' if is_async else 'sync'} request")
             
+            TaskEventEmitter.emit_submitted(task_id, "Async" if is_async else "Sync")
+
             resp = requests.post(
                 gpu_url,
                 json=body,
@@ -96,6 +99,7 @@ class ServerlessHandler:
         
         except Exception as e:
             log("ERROR", f"[ServerlessHandler][{task_id}] Internal error: {e}\n{traceback.format_exc()}")
+            TaskEventEmitter.emit_completed(task_id, "failed", error_type="submit_failed", error_message=str(e))
             return jsonify({
                 "type": "error",
                 "error_code": constants.ERROR_CODE.INTERNAL_ERROR.value,

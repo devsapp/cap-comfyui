@@ -1,10 +1,10 @@
 # 定义变量
 REGION ?= cn-hangzhou
-COMFYUI_IMAGE = comfyui:v1.6.5
-COMFYUI_DEEPGPU_IMAGE = comfyui:deepgpu-v1.6.5-v1
+COMFYUI_IMAGE = comfyui:v0.19.4
+COMFYUI_DEEPGPU_IMAGE = comfyui:deepgpu-v0.19.4-v1
 OSS_BUCKET ?= dipper-cache-$(REGION)
-OSS_COMFYUI_BASE_DIR = base/comfyui/v0.3.77-gamma
-OSS_COMFYUI_DEEPGPU_BASE_DIR = base/comfyui/v0.3.77-gamma-deepgpu
+OSS_COMFYUI_BASE_DIR = base/comfyui/v0.19.4-alpha
+OSS_COMFYUI_DEEPGPU_BASE_DIR = base/comfyui/v0.19.4-alpha-deepgpu
 
 .PHONY: upgrade
 upgrade: build upload-base
@@ -58,7 +58,7 @@ upload-base:
 
 	@echo "Creating .funart/VERSION.txt..."
 	@mkdir -p ./tmp/.funart
-	@echo "1.6.5" > ./tmp/.funart/dependency_version.txt
+	@echo "1.6.7" > ./tmp/.funart/dependency_version.txt
 
 	@echo "Uploading files to OSS..."
 	ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
@@ -98,7 +98,7 @@ upload-deepgpu-base:
 
 	@echo "Creating .funart/VERSION.txt..."
 	@mkdir -p ./tmp/.funart
-	@echo "1.6.5" > ./tmp/.funart/dependency_version.txt
+	@echo "1.6.7" > ./tmp/.funart/dependency_version.txt
 
 	@echo "Uploading files to OSS..."
 	ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_DEEPGPU_BASE_DIR)/custom_nodes && \

@@ -1,11 +1,12 @@
 {
   "metadata": {
-    "generated_at": "2026-03-05",
+    "generated_at": "2026-04-23",
     "top_n": 100,
     "total": 91,
     "source_stats_url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/github-stats.json",
     "source_list_url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/custom-node-list.json",
-    "excluded_count": 42
+    "excluded_count": 42,
+    "version_resolve_note": "versions resolved by update_custom_nodes_versions.py (prefer latest semver tag, else default-branch SHA prefix)"
   },
   "custom_nodes": [
     {
@@ -15,7 +16,7 @@
       "stars": 13812,
       "enabled": true,
       "description": "ComfyUI-Manager itself is also a custom node.",
-      "version": "3.39"
+      "version": "3.39.3"
     },
     {
       "id": "comfyui-wanvideowrapper",
@@ -51,7 +52,7 @@
       "stars": 3826,
       "enabled": true,
       "description": "Plug-and-play ComfyUI node sets for making ControlNet hint images.",
-      "version": "95a13e2"
+      "version": "e8b689a"
     },
     {
       "id": "ad-evolved",
@@ -60,7 +61,7 @@
       "stars": 3398,
       "enabled": true,
       "description": "A forked repository that actively maintains [a/AnimateDiff](https://github.com/ArtVentureX/comfyui-animatediff), created by ArtVentureX.\n\nImproved AnimateDiff integration for ComfyUI, adapts from sd-webui-animatediff.\n[w/Download one or more motion models from [a/Original Models](https://huggingface.co/guoyww/animatediff/tree/main) | [a/Finetuned Models](https://huggingface.co/manshoety/AD_Stabilized_Motion/tree/main). See README for additional model links and usage. Put the model weights under %%ComfyUI/custom_nodes/ComfyUI-AnimateDiff-Evolved/models%%. You are free to rename the models, but keeping original names will ease use when sharing your workflow.]",
-      "version": "90fb133"
+      "version": "d8d163c"
     },
     {
       "id": "comfyui-gguf",
@@ -114,7 +115,7 @@
       "stars": 2791,
       "enabled": true,
       "description": "Nunchaku ComfyUI Node. Nunchaku is the inference that supports SVDQuant. SVDQuant is a new post-training training quantization paradigm for diffusion models, which quantize both the weights and activations of FLUX.1 to 4 bits, achieving 3.5× memory and 8.7× latency reduction on a 16GB laptop 4090 GPU. See more details: https://github.com/mit-han-lab/nunchaku",
-      "version": "v1.0.2"
+      "version": "v1.2.1"
     },
     {
       "id": "advancedliveportrait",
@@ -159,7 +160,7 @@
       "stars": 2257,
       "enabled": true,
       "description": "This custom node allows you to generate pure python code from your ComfyUI workflow with the click of a button. Great for rapid experimentation or production deployment.",
-      "version": "v1.3.1"
+      "version": "v2.1.0"
     },
     {
       "id": "supir",
@@ -168,7 +169,7 @@
       "stars": 2233,
       "enabled": true,
       "description": "Wrapper nodes to use SUPIR upscaling process in ComfyUI",
-      "version": "0613a92"
+      "version": "fe0d660"
     },
     {
       "id": "liveportrait-kijai",
@@ -222,7 +223,7 @@
       "stars": 1618,
       "enabled": true,
       "description": "Nodes to use Florence2 VLM for image vision tasks: object detection, captioning, segmentation and ocr",
-      "version": "606bc5c"
+      "version": "d8cb44d"
     },
     {
       "id": "comfyui-cogvideoxwrapper",
@@ -240,7 +241,7 @@
       "stars": 1522,
       "enabled": true,
       "description": "Nodes related to video workflows",
-      "version": "993082e"
+      "version": "2984ec4"
     },
     {
       "id": "alekpet",
@@ -249,7 +250,7 @@
       "stars": 1464,
       "enabled": true,
       "description": "Nodes: PoseNode, PainterNode, TranslateTextNode, TranslateCLIPTextEncodeNode, DeepTranslatorTextNode, DeepTranslatorCLIPTextEncodeNode, ArgosTranslateTextNode, ArgosTranslateCLIPTextEncodeNode, PreviewTextNode, HexToHueNode, ColorsCorrectNode, IDENode.",
-      "version": "ba55cc2"
+      "version": "6310c31"
     },
     {
       "id": "usdu",
@@ -258,7 +259,7 @@
       "stars": 1452,
       "enabled": true,
       "description": "ComfyUI nodes for the Ultimate Stable Diffusion Upscale script by Coyote-A.",
-      "version": "34a3c2c"
+      "version": "bebd569"
     },
     {
       "id": "eff-nodes",
@@ -267,7 +268,7 @@
       "stars": 1427,
       "enabled": true,
       "description": "A collection of ComfyUI custom nodes to help streamline workflows and reduce total node count.[w/NOTE: This node is originally created by LucianoCirino, but the [a/original repository](https://github.com/LucianoCirino/efficiency-nodes-comfyui) is no longer maintained and has been forked by a new maintainer. To use the forked version, you should uninstall the original version and **REINSTALL** this one.]",
-      "version": "f0971b5"
+      "version": "4579b7d"
     },
     {
       "id": "comfyui-workspace-manager",
@@ -276,7 +277,7 @@
       "stars": 1417,
       "enabled": true,
       "description": "A ComfyUI custom node for project management to centralize the management of all your workflows in one place. Seamlessly switch between workflows, create and update them within a single workspace, like Google Docs.",
-      "version": "prod"
+      "version": "dfc9218"
     },
     {
       "id": "comfyui-fluxtapoz",
@@ -369,15 +370,6 @@
       "version": "ab63955"
     },
     {
-      "id": "teacache",
-      "name": "ComfyUI-TeaCache",
-      "repository": "https://github.com/welltop-cn/ComfyUI-TeaCache",
-      "stars": 1066,
-      "enabled": true,
-      "description": "Unofficial implementation of [ali-vilab/TeaCache](https://github.com/ali-vilab/TeaCache) for ComfyUI",
-      "version": "91dff8e"
-    },
-    {
       "id": "essentials",
       "name": "ComfyUI Essentials",
       "repository": "https://github.com/cubiq/ComfyUI_essentials",
@@ -402,7 +394,7 @@
       "stars": 1036,
       "enabled": true,
       "description": "Achieve seamless inpainting results without needing a specialized inpainting model.",
-      "version": "Release"
+      "version": "1.5.3"
     },
     {
       "id": "res4lyf",
@@ -420,7 +412,7 @@
       "stars": 987,
       "enabled": true,
       "description": "'✂️ Inpaint Crop' is a node that crops an image before sampling. The context area can be specified via the mask, expand pixels and expand factor or via a separate (optional) mask.\n'✂️ Inpaint Stitch' is a node that stitches the inpainted image back into the original image without altering unmasked areas.",
-      "version": "c2c2a41"
+      "version": "8e59ab1"
     },
     {
       "id": "steerable-motion",
@@ -438,7 +430,7 @@
       "stars": 951,
       "enabled": true,
       "description": "This is a workflow for my simple logic amazing upscale node for DIT model. it can be common use for Flux,Hunyuan,SD3 It can simple tile the initial image into pieces and then use image-interrogator to get each tile prompts for more accurate upscale process. The condition will be properly handled and the hallucination will be significantly eliminated.",
-      "version": "v1.0.2"
+      "version": "V1.0.3"
     },
     {
       "id": "adv-cnet",
@@ -447,7 +439,7 @@
       "stars": 949,
       "enabled": true,
       "description": "Nodes for scheduling ControlNet strength across timesteps and batched latents, as well as applying custom weights and attention masks.",
-      "version": "2bde95a"
+      "version": "b03791e"
     },
     {
       "id": "ue",
@@ -456,7 +448,7 @@
       "stars": 942,
       "enabled": true,
       "description": "A set of nodes that allow data to be 'broadcast' to some or all unconnected inputs. Greatly reduces link spaghetti.",
-      "version": "c01c3ce"
+      "version": "a3952a4"
     },
     {
       "id": "comfyui-latentsyncwrapper",
@@ -573,7 +565,7 @@
       "stars": 724,
       "enabled": true,
       "description": "TTS Audio Suite - Universal multi-engine TTS extension for ComfyUI with unified architecture supporting ChatterBox, F5-TTS, and future engines like RVC. Features modular engine adapters, character voice management, comprehensive SRT subtitle support, and advanced audio processing capabilities.",
-      "version": "v4.22.0"
+      "version": "v4.25.1"
     },
     {
       "id": "lucy-edit-comfyui",
@@ -629,7 +621,6 @@
       "description": "ComfyUI-QwenVL custom node: Integrates the Qwen-VL series, including Qwen2.5-VL and the latest Qwen3-VL, to enable advanced multimodal AI for text generation, image understanding, and video analysis.",
       "version": "fcd1ada"
     },
-
     {
       "id": "advancedRefluxControl",
       "name": "Advanced Reflux control",
@@ -664,7 +655,7 @@
       "stars": 644,
       "enabled": true,
       "description": "NODES: An industrial-grade zero-shot text-to-speech synthesis system with a ComfyUI interface.",
-      "version": "928812f"
+      "version": "81f6d05"
     },
     {
       "id": "external-tooling",
@@ -682,7 +673,7 @@
       "stars": 623,
       "enabled": true,
       "description": "The nodes detached from ComfyUI Layer Style are mainly those with complex requirements for dependency packages.",
-      "version": "6292ad8"
+      "version": "7b678b4"
     },
     {
       "id": "comfyui-enricos-nodes",
@@ -799,7 +790,7 @@
       "stars": 10,
       "enabled": true,
       "description": "常用 ComfyUI 节点集合，包含高级裁剪、图像缩放、批处理、图像拼接等实用节点，源自 ComfyUI_LayerStyle。",
-      "version": "cb6e904"
+      "version": "789eff2"
     }
   ]
 }

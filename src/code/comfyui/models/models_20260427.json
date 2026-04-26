@@ -1,0 +1,350 @@
+{
+  "qwen_image_edit_2509_fp8_e4m3fn.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+    "directory": "diffusion_models"
+  },
+  "hunyuan_3d_v2.1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/hunyuan3D_2.1_repackaged/resolve/main/hunyuan_3d_v2.1.safetensors",
+    "directory": "diffusion_models"
+  },
+  "hunyuan3d-dit-v2_fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/hunyuan3D_2.0_repackaged/resolve/main/split_files/hunyuan3d-dit-v2_fp16.safetensors",
+    "directory": "checkpoints"
+  },
+  "hunyuan3d-dit-v2-mv_fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/hunyuan3D_2.0_repackaged/resolve/main/split_files/hunyuan3d-dit-v2-mv_fp16.safetensors",
+    "directory": "checkpoints"
+  },
+  "hunyuan3d-dit-v2-mv-turbo_fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/hunyuan3D_2.0_repackaged/resolve/main/split_files/hunyuan3d-dit-v2-mv-turbo_fp16.safetensors",
+    "directory": "checkpoints"
+  },
+  "capybara_v0.1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/diffusion_models/capybara_v0.1.safetensors",
+    "directory": "diffusion_models"
+  },
+  "qwen_2.5_vl_7b.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HunyuanImage_2.1_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b.safetensors",
+    "directory": "clip"
+  },
+  "byt5_small_glyphxl_fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/byt5_small_glyphxl_fp16.safetensors",
+    "directory": "clip"
+  },
+  "hunyuanvideo15_vae_fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/vae/hunyuanvideo15_vae_fp16.safetensors",
+    "directory": "vae"
+  },
+  "sigclip_vision_patch14_384.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/clip_vision/sigclip_vision_patch14_384.safetensors",
+    "directory": "clip_vision"
+  },
+  "ace_step_1.5_turbo_aio.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/checkpoints/ace_step_1.5_turbo_aio.safetensors",
+    "directory": "checkpoints"
+  },
+  "acestep_v1.5_turbo.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/diffusion_models/acestep_v1.5_turbo.safetensors",
+    "directory": "unet"
+  },
+  "qwen_0.6b_ace15.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/text_encoders/qwen_0.6b_ace15.safetensors",
+    "directory": "clip"
+  },
+  "qwen_1.7b_ace15.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/text_encoders/qwen_1.7b_ace15.safetensors",
+    "directory": "clip"
+  },
+  "ace_1.5_vae.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/vae/ace_1.5_vae.safetensors",
+    "directory": "vae"
+  },
+  "qwen_4b_ace15.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/text_encoders/qwen_4b_ace15.safetensors",
+    "directory": "clip"
+  },
+  "ace_step_v1_3.5b.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/ACE-Step_ComfyUI_repackaged/blob/main/all_in_one/ace_step_v1_3.5b.safetensors",
+    "directory": "checkpoints"
+  },
+  "stable-audio-open-1.0.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/stable-audio-open-1.0_repackaged/resolve/main/stable-audio-open-1.0.safetensors",
+    "directory": "checkpoints"
+  },
+  "t5-base.safetensors": {
+    "url": "https://huggingface.co/ComfyUI-Wiki/t5-base/resolve/main/t5-base.safetensors",
+    "directory": "clip"
+  },
+  "v1-5-pruned-emaonly-fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/stable-diffusion-v1-5-archive/resolve/main/v1-5-pruned-emaonly-fp16.safetensors?download=true",
+    "directory": "checkpoints"
+  },
+  "clip_l.safetensors": {
+    "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors?download=true",
+    "directory": "clip"
+  },
+  "t5xxl_fp16.safetensors": {
+    "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors?download=true",
+    "directory": "clip"
+  },
+  "flux1-canny-dev.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/split_files/diffusion_models/flux1-canny-dev.safetensors",
+    "directory": "unet"
+  },
+  "ae.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors",
+    "directory": "vae"
+  },
+  "flux1-fill-dev.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/split_files/diffusion_models/flux1-fill-dev.safetensors",
+    "directory": "unet"
+  },
+  "flux1-dev.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev.safetensors",
+    "directory": "unet"
+  },
+  "flux1-redux-dev.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Flux1-Redux-Dev/resolve/main/flux1-redux-dev.safetensors",
+    "directory": "style_models"
+  },
+  "flux1-schnell.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux1-schnell/resolve/main/flux1-schnell.safetensors",
+    "directory": "unet"
+  },
+  "hidream_e1_1_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_e1_1_bf16.safetensors",
+    "directory": "unet"
+  },
+  "clip_g_hidream.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/blob/main/split_files/text_encoders/clip_g_hidream.safetensors",
+    "directory": "clip"
+  },
+  "clip_l_hidream.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/blob/main/split_files/text_encoders/clip_l_hidream.safetensors",
+    "directory": "clip"
+  },
+  "t5xxl_fp8_e4m3fn_scaled.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/blob/main/split_files/text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors",
+    "directory": "clip"
+  },
+  "llama_3.1_8b_instruct_fp8_scaled.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/blob/main/split_files/text_encoders/llama_3.1_8b_instruct_fp8_scaled.safetensors",
+    "directory": "clip"
+  },
+  "hidream_e1_full_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_e1_full_bf16.safetensors",
+    "directory": "unet"
+  },
+  "hidream_i1_fast_fp8.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_fast_fp8.safetensors",
+    "directory": "unet"
+  },
+  "hidream_i1_full_fp8.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HiDream-I1_ComfyUI/resolve/main/split_files/diffusion_models/hidream_i1_full_fp8.safetensors",
+    "directory": "unet"
+  },
+  "Chroma1-HD-fp8mixed.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Chroma1-HD_repackaged/resolve/main/split_files/diffusion_models/Chroma1-HD-fp8mixed.safetensors",
+    "directory": "unet"
+  },
+  "flux-2-klein-9b-kv-fp8.safetensors": {
+    "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-kv-fp8/resolve/main/flux-2-klein-9b-kv-fp8.safetensors",
+    "directory": "unet"
+  },
+  "qwen_3_8b_fp8mixed.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux2-klein-9B/resolve/main/split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors",
+    "directory": "clip"
+  },
+  "flux2-vae.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+    "directory": "vae"
+  },
+  "flux-2-klein-base-4b.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux2-klein/resolve/main/split_files/diffusion_models/flux-2-klein-base-4b.safetensors",
+    "directory": "diffusion_models"
+  },
+  "qwen_3_4b.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux2-klein/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors",
+    "directory": "clip"
+  },
+  "flux-2-klein-4b.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux2-klein/resolve/main/split_files/diffusion_models/flux-2-klein-4b.safetensors",
+    "directory": "diffusion_models"
+  },
+  "kandinsky5lite_t2i.safetensors": {
+    "url": "https://huggingface.co/kandinskylab/Kandinsky-5.0-T2I-Lite/resolve/main/model/kandinsky5lite_t2i.safetensors",
+    "directory": "diffusion_models"
+  },
+  "qwen_2.5_vl_7b_fp8_scaled.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    "directory": "clip"
+  },
+  "longcat_image_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/LongCat-Image/resolve/main/split_files/diffusion_models/longcat_image_bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "NewBie-Image-Exp0.1-bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/NewBie-image-Exp0.1_repackaged/resolve/main/split_files/diffusion_models/NewBie-Image-Exp0.1-bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "gemma_3_4b_it_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/NewBie-image-Exp0.1_repackaged/resolve/main/split_files/text_encoders/gemma_3_4b_it_bf16.safetensors",
+    "directory": "clip"
+  },
+  "jina_clip_v2_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/NewBie-image-Exp0.1_repackaged/resolve/main/split_files/text_encoders/jina_clip_v2_bf16.safetensors",
+    "directory": "clip"
+  },
+  "qwen_2.5_vl_fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Omnigen2_ComfyUI_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_fp16.safetensors",
+    "directory": "clip"
+  },
+  "omnigen2_fp16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Omnigen2_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/omnigen2_fp16.safetensors",
+    "directory": "unet"
+  },
+  "ovis_image_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Ovis-Image/resolve/main/split_files/diffusion_models/ovis_image_bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "ovis_2.5.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Ovis-Image/resolve/main/split_files/text_encoders/ovis_2.5.safetensors",
+    "directory": "clip"
+  },
+  "qwen_image_2512_fp8_e4m3fn.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors",
+    "directory": "diffusion_models"
+  },
+  "qwen_image_vae.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+    "directory": "vae"
+  },
+  "Qwen-Image-2512-Fun-Controlnet-Union-2602.safetensors": {
+    "url": "https://huggingface.co/alibaba-pai/Qwen-Image-2512-Fun-Controlnet-Union/resolve/main/Qwen-Image-2512-Fun-Controlnet-Union-2602.safetensors",
+    "directory": "controlnet"
+  },
+  "Wuli-Qwen-Image-2512-Turbo-LoRA-2steps-V1.0-bf16.safetensors": {
+    "url": "https://huggingface.co/Wuli-art/Qwen-Image-2512-Turbo-LoRA-2-Steps/resolve/main/Wuli-Qwen-Image-2512-Turbo-LoRA-2steps-V1.0-bf16.safetensors",
+    "directory": "loras"
+  },
+  "qwen_image_canny_diffsynth_controlnet.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-DiffSynth-ControlNets/resolve/main/split_files/model_patches/qwen_image_canny_diffsynth_controlnet.safetensors",
+    "directory": "controlnet"
+  },
+  "qwen_image_fp8_e4m3fn.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_fp8_e4m3fn.safetensors",
+    "directory": "unet"
+  },
+  "Qwen-Image-Lightning-4steps-V1.0.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Lightning-4steps-V1.0.safetensors",
+    "directory": "loras"
+  },
+  "Qwen-Image-Edit-2509-Relight.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/loras/Qwen-Image-Edit-2509-Relight.safetensors",
+    "directory": "loras"
+  },
+  "qwen_image_edit_2511_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-InstantX-ControlNet-Inpainting.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-InstantX-ControlNets/resolve/main/split_files/controlnet/Qwen-Image-InstantX-ControlNet-Inpainting.safetensors",
+    "directory": "controlnet"
+  },
+  "qwen_image_layered_control_bf16.safetensors": {
+    "url": "https://huggingface.co/DiffSynth-Studio/Qwen-Image-Layered-Control/resolve/main/qwen_image_layered_control_bf16.safetensors",
+    "directory": "controlnet"
+  },
+  "qwen_image_layered_vae.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Layered_ComfyUI/resolve/main/split_files/vae/qwen_image_layered_vae.safetensors",
+    "directory": "vae"
+  },
+  "z_image_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/z_image/resolve/main/split_files/diffusion_models/z_image_bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "z_image_turbo_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "sd3.5_large_controlnet_blur.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-controlnets_ComfyUI_repackaged/resolve/main/split_files/controlnet/sd3.5_large_controlnet_blur.safetensors",
+    "directory": "controlnet"
+  },
+  "sd3.5_large_fp8_scaled.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/sd3.5_large_fp8_scaled.safetensors",
+    "directory": "checkpoints"
+  },
+  "sd3.5_large_controlnet_canny.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-controlnets_ComfyUI_repackaged/resolve/main/split_files/controlnet/sd3.5_large_controlnet_canny.safetensors",
+    "directory": "controlnet"
+  },
+  "sd3.5_large_controlnet_depth.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-controlnets_ComfyUI_repackaged/resolve/main/split_files/controlnet/sd3.5_large_controlnet_depth.safetensors",
+    "directory": "controlnet"
+  },
+  "vae-ft-mse-840000-ema-pruned.safetensors": {
+    "url": "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors",
+    "directory": "vae"
+  },
+  "lotus-depth-d-v1-1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/lotus/resolve/main/lotus-depth-d-v1-1.safetensors",
+    "directory": "diffusion_models"
+  },
+  "sd_xl_base_1.0.safetensors": {
+    "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
+    "directory": "checkpoints"
+  },
+  "clip_vision_g.safetensors": {
+    "url": "https://huggingface.co/comfyanonymous/clip_vision_g/resolve/main/clip_vision_g.safetensors",
+    "directory": "clip_vision"
+  },
+  "flux2_dev_fp8mixed.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/diffusion_models/flux2_dev_fp8mixed.safetensors",
+    "directory": "diffusion_models"
+  },
+  "mistral_3_small_flux2_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/text_encoders/mistral_3_small_flux2_bf16.safetensors",
+    "directory": "clip"
+  },
+  "flux-2-klein-base-4b-fp8.safetensors": {
+    "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-base-4b-fp8/resolve/main/flux-2-klein-base-4b-fp8.safetensors",
+    "directory": "diffusion_models"
+  },
+  "ltx-2-19b-ic-lora-canny-control.safetensors": {
+    "url": "https://huggingface.co/Lightricks/LTX-2-19b-IC-LoRA-Canny-Control/resolve/main/ltx-2-19b-ic-lora-canny-control.safetensors",
+    "directory": "loras"
+  },
+  "ltx-2-19b-dev-fp8.safetensors": {
+    "url": "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-dev-fp8.safetensors",
+    "directory": "diffusion_models"
+  },
+  "gemma_3_12B_it_fp4_mixed.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors",
+    "directory": "clip"
+  },
+  "ltx-2-19b-distilled-lora-384.safetensors": {
+    "url": "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled-lora-384.safetensors",
+    "directory": "loras"
+  },
+  "ltx-2-spatial-upscaler-x2-1.0.safetensors": {
+    "url": "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors",
+    "directory": "upscale_models"
+  },
+  "ltx-2-19b-distilled.safetensors": {
+    "url": "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled.safetensors",
+    "directory": "diffusion_models"
+  },
+  "ltx-2-19b-ic-lora-depth-control.safetensors": {
+    "url": "https://huggingface.co/Lightricks/LTX-2-19b-IC-LoRA-Depth-Control/resolve/main/ltx-2-19b-ic-lora-depth-control.safetensors",
+    "directory": "loras"
+  },
+  "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+    "directory": "diffusion_models"
+  }
+}

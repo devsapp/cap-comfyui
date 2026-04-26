@@ -1,0 +1,134 @@
+{
+  "uso-flux1-dit-lora-v1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/USO_1.0_Repackaged/resolve/main/split_files/loras/uso-flux1-dit-lora-v1.safetensors",
+    "directory": "loras"
+  },
+  "uso-flux1-projector-v1.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/USO_1.0_Repackaged/resolve/main/split_files/model_patches/uso-flux1-projector-v1.safetensors",
+    "directory": "model_patches"
+  },
+  "model.safetensors": {
+    "url": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/model.safetensors",
+    "directory": "LLM/Florence-2-base-ft"
+  },
+  "qwen_image_edit_2511_bf16.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "flux.1-fill-dev-OneReward-transformer_fp8.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/OneReward_repackaged/resolve/main/split_files/diffusion_models/flux.1-fill-dev-OneReward-transformer_fp8.safetensors",
+    "directory": "diffusion_models"
+  },
+  "removal_timestep_alpha-2-1740.safetensors": {
+    "url": "https://huggingface.co/lrzjason/ObjectRemovalFluxFill/resolve/main/removal_timestep_alpha-2-1740.safetensors",
+    "directory": "loras"
+  },
+  "flux1-dev-fp8-e4m3fn.safetensors": {
+    "url": "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8-e4m3fn.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning/resolve/main/Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "qwen-image-edit-2511-multiple-angles-lora.safetensors": {
+    "url": "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors",
+    "directory": "loras"
+  },
+  "qwen_image_layered_vae.safetensors": {
+    "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Layered_ComfyUI/resolve/main/split_files/vae/qwen_image_layered_vae.safetensors",
+    "directory": "vae"
+  },
+  "svdq-int4_r32-qwen-image-lightningv1.1-8steps.safetensors": {
+    "url": "https://huggingface.co/nunchaku-ai/nunchaku-qwen-image/resolve/main/svdq-int4_r32-qwen-image-lightningv1.1-8steps.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-Edit-2509_fp8_e4m3fn.safetensors": {
+    "url": "https://huggingface.co/aidiffuser/Qwen-Image-Edit-2509/resolve/main/Qwen-Image-Edit-2509_fp8_e4m3fn.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-Lightning-8steps-V1.1-bf16.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Lightning-8steps-V1.1-bf16.safetensors",
+    "directory": "diffusion_models"
+  },
+  "Qwen-Image-Edit-Lightning-8steps-V1.0.safetensors": {
+    "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-Lightning-8steps-V1.0.safetensors",
+    "directory": "diffusion_models"
+  },
+  "consistence_edit_v2.safetensors": {
+    "url": "https://huggingface.co/jagat334433/beru_custom/resolve/main/consistence_edit_v2.safetensors",
+    "directory": "loras"
+  },
+  "dreamshaper_8.safetensors": {
+    "url": "https://huggingface.co/digiplay/DreamShaper_8/resolve/main/dreamshaper_8.safetensors",
+    "directory": "checkpoints"
+  },
+  "diffusers_xl_canny_small.safetensors": {
+    "url": "https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/diffusers_xl_canny_small.safetensors",
+    "directory": "controlnet"
+  },
+  "diffusers_xl_depth_small.safetensors": {
+    "url": "https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/diffusers_xl_depth_small.safetensors",
+    "directory": "controlnet"
+  },
+  "flux1-fill-dev.safetensors": {
+    "url": "https://huggingface.co/mp3pintyo/FLUX.1/resolve/main/flux1-fill-dev.safetensors",
+    "directory": "diffusion_models"
+  },
+  "SUPIR-v0F_fp16.safetensors": {
+    "url": "https://huggingface.co/Kijai/SUPIR_pruned/resolve/main/SUPIR-v0F_fp16.safetensors",
+    "directory": "checkpoints"
+  },
+  "juggernautXL_version6Rundiffusion.safetensors": {
+    "url": "https://huggingface.co/RunDiffusion/Juggernaut-XL-v6/resolve/main/juggernautXL_version6Rundiffusion.safetensors",
+    "directory": "checkpoints"
+  },
+  "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors": {
+    "url": "https://huggingface.co/f5aiteam/ComfyUI/resolve/main/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors",
+    "directory": "clip_vision"
+  },
+  "mistoLine_rank256.safetensors": {
+    "url": "https://huggingface.co/TheMistoAI/MistoLine/resolve/main/mistoLine_rank256.safetensors",
+    "directory": "controlnet"
+  },
+  "ESRGAN_4x.pth": {
+    "url": "https://huggingface.co/f5aiteam/Upscale_Models/resolve/main/ESRGAN_4x.pth",
+    "directory": "upscale_models"
+  },
+  "ic-lora-flux-v1.safetensors": {
+    "url": "https://huggingface.co/martintomov/ic-lora-flux-v1/resolve/main/ic-lora-flux-v1.safetensors",
+    "directory": "loras"
+  },
+  "juggernautXL_v8Rundiffusion.safetensors": {
+    "url": "https://huggingface.co/RunDiffusion/Juggernaut-XL-v8/resolve/main/juggernautXL_v8Rundiffusion.safetensors",
+    "directory": "checkpoints"
+  },
+  "sai_xl_depth_256lora.safetensors": {
+    "url": "https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/sai_xl_depth_256lora.safetensors",
+    "directory": "controlnet"
+  },
+  "flux1-dev.safetensors": {
+    "url": "https://huggingface.co/BestModelsv2/FLUX/resolve/main/flux1-dev.safetensors",
+    "directory": "diffusion_models"
+  },
+  "4x-UltraSharp.pth": {
+    "url": "https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.pth",
+    "directory": "upscale_models"
+  },
+  "ae.safetensors": {
+    "url": "https://huggingface.co/ffxvs/vae-flux/resolve/main/ae.safetensors",
+    "directory": "vae"
+  },
+  "control_instant_id_sdxl.safetensors": {
+    "url": "https://huggingface.co/StableDiffusionVN/XLControlnet/resolve/main/control_instant_id_sdxl.safetensors",
+    "directory": "controlnet"
+  },
+  "RealESRGAN_x4plus.pth": {
+    "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+    "directory": "upscale_models"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "svdq-int4_r32-qwen-image-lightningv1.1-8steps.safetensors": {
+    "url": "https://huggingface.co/nunchaku-ai/nunchaku-qwen-image/resolve/main/svdq-int4_r32-qwen-image-lightningv1.1-8steps.safetensors",
+    "directory": "diffusion_models"
+  },
+  "flux-2-klein-9b.safetensors": {
+    "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9B/resolve/main/flux-2-klein-9b.safetensors",
+    "directory": "unet"
+  }
+}

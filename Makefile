@@ -93,32 +93,46 @@ warmup:
 	@./warmup/warmup.sh "$(AGENT_IMAGE)" $(WARMUP_REGIONS)
 
 # ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+# ComfyUI 多版本构建
+COMFYUI_VERSION ?= v0.3.77
+
 .PHONY: build-comfyui
 build-comfyui: build
-	@make -C src/code/comfyui build
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) build
+
+.PHONY: build-comfyui-v0.3.77
+build-comfyui-v0.3.77:
+	@$(MAKE) build-comfyui COMFYUI_VERSION=v0.3.77
+
+.PHONY: build-comfyui-v0.16.4
+build-comfyui-v0.16.4:
+	@$(MAKE) build-comfyui COMFYUI_VERSION=v0.16.4
+
+.PHONY: build-comfyui-all
+build-comfyui-all: build-comfyui-v0.3.77 build-comfyui-v0.16.4
 
 .PHONY: run-comfyui
 run-comfyui:
-	@make -C src/code/comfyui run
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) run
 
 .PHONY: exec-comfyui
 exec-comfyui:
-	@make -C src/code/comfyui exec
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) exec
 
 .PHONY: pull-comfyui
 pull-comfyui:
-	@make -C src/code/comfyui pull
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) pull
 
 .PHONY: upload-comfyui-base
 upload-comfyui-base:
-	@make -C src/code/comfyui upload-base
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) upload-base
 
 # 根据已发布的snapshot构建comfyui生产镜像
 # BUILD_ENV_SNAPSHOT_DIR=/mnt/cap-models/4a34adf1-4b55-5ee7-b997-9f0414bb30c8/snapshots/prod-20250609-092136
 # make build-comfyui-from-snapshot
 .PHONY: build-comfyui-from-snapshot
 build-comfyui-from-snapshot: build
-	@make -C src/code/comfyui build-from-snapshot
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) build-from-snapshot
 
 # ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 .PHONY: build-sd

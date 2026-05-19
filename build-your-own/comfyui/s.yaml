@@ -47,6 +47,7 @@ resources:
         image: ${vars.image}
       environmentVariables:
         BACKEND_TYPE: 'comfyui'
+        COMFYUI_VERSION: 'v0.3.77'
         SKIP_SNAPSHOT_LOADING: 'true'
         AUTO_LAUNCH_SNAPSHOT_NAME: 'latest'
       vpcConfig: auto

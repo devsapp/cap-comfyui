@@ -2,6 +2,9 @@ FROM alpine/git:2.36.2 AS codes
 
 WORKDIR /root
 
+ARG COMFYUI_VERSION
+ARG CUSTOM_NODES_JSON
+
 # 安装 jq（用于解析 JSON）
 RUN apk add --no-cache jq
 
@@ -9,10 +12,10 @@ ENV COMFYUI_DIR="/root/comfyui"
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git ${COMFYUI_DIR} && \
     cd ${COMFYUI_DIR} && \
-    git checkout "v0.3.77"
+    git checkout "${COMFYUI_VERSION}"
 
 # 复制插件列表配置文件
-COPY code/comfyui/custom_nodes_config/custom_nodes.json /tmp/custom_nodes.json
+COPY ${CUSTOM_NODES_JSON} /tmp/custom_nodes.json
 
 # 批量安装自定义节点插件
 # 从 custom_nodes.json 读取插件列表，循环安装启用的插件
@@ -81,6 +84,9 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
 
 # 拷贝自研插件（如果有）
 COPY code/comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+
+# 写入版本标识文件，供 agent 运行时探测
+RUN echo "${COMFYUI_VERSION}" > ${COMFYUI_DIR}/.funart-comfyui-version
 
 FROM python:3.10.16-slim AS dependencies
 

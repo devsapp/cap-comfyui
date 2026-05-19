@@ -83,7 +83,7 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
     fi
 
 # 拷贝自研插件（如果有）
-COPY code/comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+COPY comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
 
 # 写入版本标识文件，供 agent 运行时探测
 RUN echo "${COMFYUI_VERSION}" > ${COMFYUI_DIR}/.funart-comfyui-version
@@ -122,7 +122,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 安装 ComfyUI 插件的依赖
 # 使用 ManagementService.install_custom_nodes - 智能合并依赖，处理冲突（需要 agent 代码）
 ENV AGENT_DIR="/root/agent"
-COPY code/agent ${AGENT_DIR}
+COPY agent ${AGENT_DIR}
 
 # 安装 agent 的依赖（供 ManagementService 运行，使用主 Python 环境）
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -167,7 +167,7 @@ RUN \
     git curl wget jq ffmpeg gcc g++ build-essential zstd && \
     rm -rf /var/lib/apt/lists/*
 
-COPY code/agent ${AGENT_DIR}
+COPY agent ${AGENT_DIR}
 
 RUN python3 -m venv ${AGENT_DIR}/venv
 

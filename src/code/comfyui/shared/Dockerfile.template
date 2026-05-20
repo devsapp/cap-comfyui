@@ -92,10 +92,10 @@ FROM python:3.10.16-slim AS dependencies
 
 WORKDIR /root
 
-# 安装系统依赖（git 等，PIPInstaller 可能需要）
+# 安装系统依赖（git、g++ 等，PIPInstaller 和 insightface/pyworld 编译需要）
 RUN \
     apt update && \
-    apt install -y --no-install-recommends git && \
+    apt install -y --no-install-recommends git gcc g++ build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 # 升级pip并初始化venv虚拟环境

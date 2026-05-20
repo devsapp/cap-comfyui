@@ -193,6 +193,9 @@ COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 
+# ComfyUI v0.16.4+ 需要 user/ 目录存放 sqlite 数据库
+RUN mkdir -p ${WORK_DIR}/user
+
 ENV BACKEND_TYPE="comfyui"
 
 RUN chmod +x ${AGENT_DIR}/entrypoint.bash

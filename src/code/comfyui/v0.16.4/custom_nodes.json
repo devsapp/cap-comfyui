@@ -373,8 +373,8 @@
       "name": "ComfyUI-TeaCache",
       "repository": "https://github.com/welltop-cn/ComfyUI-TeaCache",
       "stars": 1066,
-      "enabled": true,
-      "description": "Unofficial implementation of [ali-vilab/TeaCache](https://github.com/ali-vilab/TeaCache) for ComfyUI",
+      "enabled": false,
+      "description": "Unofficial implementation of [ali-vilab/TeaCache](https://github.com/ali-vilab/TeaCache) for ComfyUI. Disabled: incompatible with v0.16.4 (precompute_freqs_cis removed)",
       "version": "91dff8e"
     },
     {

@@ -5,6 +5,7 @@ This module patches ComfyUI's server to automatically extract and set user_id fr
 """
 
 from .context import set_current_user, clear_current_user
+from .json_sanitize import install_json_sanitize
 
 _hook_installed = False
 _original_add_routes = None
@@ -25,6 +26,8 @@ def install_server_middleware():
 
     try:
         import server  # type: ignore
+
+        install_json_sanitize()
 
         # Save original add_routes method
         _original_add_routes = server.PromptServer.add_routes

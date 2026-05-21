@@ -40,6 +40,7 @@ from .context import (
     UserContext,
 )
 
+from .json_sanitize import install_json_sanitize
 from .folder_paths_patch import install_folder_paths_patch
 from .execution_patch import install_execution_patch
 from .cache_signature_patch import install_cache_signature_patch
@@ -59,6 +60,8 @@ ENABLE_PLUGIN = os.getenv('ENABLE_COMFYUI_MULTI_USER', 'false').lower() == 'true
 
 if ENABLE_PLUGIN:
     try:
+        # JSON 补丁必须最早安装（在 server 处理 /object_info 之前生效）
+        install_json_sanitize()
         # Install all patches
         install_folder_paths_patch()
         install_execution_patch()

@@ -265,7 +265,7 @@ class Routes:
             # 对 POST /prompt 请求，将 user_id 注入到 extra_data 中
             # 确保 ComfyUI 执行线程能正确获取用户上下文（execution_patch 从 extra_data 读取）
             data = request.get_data()
-            if user_id and path == 'prompt' and request.method == 'POST':
+            if user_id and path in ('prompt', 'api/prompt') and request.method == 'POST':
                 try:
                     json_data = json.loads(data)
                     if 'extra_data' not in json_data:

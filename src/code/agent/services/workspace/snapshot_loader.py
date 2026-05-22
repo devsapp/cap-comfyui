@@ -1,5 +1,4 @@
 import os
-import shutil
 from abc import ABC, abstractmethod
 from typing import Dict
 
@@ -107,9 +106,6 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
             force=True
         )
 
-        # 恢复自研内置插件到 NAS custom_nodes 目录
-        _restore_builtin_plugins(f"{constants.MNT_DIR}/custom_nodes")
-
         # 新建 .cache 目录软链接
         mnt_cache_dir = f"{constants.MNT_DIR}/.cache"
         work_cache_dir = f"{constants.WORK_DIR}/.cache"
@@ -120,27 +116,6 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
             link_path=work_cache_dir,
             force=True
         )
-
-
-def _restore_builtin_plugins(target_custom_nodes_dir: str):
-    """
-    从 /root/built-in/custom_nodes/ 恢复自研插件到目标目录。
-    Snapshot 加载后 custom_nodes 被 NAS 软链接替换，需要确保自研插件存在。
-    """
-    builtin_dir = constants.BUILTIN_NODES_DIR
-    if not os.path.isdir(builtin_dir):
-        return
-
-    os.makedirs(target_custom_nodes_dir, exist_ok=True)
-    for name in os.listdir(builtin_dir):
-        src = os.path.join(builtin_dir, name)
-        dst = os.path.join(target_custom_nodes_dir, name)
-        if not os.path.isdir(src):
-            continue
-        if os.path.exists(dst):
-            shutil.rmtree(dst)
-        shutil.copytree(src, dst)
-        log("INFO", f"[BuiltinPlugins] Restored {name} to {target_custom_nodes_dir}")
 
 
 class ComfyUIProdSnapshotLoader(SnapshotLoader):

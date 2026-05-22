@@ -55,16 +55,14 @@ upload-base:
 
 	@echo "Creating .funart/VERSION.txt..."
 	@mkdir -p ./tmp/.funart
-	@echo "1.6.5" > ./tmp/.funart/dependency_version.txt
+	@echo "$(COMFYUI_VERSION)" > ./tmp/.funart/dependency_version.txt
 
 	@echo "Uploading files to OSS..."
 	ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \
 	ossutil cp -r ./tmp/custom_nodes oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/custom_nodes && \
 	ossutil cp ./tmp/comfyui.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/comfyui.tar.zst && \
 	ossutil cp ./tmp/venv.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar.zst && \
-	ossutil cp ./tmp/.funart/dependency_version.txt oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/.funart/dependency_version.txt  && \
-	# 将 input 目录拷贝到 OSS 上
-	ossutil cp -r oss://$(OSS_BUCKET)/v0.3.77-alpha/input/ oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/
+	ossutil cp ./tmp/.funart/dependency_version.txt oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/.funart/dependency_version.txt
 
 	@rm -rf tmp
 	@echo "Upload completed successfully"

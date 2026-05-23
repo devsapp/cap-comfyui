@@ -154,6 +154,8 @@ fi
 mkdir -p ${MNT_DIR}/input
 mkdir -p ${MNT_DIR}/output
 mkdir -p ${MNT_DIR}/output/serverless_api
+# ComfyUI v0.16.4+ sqlite 数据库默认路径为 /root/user/comfyui.db
+mkdir -p /root/user
 source ${AGENT_DIR}/venv/bin/activate
 echo "Using python venv, python path '$(which python)', pip path '$(which pip)'... "
 

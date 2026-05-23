@@ -153,7 +153,7 @@ class JobsHandler:
         """Convert a HistoryManager item to jobs API format"""
         prompt_tuple = history_item.get('prompt', [])
         extra_data = prompt_tuple[3] if len(prompt_tuple) > 3 else {}
-        create_time = extra_data.get('create_time')
+        create_time = extra_data.get('create_time') or history_item.get('create_time')
 
         status_info = history_item.get('status', {})
         status_str = status_info.get('status_str', '')

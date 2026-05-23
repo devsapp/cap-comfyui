@@ -17,7 +17,7 @@ from services.gateway.task.utils.prompt_utils import parse_prompt_body
 # 持久化文件路径（NAS 上，实例重建后仍可读取）
 _HISTORY_FILE = os.path.join(constants.MNT_DIR, "output", ".history.json")
 # 持久化最大条目数（避免文件无限增长）
-_MAX_PERSISTED_ITEMS = 500
+_MAX_PERSISTED_ITEMS = 1000
 # 写盘去抖间隔（秒）
 _FLUSH_DEBOUNCE_SECONDS = 3
 
@@ -558,8 +558,25 @@ class HistoryManager:
             self._flush_timer.daemon = True
             self._flush_timer.start()
 
+    @staticmethod
+    def _slim_item(item: dict) -> dict:
+        """提取持久化所需的最小字段集，丢弃完整 workflow prompt 数据"""
+        # prompt 格式: [sequence_number, prompt_id, prompt_dict, extra_data, outputs_to_execute]
+        # 只保留 extra_data 中的 create_time，丢弃 prompt_dict 和 outputs_to_execute
+        prompt = item.get("prompt", [])
+        create_time = 0
+        if len(prompt) > 3 and isinstance(prompt[3], dict):
+            create_time = prompt[3].get("create_time", 0)
+        return {
+            "outputs": item.get("outputs", {}),
+            "meta": item.get("meta", {}),
+            "status": item.get("status", {}),
+            "user_id": item.get("user_id", ""),
+            "create_time": create_time,
+        }
+
     def _flush_to_disk(self):
-        """将已完成的历史记录写入 NAS"""
+        """将已完成的历史记录精简后写入 NAS"""
         try:
             with self._lock:
                 completed = {
@@ -567,15 +584,21 @@ class HistoryManager:
                     if item.get("status", {}).get("completed", False)
                     and not item.get("_initializing")
                 }
-            # 按 create_time 排序，只保留最近 N 条
-            sorted_items = sorted(
-                completed.items(),
-                key=lambda x: x[1].get("prompt", [None, None, None, {}])[3].get("create_time", 0)
-                if len(x[1].get("prompt", [])) > 3 else 0
-            )
+            # 提取 create_time 用于排序
+            def _get_create_time(entry):
+                item = entry[1]
+                # 从 prompt 字段提取（内存中的完整记录）
+                prompt = item.get("prompt", [])
+                if len(prompt) > 3 and isinstance(prompt[3], dict):
+                    return prompt[3].get("create_time", 0)
+                # 从顶层提取（从磁盘加载的精简记录）
+                return item.get("create_time", 0)
+
+            sorted_items = sorted(completed.items(), key=_get_create_time)
             if len(sorted_items) > _MAX_PERSISTED_ITEMS:
                 sorted_items = sorted_items[-_MAX_PERSISTED_ITEMS:]
-            to_save = dict(sorted_items)
+
+            to_save = {pid: self._slim_item(item) for pid, item in sorted_items}
 
             os.makedirs(os.path.dirname(_HISTORY_FILE), exist_ok=True)
             tmp_file = _HISTORY_FILE + ".tmp"

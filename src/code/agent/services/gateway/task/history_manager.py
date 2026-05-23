@@ -2,34 +2,51 @@
 History 管理模块
 负责管理任务历史记录的创建、更新和查询
 """
+import json
+import os
 import time
 import threading
 import traceback
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
 
+import constants
 from utils.logger import log
 from services.gateway.task.utils.prompt_utils import parse_prompt_body
+
+# 持久化文件路径（NAS 上，实例重建后仍可读取）
+_HISTORY_FILE = os.path.join(constants.MNT_DIR, "output", ".history.json")
+# 持久化最大条目数（避免文件无限增长）
+_MAX_PERSISTED_ITEMS = 500
+# 写盘去抖间隔（秒）
+_FLUSH_DEBOUNCE_SECONDS = 3
 
 
 class HistoryManager:
     """
     历史记录管理类
     负责管理任务执行历史的存储和查询
-    
+
     注意：此类是线程安全的，所有公共方法都使用独立的锁保护
     """
-    
+
     def __init__(self):
         """初始化历史记录存储"""
         # 历史记录主存储: {prompt_id: {prompt, outputs, status, meta, user_id}}
         self.history: Dict[str, dict] = {}
-        
+
         # 按用户分组的历史记录: {user_id: {prompt_id: history_item}}
         self._history_by_user: Dict[str, Dict[str, dict]] = defaultdict(dict)
-        
+
         # 独立的锁，保护 history 和 _history_by_user 的并发访问
         self._lock = threading.Lock()
+
+        # 持久化相关
+        self._flush_timer: Optional[threading.Timer] = None
+        self._flush_lock = threading.Lock()
+
+        # 从 NAS 加载历史数据
+        self._load_from_disk()
     
     def get_history(self, user_id: str, max_items=None, offset: int = -1) -> Dict[Any, Any]:
         """
@@ -125,10 +142,10 @@ class HistoryManager:
     def remove_history_item(self, prompt_id: str) -> bool:
         """
         原子地从两个字典移除 history item
-        
+
         Args:
             prompt_id: prompt ID
-            
+
         Returns:
             bool: 是否成功移除
         """
@@ -137,17 +154,18 @@ class HistoryManager:
                 history_item = self.history.get(prompt_id)
                 if not history_item:
                     return False
-                
+
                 user_id = history_item.get("user_id")
-                
+
                 # 原子性删除
                 self.history.pop(prompt_id, None)
                 if user_id:
                     self._history_by_user[user_id].pop(prompt_id, None)
-                
+
                 log("DEBUG", f"[HistoryManager] Removed history_item for prompt_id {prompt_id}")
+                self._schedule_flush()
                 return True
-                
+
             except Exception as e:
                 log("ERROR", f"[HistoryManager] Error in remove_history_item for {prompt_id}: {e}\n{traceback.format_exc()}")
                 return False
@@ -167,6 +185,7 @@ class HistoryManager:
                 self.history.pop(prompt_id, None)
                 self._history_by_user[user_id].pop(prompt_id, None)
                 log("DEBUG", f"[HistoryManager] Removed history_item for prompt_id {prompt_id}")
+                self._schedule_flush()
                 return True
             except Exception as e:
                 log("ERROR", f"[HistoryManager] Error in remove_if_owned for {prompt_id}: {e}\n{traceback.format_exc()}")
@@ -175,10 +194,10 @@ class HistoryManager:
     def wipe_history_for_user(self, user_id: str) -> int:
         """
         清空指定用户的全部历史记录（与 ComfyUI wipe_history 语义对齐，多租户下按用户清空）
-        
+
         Args:
             user_id: 用户ID
-            
+
         Returns:
             int: 被移除的条目数
         """
@@ -191,6 +210,7 @@ class HistoryManager:
                 self._history_by_user[user_id] = {}
                 if count > 0:
                     log("DEBUG", f"[HistoryManager] Wiped {count} history items for user {user_id}")
+                    self._schedule_flush()
                 return count
             except Exception as e:
                 log("ERROR", f"[HistoryManager] Error in wipe_history_for_user for {user_id}: {e}\n{traceback.format_exc()}")
@@ -357,8 +377,10 @@ class HistoryManager:
                 status["status_str"] = status_str
                 
                 # 根据状态类型添加消息
+                completed_now = False
                 if status_str == "success":
                     status["completed"] = True
+                    completed_now = True
                     # 添加 execution_success 消息（如果还没有）
                     if not any(msg[0] == "execution_success" for msg in status.get("messages", [])):
                         status.setdefault("messages", []).append(
@@ -366,6 +388,7 @@ class HistoryManager:
                         )
                 elif status_str == "error":
                     status["completed"] = True
+                    completed_now = True
                     # 添加 execution_error 消息（如果还没有）
                     if not any(msg[0] == "execution_error" for msg in status.get("messages", [])):
                         error_info = {
@@ -383,9 +406,11 @@ class HistoryManager:
                             status.setdefault("messages", []).append(
                                 ["execution_cached", {"prompt_id": prompt_id, "timestamp": timestamp}]
                             )
-                
+
+                if completed_now:
+                    self._schedule_flush()
                 return True
-                
+
             except Exception as e:
                 log("ERROR", f"[HistoryManager] Error updating history status: {e}\n{traceback.format_exc()}")
                 return False
@@ -457,18 +482,18 @@ class HistoryManager:
                 log("ERROR", f"[HistoryManager] Error updating history outputs: {e}\n{traceback.format_exc()}")
                 return False
     
-    def late_init_history_item(self, task_id: str, prompt_id: str, prompt_body: dict, 
+    def late_init_history_item(self, task_id: str, prompt_id: str, prompt_body: dict,
                                client_id: str, user_id: str) -> bool:
         """
         延迟初始化历史项（当 executed 消息到达但 history_item 尚未创建时）
-        
+
         Args:
             task_id: 任务ID
             prompt_id: prompt ID
             prompt_body: 任务的 prompt 数据
             client_id: 客户端ID
             user_id: 用户ID
-            
+
         Returns:
             bool: 是否成功初始化
         """
@@ -476,10 +501,10 @@ class HistoryManager:
             try:
                 if prompt_id in self.history:
                     return False
-                
+
                 prompt_dict, outputs_to_execute, extra_data = parse_prompt_body(prompt_body, client_id)
                 extra_data["create_time"] = int(time.time() * 1000)
-                
+
                 log("INFO", f"[HistoryManager] Late-initializing history_item for prompt_id {prompt_id}")
                 history_item = {
                     "meta": {},
@@ -495,7 +520,68 @@ class HistoryManager:
                 self.history[prompt_id] = history_item
                 self._history_by_user[user_id][prompt_id] = history_item
                 return True
-                
+
             except Exception as e:
                 log("ERROR", f"[HistoryManager] Error in late_init_history_item for {prompt_id}: {e}\n{traceback.format_exc()}")
                 return False
+
+    # ==================== 持久化 ====================
+
+    def _load_from_disk(self):
+        """启动时从 NAS 加载已完成的历史记录"""
+        try:
+            if not os.path.exists(_HISTORY_FILE):
+                return
+            with open(_HISTORY_FILE, "r") as f:
+                items = json.load(f)
+            if not isinstance(items, dict):
+                return
+            count = 0
+            for prompt_id, item in items.items():
+                user_id = item.get("user_id")
+                if not user_id:
+                    continue
+                self.history[prompt_id] = item
+                self._history_by_user[user_id][prompt_id] = item
+                count += 1
+            if count > 0:
+                log("INFO", f"[HistoryManager] Loaded {count} history items from disk")
+        except Exception as e:
+            log("WARNING", f"[HistoryManager] Failed to load history from disk: {e}")
+
+    def _schedule_flush(self):
+        """去抖写盘：延迟 _FLUSH_DEBOUNCE_SECONDS 后执行，合并高频写入"""
+        with self._flush_lock:
+            if self._flush_timer is not None:
+                self._flush_timer.cancel()
+            self._flush_timer = threading.Timer(_FLUSH_DEBOUNCE_SECONDS, self._flush_to_disk)
+            self._flush_timer.daemon = True
+            self._flush_timer.start()
+
+    def _flush_to_disk(self):
+        """将已完成的历史记录写入 NAS"""
+        try:
+            with self._lock:
+                completed = {
+                    pid: item for pid, item in self.history.items()
+                    if item.get("status", {}).get("completed", False)
+                    and not item.get("_initializing")
+                }
+            # 按 create_time 排序，只保留最近 N 条
+            sorted_items = sorted(
+                completed.items(),
+                key=lambda x: x[1].get("prompt", [None, None, None, {}])[3].get("create_time", 0)
+                if len(x[1].get("prompt", [])) > 3 else 0
+            )
+            if len(sorted_items) > _MAX_PERSISTED_ITEMS:
+                sorted_items = sorted_items[-_MAX_PERSISTED_ITEMS:]
+            to_save = dict(sorted_items)
+
+            os.makedirs(os.path.dirname(_HISTORY_FILE), exist_ok=True)
+            tmp_file = _HISTORY_FILE + ".tmp"
+            with open(tmp_file, "w") as f:
+                json.dump(to_save, f, ensure_ascii=False, separators=(",", ":"))
+            os.replace(tmp_file, _HISTORY_FILE)
+            log("DEBUG", f"[HistoryManager] Flushed {len(to_save)} history items to disk")
+        except Exception as e:
+            log("WARNING", f"[HistoryManager] Failed to flush history to disk: {e}")

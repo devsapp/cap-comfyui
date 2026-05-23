@@ -4,6 +4,7 @@ History 管理模块
 """
 import json
 import os
+import sqlite3
 import time
 import threading
 import traceback
@@ -14,10 +15,10 @@ import constants
 from utils.logger import log
 from services.gateway.task.utils.prompt_utils import parse_prompt_body
 
-# 持久化文件路径（NAS 上，实例重建后仍可读取）
-_HISTORY_FILE = os.path.join(constants.MNT_DIR, "output", ".history.json")
-# 持久化最大条目数（避免文件无限增长）
-_MAX_PERSISTED_ITEMS = 1000
+# 持久化数据库路径（NAS 上，实例重建后仍可读取）
+_HISTORY_DB = os.path.join(constants.MNT_DIR, "output", ".history.db")
+# 启动时加载到内存的最大条目数（DB 本身不限制）
+_MAX_LOAD_ITEMS = 2000
 # 写盘去抖间隔（秒）
 _FLUSH_DEBOUNCE_SECONDS = 3
 
@@ -525,29 +526,61 @@ class HistoryManager:
                 log("ERROR", f"[HistoryManager] Error in late_init_history_item for {prompt_id}: {e}\n{traceback.format_exc()}")
                 return False
 
-    # ==================== 持久化 ====================
+    # ==================== 持久化（SQLite）====================
+
+    def _init_db(self):
+        """初始化 SQLite 数据库连接和表结构"""
+        try:
+            os.makedirs(os.path.dirname(_HISTORY_DB), exist_ok=True)
+            conn = sqlite3.connect(_HISTORY_DB, timeout=5)
+            conn.execute("PRAGMA journal_mode=DELETE")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS history (
+                    prompt_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    outputs TEXT,
+                    meta TEXT,
+                    status TEXT,
+                    create_time INTEGER DEFAULT 0
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON history(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_create_time ON history(create_time)")
+            conn.commit()
+            return conn
+        except Exception as e:
+            log("WARNING", f"[HistoryManager] Failed to init history DB: {e}")
+            return None
 
     def _load_from_disk(self):
-        """启动时从 NAS 加载已完成的历史记录"""
+        """启动时从 SQLite 加载已完成的历史记录"""
         try:
-            if not os.path.exists(_HISTORY_FILE):
+            conn = self._init_db()
+            if not conn:
                 return
-            with open(_HISTORY_FILE, "r") as f:
-                items = json.load(f)
-            if not isinstance(items, dict):
-                return
+            cursor = conn.execute(
+                "SELECT prompt_id, user_id, outputs, meta, status, create_time "
+                "FROM history ORDER BY create_time DESC LIMIT ?",
+                (_MAX_LOAD_ITEMS,)
+            )
             count = 0
-            for prompt_id, item in items.items():
-                user_id = item.get("user_id")
-                if not user_id:
-                    continue
+            for row in cursor:
+                prompt_id, user_id, outputs_json, meta_json, status_json, create_time = row
+                item = {
+                    "outputs": json.loads(outputs_json) if outputs_json else {},
+                    "meta": json.loads(meta_json) if meta_json else {},
+                    "status": json.loads(status_json) if status_json else {},
+                    "user_id": user_id,
+                    "create_time": create_time or 0,
+                }
                 self.history[prompt_id] = item
                 self._history_by_user[user_id][prompt_id] = item
                 count += 1
+            conn.close()
             if count > 0:
-                log("INFO", f"[HistoryManager] Loaded {count} history items from disk")
+                log("INFO", f"[HistoryManager] Loaded {count} history items from DB")
         except Exception as e:
-            log("WARNING", f"[HistoryManager] Failed to load history from disk: {e}")
+            log("WARNING", f"[HistoryManager] Failed to load history from DB: {e}")
 
     def _schedule_flush(self):
         """去抖写盘：延迟 _FLUSH_DEBOUNCE_SECONDS 后执行，合并高频写入"""
@@ -559,52 +592,48 @@ class HistoryManager:
             self._flush_timer.start()
 
     @staticmethod
-    def _slim_item(item: dict) -> dict:
-        """提取持久化所需的最小字段集，丢弃完整 workflow prompt 数据"""
-        # prompt 格式: [sequence_number, prompt_id, prompt_dict, extra_data, outputs_to_execute]
-        # 只保留 extra_data 中的 create_time，丢弃 prompt_dict 和 outputs_to_execute
+    def _get_create_time(item: dict) -> int:
+        """从 history item 中提取 create_time"""
         prompt = item.get("prompt", [])
-        create_time = 0
         if len(prompt) > 3 and isinstance(prompt[3], dict):
-            create_time = prompt[3].get("create_time", 0)
-        return {
-            "outputs": item.get("outputs", {}),
-            "meta": item.get("meta", {}),
-            "status": item.get("status", {}),
-            "user_id": item.get("user_id", ""),
-            "create_time": create_time,
-        }
+            return prompt[3].get("create_time", 0)
+        return item.get("create_time", 0)
 
     def _flush_to_disk(self):
-        """将已完成的历史记录精简后写入 NAS"""
+        """将已完成的历史记录写入 SQLite"""
         try:
             with self._lock:
-                completed = {
-                    pid: item for pid, item in self.history.items()
+                completed = [
+                    (pid, item) for pid, item in self.history.items()
                     if item.get("status", {}).get("completed", False)
                     and not item.get("_initializing")
-                }
-            # 提取 create_time 用于排序
-            def _get_create_time(entry):
-                item = entry[1]
-                # 从 prompt 字段提取（内存中的完整记录）
-                prompt = item.get("prompt", [])
-                if len(prompt) > 3 and isinstance(prompt[3], dict):
-                    return prompt[3].get("create_time", 0)
-                # 从顶层提取（从磁盘加载的精简记录）
-                return item.get("create_time", 0)
+                ]
 
-            sorted_items = sorted(completed.items(), key=_get_create_time)
-            if len(sorted_items) > _MAX_PERSISTED_ITEMS:
-                sorted_items = sorted_items[-_MAX_PERSISTED_ITEMS:]
+            if not completed:
+                return
 
-            to_save = {pid: self._slim_item(item) for pid, item in sorted_items}
+            conn = sqlite3.connect(_HISTORY_DB, timeout=5)
+            conn.execute("PRAGMA journal_mode=DELETE")
 
-            os.makedirs(os.path.dirname(_HISTORY_FILE), exist_ok=True)
-            tmp_file = _HISTORY_FILE + ".tmp"
-            with open(tmp_file, "w") as f:
-                json.dump(to_save, f, ensure_ascii=False, separators=(",", ":"))
-            os.replace(tmp_file, _HISTORY_FILE)
-            log("DEBUG", f"[HistoryManager] Flushed {len(to_save)} history items to disk")
+            rows = []
+            for pid, item in completed:
+                create_time = self._get_create_time(item)
+                rows.append((
+                    pid,
+                    item.get("user_id", ""),
+                    json.dumps(item.get("outputs", {}), ensure_ascii=False, separators=(",", ":")),
+                    json.dumps(item.get("meta", {}), ensure_ascii=False, separators=(",", ":")),
+                    json.dumps(item.get("status", {}), ensure_ascii=False, separators=(",", ":")),
+                    create_time,
+                ))
+
+            conn.executemany(
+                "INSERT OR REPLACE INTO history (prompt_id, user_id, outputs, meta, status, create_time) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                rows
+            )
+            conn.commit()
+            conn.close()
+            log("DEBUG", f"[HistoryManager] Flushed {len(rows)} history items to DB")
         except Exception as e:
-            log("WARNING", f"[HistoryManager] Failed to flush history to disk: {e}")
+            log("WARNING", f"[HistoryManager] Failed to flush history to DB: {e}")

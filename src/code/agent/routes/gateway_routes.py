@@ -18,6 +18,7 @@ from services.gateway.handlers.queue_handler import QueueHandler
 from services.gateway.handlers.prompt_handler import PromptHandler
 from services.gateway.handlers.serverless_handler import ServerlessHandler
 from services.gateway.handlers.history_handler import HistoryHandler
+from services.gateway.handlers.jobs_handler import JobsHandler
 from services.gateway.handlers.interrupt_handler import InterruptHandler
 from services.gateway.handlers.reboot_handler import RebootHandler
 from services.gateway.handlers.task_status_handler import TaskStatusHandler
@@ -50,6 +51,7 @@ class GatewayRoutes:
         self.serverless_handler = ServerlessHandler()
         self.task_status_handler = TaskStatusHandler(ServerlessApiService())
         self.history_handler = HistoryHandler()
+        self.jobs_handler = JobsHandler(task_manager)
         self.interrupt_handler = InterruptHandler()
         self.userdata_handler = UserdataHandler()
         self.ws_handler = WsHandler()
@@ -76,6 +78,7 @@ class GatewayRoutes:
             self._register_serverless_run_handler()
             self._register_task_status_handler()
             self._register_history_handler()
+            self._register_jobs_handler()
             self._register_interrupt_handler()
             # 通过环境变量控制是否禁用工作流保存
             if constants.DISABLE_FLOW_SAVE:
@@ -245,6 +248,17 @@ class GatewayRoutes:
                 return self.history_handler.handle_get_request()
             return self.history_handler.handle_post_request()
     
+    def _register_jobs_handler(self):
+        @self.bp.route("/jobs", methods=["GET"])
+        @handle_exceptions(error_type="jobs_operation_error", log_prefix="Jobs")
+        def handle_jobs():
+            return self.jobs_handler.handle_get_jobs()
+
+        @self.bp.route("/jobs/<job_id>", methods=["GET"])
+        @handle_exceptions(error_type="jobs_operation_error", log_prefix="Jobs")
+        def handle_job_detail(job_id):
+            return self.jobs_handler.handle_get_job(job_id)
+
     def _register_interrupt_handler(self):
         @self.bp.route("/interrupt", methods=["POST"])
         @handle_exceptions(error_type="interrupt_operation_error", log_prefix="Interrupt")

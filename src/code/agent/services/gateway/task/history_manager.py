@@ -45,6 +45,9 @@ class HistoryManager:
         # 持久化相关
         self._flush_timer: Optional[threading.Timer] = None
         self._flush_lock = threading.Lock()
+        # 追踪需要写入/删除的记录
+        self._dirty_prompt_ids: set = set()
+        self._deleted_prompt_ids: set = set()
 
         # 从 NAS 加载历史数据
         self._load_from_disk()
@@ -164,13 +167,15 @@ class HistoryManager:
                     self._history_by_user[user_id].pop(prompt_id, None)
 
                 log("DEBUG", f"[HistoryManager] Removed history_item for prompt_id {prompt_id}")
+                self._dirty_prompt_ids.discard(prompt_id)
+                self._deleted_prompt_ids.add(prompt_id)
                 self._schedule_flush()
                 return True
 
             except Exception as e:
                 log("ERROR", f"[HistoryManager] Error in remove_history_item for {prompt_id}: {e}\n{traceback.format_exc()}")
                 return False
-    
+
     def remove_if_owned(self, prompt_id: str, user_id: str) -> bool:
         """
         原子地校验归属并删除 history item，消除先 get 再 remove 的 TOCTOU 竞态。
@@ -186,6 +191,8 @@ class HistoryManager:
                 self.history.pop(prompt_id, None)
                 self._history_by_user[user_id].pop(prompt_id, None)
                 log("DEBUG", f"[HistoryManager] Removed history_item for prompt_id {prompt_id}")
+                self._dirty_prompt_ids.discard(prompt_id)
+                self._deleted_prompt_ids.add(prompt_id)
                 self._schedule_flush()
                 return True
             except Exception as e:
@@ -208,6 +215,8 @@ class HistoryManager:
                 count = len(user_history)
                 for prompt_id in list(user_history.keys()):
                     self.history.pop(prompt_id, None)
+                    self._dirty_prompt_ids.discard(prompt_id)
+                    self._deleted_prompt_ids.add(prompt_id)
                 self._history_by_user[user_id] = {}
                 if count > 0:
                     log("DEBUG", f"[HistoryManager] Wiped {count} history items for user {user_id}")
@@ -409,6 +418,7 @@ class HistoryManager:
                             )
 
                 if completed_now:
+                    self._dirty_prompt_ids.add(prompt_id)
                     self._schedule_flush()
                 return True
 
@@ -600,40 +610,51 @@ class HistoryManager:
         return item.get("create_time", 0)
 
     def _flush_to_disk(self):
-        """将已完成的历史记录写入 SQLite"""
+        """将脏记录增量写入 SQLite，删除已移除的记录"""
         try:
             with self._lock:
-                completed = [
-                    (pid, item) for pid, item in self.history.items()
-                    if item.get("status", {}).get("completed", False)
-                    and not item.get("_initializing")
-                ]
+                dirty_ids = self._dirty_prompt_ids.copy()
+                deleted_ids = self._deleted_prompt_ids.copy()
+                self._dirty_prompt_ids.clear()
+                self._deleted_prompt_ids.clear()
 
-            if not completed:
+                # 收集需要写入的记录
+                rows = []
+                for pid in dirty_ids:
+                    item = self.history.get(pid)
+                    if not item or not item.get("status", {}).get("completed", False):
+                        continue
+                    if item.get("_initializing"):
+                        continue
+                    create_time = self._get_create_time(item)
+                    rows.append((
+                        pid,
+                        item.get("user_id", ""),
+                        json.dumps(item.get("outputs", {}), ensure_ascii=False, separators=(",", ":")),
+                        json.dumps(item.get("meta", {}), ensure_ascii=False, separators=(",", ":")),
+                        json.dumps(item.get("status", {}), ensure_ascii=False, separators=(",", ":")),
+                        create_time,
+                    ))
+
+            if not rows and not deleted_ids:
                 return
 
             conn = sqlite3.connect(_HISTORY_DB, timeout=5)
             conn.execute("PRAGMA journal_mode=DELETE")
 
-            rows = []
-            for pid, item in completed:
-                create_time = self._get_create_time(item)
-                rows.append((
-                    pid,
-                    item.get("user_id", ""),
-                    json.dumps(item.get("outputs", {}), ensure_ascii=False, separators=(",", ":")),
-                    json.dumps(item.get("meta", {}), ensure_ascii=False, separators=(",", ":")),
-                    json.dumps(item.get("status", {}), ensure_ascii=False, separators=(",", ":")),
-                    create_time,
-                ))
+            if rows:
+                conn.executemany(
+                    "INSERT OR REPLACE INTO history (prompt_id, user_id, outputs, meta, status, create_time) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    rows
+                )
 
-            conn.executemany(
-                "INSERT OR REPLACE INTO history (prompt_id, user_id, outputs, meta, status, create_time) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                rows
-            )
+            if deleted_ids:
+                placeholders = ",".join("?" * len(deleted_ids))
+                conn.execute(f"DELETE FROM history WHERE prompt_id IN ({placeholders})", list(deleted_ids))
+
             conn.commit()
             conn.close()
-            log("DEBUG", f"[HistoryManager] Flushed {len(rows)} history items to DB")
+            log("DEBUG", f"[HistoryManager] DB flush: {len(rows)} upserted, {len(deleted_ids)} deleted")
         except Exception as e:
             log("WARNING", f"[HistoryManager] Failed to flush history to DB: {e}")

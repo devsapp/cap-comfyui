@@ -50,7 +50,7 @@ COPY --from=comfyui_source /root/built-in/custom_nodes /root/built-in/custom_nod
 
 # 写入内置插件版本号，供启动时版本检查使用
 # 版本号需随内置插件列表的实质性变化（增删插件、升级版本）而更新
-RUN echo "1.6.7" > /root/built-in/version.txt
+RUN echo "1.6.8" > /root/built-in/version.txt
 
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"

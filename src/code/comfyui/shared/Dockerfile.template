@@ -197,7 +197,7 @@ COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 # 需要通过 delta 机制恢复内置插件，与 agent 镜像对齐）
 RUN mkdir -p /root/built-in && \
     cp -r ${COMFYUI_DIR}/custom_nodes /root/built-in/custom_nodes && \
-    echo "1.6.7" > /root/built-in/version.txt
+    echo "2.0.0" > /root/built-in/version.txt
 
 # ComfyUI v0.16.4+ 需要 user/ 目录存放 sqlite 数据库
 RUN mkdir -p ${WORK_DIR}/user

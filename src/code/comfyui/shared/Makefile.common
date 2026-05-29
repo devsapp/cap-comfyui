@@ -4,8 +4,8 @@
 
 REGION ?= cn-hangzhou
 OSS_BUCKET ?= dipper-cache-$(REGION)
-COMFYUI_IMAGE ?= comfyui:v1.6.7-comfyui-$(COMFYUI_VERSION)
-COMFYUI_DEEPGPU_IMAGE ?= comfyui:deepgpu-v1.6.7-comfyui-$(COMFYUI_VERSION)
+COMFYUI_IMAGE ?= comfyui:v2.0.0-comfyui-$(COMFYUI_VERSION)
+COMFYUI_DEEPGPU_IMAGE ?= comfyui:deepgpu-v2.0.0-comfyui-$(COMFYUI_VERSION)
 
 # Build context is src/code/ (two levels up from version dir)
 BUILD_CONTEXT := $(shell cd ../.. && pwd)
@@ -55,7 +55,7 @@ upload-base:
 
 	@echo "Creating .funart/VERSION.txt..."
 	@mkdir -p ./tmp/.funart
-	@echo "1.6.7" > ./tmp/.funart/dependency_version.txt
+	@echo "2.0.0" > ./tmp/.funart/dependency_version.txt
 
 	@echo "Uploading files to OSS..."
 	ossutil cp -r ./tmp/models oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/models && \

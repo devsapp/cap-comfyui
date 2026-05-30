@@ -41,15 +41,20 @@ upload-base:
 	@mkdir -p tmp
 
 	@echo "Copying files from container..."
-	@# 使用 tar 流式复制,排除 models(体积大且单独上传),保留 custom_nodes
+	@# 使用 tar 流式复制,排除 custom_nodes 和 models(各自单独处理)
 	docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - \
+		--exclude 'comfyui/custom_nodes' \
 		-C /root comfyui venv | tar -x -C ./tmp
+
+	@echo "Preparing custom_nodes (only self-developed plugins)..."
+	@# 只上传自研插件,不上传容器里的 91 个社区插件。
+	@# 用户可通过 ComfyUI-Manager 按需安装社区插件。
+	cp -r $(BUILD_CONTEXT)/comfyui/custom_nodes ./tmp/custom_nodes
 
 	@echo "Creating snapshot..."
 	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst
-	@# 将 models 和 custom_nodes 从 comfyui 目录移出，使其不包含在 comfyui.tar.zst 中
+	@# 将 models 从 comfyui 目录移出，使其不包含在 comfyui.tar.zst 中
 	mv ./tmp/comfyui/models ./tmp/models
-	mv ./tmp/comfyui/custom_nodes ./tmp/custom_nodes
 	tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
 
 	@echo "Creating .funart/VERSION.txt..."

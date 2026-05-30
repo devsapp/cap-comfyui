@@ -193,10 +193,13 @@ COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
 
-# 备份全部插件到 built-in 目录（snapshot 加载后 custom_nodes 会被 NAS 软链接覆盖，
-# 需要通过 delta 机制恢复内置插件，与 agent 镜像对齐）
-RUN mkdir -p /root/built-in && \
-    cp -r ${COMFYUI_DIR}/custom_nodes /root/built-in/custom_nodes && \
+# 备份自研插件到 built-in 目录（snapshot 加载后 custom_nodes 会被 NAS 软链接覆盖，
+# 需要通过 delta 机制恢复内置插件；只备份自研插件，不备份社区插件，
+# 用户可通过 ComfyUI-Manager 按需安装社区插件）
+RUN mkdir -p /root/built-in/custom_nodes && \
+    cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-Multi-User /root/built-in/custom_nodes/ && \
+    cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-APIs /root/built-in/custom_nodes/ && \
+    cp -r ${COMFYUI_DIR}/custom_nodes/Comfy-VisionPlaid /root/built-in/custom_nodes/ && \
     echo "2.0.0" > /root/built-in/version.txt
 
 # ComfyUI v0.16.4+ 需要 user/ 目录存放 sqlite 数据库

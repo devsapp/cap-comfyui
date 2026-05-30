@@ -9,6 +9,16 @@ endif
 VERSION ?= $(shell date "+%Y%m%d%H%M%S")
 REGISTRY = cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app
 AGENT_IMAGE ?= $(REGISTRY)/image-generation-comfyui-agent-dev:$(VERSION)
+COMFYUI_VERSION ?= v0.3.77
+ifeq ($(COMFYUI_VERSION),v0.16.4)
+CAP_SYSTEM_VERSION ?= 2.0.0
+BUILTIN_DEPENDENCY_VERSION ?= 2.0.0-vp1.2.1
+else
+CAP_SYSTEM_VERSION ?= 1.6.8
+BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
+endif
+AGENT_COMFYUI_IMAGE ?= cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v$(CAP_SYSTEM_VERSION)
+COMFYUI_LOCAL_IMAGE ?= comfyui:v$(CAP_SYSTEM_VERSION)-comfyui-$(COMFYUI_VERSION)
 export OSS_BUCKET = dipper-cache-$(REGION)
 WARMUP_REGIONS ?= cn-hangzhou cn-shenzhen cn-beijing cn-shanghai ap-southeast-1
 
@@ -47,7 +57,10 @@ release:
 # 镜像构建
 .PHONY: build
 build:
-	cd src/code/agent && docker build --platform linux/amd64 -t $(AGENT_IMAGE) .
+	cd src/code/agent && docker build --platform linux/amd64 \
+		--build-arg COMFYUI_IMAGE=$(AGENT_COMFYUI_IMAGE) \
+		--build-arg BUILTIN_DEPENDENCY_VERSION=$(BUILTIN_DEPENDENCY_VERSION) \
+		-t $(AGENT_IMAGE) .
 	docker tag $(AGENT_IMAGE) agent
 
 # 本地测试运行
@@ -94,11 +107,16 @@ warmup:
 
 # ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 # ComfyUI 多版本构建
-COMFYUI_VERSION ?= v0.3.77
 
 .PHONY: build-comfyui
-build-comfyui: build
+build-comfyui:
 	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) build
+	docker tag $(COMFYUI_LOCAL_IMAGE) $(AGENT_COMFYUI_IMAGE)
+	@$(MAKE) build \
+		COMFYUI_VERSION=$(COMFYUI_VERSION) \
+		AGENT_COMFYUI_IMAGE=$(AGENT_COMFYUI_IMAGE) \
+		BUILTIN_DEPENDENCY_VERSION=$(BUILTIN_DEPENDENCY_VERSION) \
+		AGENT_IMAGE=$(AGENT_IMAGE)
 
 .PHONY: build-comfyui-v0.3.77
 build-comfyui-v0.3.77:

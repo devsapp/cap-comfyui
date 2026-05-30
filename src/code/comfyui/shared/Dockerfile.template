@@ -4,6 +4,10 @@ WORKDIR /root
 
 ARG COMFYUI_VERSION
 ARG CUSTOM_NODES_JSON
+ARG VISION_PLAID_VERSION=1.0.3
+ARG BITFORGE_VERSION=0.2.3
+ARG VISION_PLAID_EXTRA_PACKAGES=""
+ARG BUILTIN_DEPENDENCY_VERSION=2.0.0
 
 # 安装 jq（用于解析 JSON）
 RUN apk add --no-cache jq
@@ -90,6 +94,10 @@ RUN echo "${COMFYUI_VERSION}" > ${COMFYUI_DIR}/.funart-comfyui-version
 
 FROM python:3.10.16-slim AS dependencies
 
+ARG VISION_PLAID_VERSION
+ARG BITFORGE_VERSION
+ARG VISION_PLAID_EXTRA_PACKAGES
+
 WORKDIR /root
 
 # 安装系统依赖（git、g++ 等，PIPInstaller 和 insightface/pyworld 编译需要）
@@ -142,14 +150,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     /root/venv/bin/pip install -r ${COMFYUI_DIR}/requirements.txt --no-cache-dir && \
     # 安装 transformers 依赖, transformers 5.0.0 与 comfyui0.3.77 不兼容
     /root/venv/bin/pip install transformers==4.56.2 --no-cache-dir && \
-    /root/venv/bin/pip install setproctitle dill scikit-image -i https://mirrors.bfsu.edu.cn/pypi/web/simple/ && \
+    /root/venv/bin/pip install setproctitle dill scikit-image ${VISION_PLAID_EXTRA_PACKAGES} -i https://mirrors.bfsu.edu.cn/pypi/web/simple/ && \
     # /root/venv/bin/pip install flash_attn && \
     # 再次强制安装指定版本的 PyTorch，防止被插件依赖覆盖
     /root/venv/bin/pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --extra-index-url https://download.pytorch.org/whl/cu128 && \
     /root/venv/bin/pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.0.2/nunchaku-1.0.2+torch2.9-cp310-cp310-linux_x86_64.whl && \
     # 安装 vision-plaid 依赖
-    /root/venv/bin/pip install vision-plaid==1.0.3 --extra-index=https://py-index.oss-cn-beijing.aliyuncs.com/simple && \
-    /root/venv/bin/pip install bitforge==0.2.3 --extra-index=https://py-index.oss-cn-beijing.aliyuncs.com/pytorch/cu128/ && \
+    /root/venv/bin/pip install vision-plaid==${VISION_PLAID_VERSION} --extra-index-url=https://py-index.oss-cn-beijing.aliyuncs.com/simple && \
+    /root/venv/bin/pip install bitforge==${BITFORGE_VERSION} --extra-index-url=https://py-index.oss-cn-beijing.aliyuncs.com/pytorch/cu128/ && \
     # 安装 comfyui-impact-pack 依赖
     /root/venv/bin/pip install git+https://github.com/facebookresearch/sam2  && \
     /root/venv/bin/pip install insightface
@@ -177,6 +185,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 FROM python:3.10.16-slim AS base
 
+ARG BUILTIN_DEPENDENCY_VERSION
+
 WORKDIR /root
 
 RUN \
@@ -200,7 +210,7 @@ RUN mkdir -p /root/built-in/custom_nodes && \
     cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-Multi-User /root/built-in/custom_nodes/ && \
     cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-APIs /root/built-in/custom_nodes/ && \
     cp -r ${COMFYUI_DIR}/custom_nodes/Comfy-VisionPlaid /root/built-in/custom_nodes/ && \
-    echo "2.0.0" > /root/built-in/version.txt
+    echo "${BUILTIN_DEPENDENCY_VERSION}" > /root/built-in/version.txt
 
 # ComfyUI v0.16.4+ 需要 user/ 目录存放 sqlite 数据库
 RUN mkdir -p ${WORK_DIR}/user

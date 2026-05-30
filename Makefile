@@ -12,7 +12,9 @@ AGENT_IMAGE ?= $(REGISTRY)/image-generation-comfyui-agent-dev:$(VERSION)
 COMFYUI_VERSION ?= v0.3.77
 ifeq ($(COMFYUI_VERSION),v0.16.4)
 CAP_SYSTEM_VERSION ?= 2.0.0
-BUILTIN_DEPENDENCY_VERSION ?= 2.0.0-vp1.2.1
+# 指纹只用裸系统版本号(不带 -vp 后缀),与存量实例 NAS 上记录的版本一致,
+# 避免内置依赖指纹变化触发存量 ComfyUI 冷启动时重跑 install_all
+BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
 else
 CAP_SYSTEM_VERSION ?= 1.6.8
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)

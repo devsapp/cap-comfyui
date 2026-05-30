@@ -6,6 +6,8 @@ CAP_SYSTEM_VERSION := 2.0.0
 VISION_PLAID_VERSION := 1.2.1
 BITFORGE_VERSION := 0.2.4
 VISION_PLAID_EXTRA_PACKAGES := flashinfer-python flashinfer-cubin
-BUILTIN_DEPENDENCY_VERSION := 2.0.0-vp1.2.1
+# 指纹回归旧方式:只用 CAP_SYSTEM_VERSION,不编码 VP 版本,
+# 防止存量实例因指纹变化在冷启动时触发 install_all
+BUILTIN_DEPENDENCY_VERSION := $(CAP_SYSTEM_VERSION)
 
 include ../shared/Makefile.common

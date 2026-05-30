@@ -41,16 +41,15 @@ upload-base:
 	@mkdir -p tmp
 
 	@echo "Copying files from container..."
-	@# 使用 tar 流式复制并排除 custom_nodes 和 models，避免拷贝大量无用文件，提高速度
+	@# 使用 tar 流式复制,排除 models(体积大且单独上传),保留 custom_nodes
 	docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - \
-		--exclude 'comfyui/custom_nodes' \
 		-C /root comfyui venv | tar -x -C ./tmp
 
 	@echo "Creating snapshot..."
 	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst
 	@# 将 models 和 custom_nodes 从 comfyui 目录移出，使其不包含在 comfyui.tar.zst 中
 	mv ./tmp/comfyui/models ./tmp/models
-	mkdir -p ./tmp/custom_nodes
+	mv ./tmp/comfyui/custom_nodes ./tmp/custom_nodes
 	tar -cf - -C ./tmp comfyui | zstd -10 -T0 -o ./tmp/comfyui.tar.zst
 
 	@echo "Creating .funart/VERSION.txt..."

@@ -57,8 +57,18 @@ upload-base:
 
 	@echo "Preparing custom_nodes (only self-developed plugins)..."
 	@# 只上传自研插件,不上传容器里的 91 个社区插件。
-	@# 用户可通过 ComfyUI-Manager 按需安装社区插件。
+	@# 1) 从本地源码拷共享的自研插件(FunArt-ComfyUI-APIs / FunArt-ComfyUI-Multi-User)
 	cp -r $(BUILD_CONTEXT)/comfyui/custom_nodes ./tmp/custom_nodes
+	@# 2) 版本目录覆盖(如有非隐藏文件)
+	@if ls $(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/custom_nodes/* 1>/dev/null 2>&1; then \
+		echo "Overlaying version-specific custom_nodes from $(COMFYUI_VERSION)..."; \
+		cp -r $(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/custom_nodes/* ./tmp/custom_nodes/; \
+	fi
+	@# 3) VisionPlaid 插件:从容器的 pip 包提取(版本自动匹配,无需手维护)
+	@echo "Extracting Comfy-VisionPlaid from pip package..."
+	docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - \
+		-C /root/venv/lib/python3.10/site-packages/vision_plaid Comfy-VisionPlaid | \
+		tar -x -C ./tmp/custom_nodes/
 
 	@echo "Creating snapshot..."
 	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst

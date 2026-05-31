@@ -86,8 +86,11 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
         echo "⚠️  警告: ${FAILED_COUNT} 个插件安装失败，但继续构建"; \
     fi
 
-# 拷贝自研插件（如果有）
+# 拷贝自研插件:先拷共享的,再用版本目录的覆盖(版本目录优先级更高)
+# 共享: src/code/comfyui/custom_nodes/ (给所有版本的默认插件代码)
+# 版本: src/code/comfyui/<version>/custom_nodes/ (版本特化的插件代码,如不同 vision-plaid 版本的适配)
 COPY comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+COPY comfyui/${COMFYUI_VERSION}/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
 
 # 写入版本标识文件，供 agent 运行时探测
 RUN echo "${COMFYUI_VERSION}" > ${COMFYUI_DIR}/.funart-comfyui-version
@@ -202,6 +205,13 @@ ENV AGENT_DIR="${WORK_DIR}/agent"
 COPY --from=dependencies ${VENV_DIR} ${VENV_DIR}
 COPY --from=codes ${COMFYUI_DIR} ${COMFYUI_DIR}
 COPY --from=agent ${AGENT_DIR} ${AGENT_DIR}
+
+# VisionPlaid 插件:从 pip 包自带的插件代码拷贝到 custom_nodes
+# (pip install vision-plaid 会在 site-packages/vision_plaid/ 下自带 Comfy-VisionPlaid/)
+# 这样插件代码的 __init__.py 始终跟 SDK 版本匹配,无需手动维护
+RUN rm -rf ${COMFYUI_DIR}/custom_nodes/Comfy-VisionPlaid && \
+    cp -r ${VENV_DIR}/lib/python3.10/site-packages/vision_plaid/Comfy-VisionPlaid \
+    ${COMFYUI_DIR}/custom_nodes/Comfy-VisionPlaid
 
 # 备份自研插件到 built-in 目录（snapshot 加载后 custom_nodes 会被 NAS 软链接覆盖，
 # 需要通过 delta 机制恢复内置插件；只备份自研插件，不备份社区插件，

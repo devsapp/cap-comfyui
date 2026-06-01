@@ -196,10 +196,11 @@ class JobsHandler:
         }
 
         if execution_error:
-            # 前端(v0.16.4)校验 execution_error 必须含 traceback(array) 和 exception_type(string),
-            # ComfyUI 后端在某些错误场景下不返回这些字段,补上默认值避免前端 schema 校验失败
+            # 前端(v0.16.4)Zod schema 校验 execution_error 必须含以下字段,
+            # ComfyUI 后端在某些错误场景下不返回全部字段,补上默认值避免校验失败
             execution_error.setdefault('traceback', [])
             execution_error.setdefault('exception_type', '')
+            execution_error.setdefault('node_type', '')
             job['execution_error'] = execution_error
 
         if include_outputs:

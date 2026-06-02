@@ -87,6 +87,12 @@ upload-base:
 	ossutil cp ./tmp/venv.tar.zst oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/snapshots/$(SNAPSHOT_NAME)/venv.tar.zst && \
 	ossutil cp ./tmp/.funart/dependency_version.txt oss://$(OSS_BUCKET)/$(OSS_COMFYUI_BASE_DIR)/.funart/dependency_version.txt
 
+	@# 上传工作流模板到 OSS(如果版本目录下有 workflows/ 目录)
+	@if [ -d "$(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/workflows" ]; then \
+		echo "Uploading workflows to OSS..."; \
+		ossutil cp -r $(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/workflows/ oss://$(OSS_BUCKET)/workflows/ -f; \
+	fi
+
 	@rm -rf tmp
 	@echo "Upload completed successfully"
 

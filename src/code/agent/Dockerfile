@@ -1,5 +1,5 @@
-ARG COMFYUI_IMAGE=cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v2.0.1
-ARG BUILTIN_DEPENDENCY_VERSION=2.0.1
+ARG COMFYUI_IMAGE=cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v2.0.2
+ARG BUILTIN_DEPENDENCY_VERSION=2.0.2
 FROM ${COMFYUI_IMAGE} AS comfyui_source_raw
 
 # 确保 built-in/custom_nodes 目录存在（某些版本的源镜像可能缺少该路径）

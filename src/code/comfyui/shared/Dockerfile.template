@@ -161,6 +161,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     # 安装 vision-plaid 依赖
     /root/venv/bin/pip install vision-plaid==${VISION_PLAID_VERSION} --extra-index-url=https://py-index.oss-cn-beijing.aliyuncs.com/simple && \
     /root/venv/bin/pip install bitforge==${BITFORGE_VERSION} --extra-index-url=https://py-index.oss-cn-beijing.aliyuncs.com/pytorch/cu128/ && \
+    /root/venv/bin/pip uninstall -y flashinfer-cubin flashinfer-python && \
     # 安装 comfyui-impact-pack 依赖
     /root/venv/bin/pip install git+https://github.com/facebookresearch/sam2  && \
     /root/venv/bin/pip install insightface

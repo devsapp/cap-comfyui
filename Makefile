@@ -9,6 +9,18 @@ endif
 VERSION ?= $(shell date "+%Y%m%d%H%M%S")
 REGISTRY = cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app
 AGENT_IMAGE ?= $(REGISTRY)/image-generation-comfyui-agent-dev:$(VERSION)
+COMFYUI_VERSION ?= v0.3.77
+ifeq ($(COMFYUI_VERSION),v0.16.4)
+CAP_SYSTEM_VERSION ?= 2.0.3
+# 指纹只用裸系统版本号(不带 -vp 后缀),与存量实例 NAS 上记录的版本一致,
+# 避免内置依赖指纹变化触发存量 ComfyUI 冷启动时重跑 install_all
+BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
+else
+CAP_SYSTEM_VERSION ?= 1.6.8
+BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
+endif
+AGENT_COMFYUI_IMAGE ?= cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v$(CAP_SYSTEM_VERSION)
+COMFYUI_LOCAL_IMAGE ?= comfyui:v$(CAP_SYSTEM_VERSION)-comfyui-$(COMFYUI_VERSION)
 export OSS_BUCKET = dipper-cache-$(REGION)
 WARMUP_REGIONS ?= cn-hangzhou cn-shenzhen cn-beijing cn-shanghai ap-southeast-1
 
@@ -47,7 +59,10 @@ release:
 # 镜像构建
 .PHONY: build
 build:
-	cd src/code/agent && docker build --platform linux/amd64 -t $(AGENT_IMAGE) .
+	cd src/code/agent && docker build --platform linux/amd64 \
+		--build-arg COMFYUI_IMAGE=$(AGENT_COMFYUI_IMAGE) \
+		--build-arg BUILTIN_DEPENDENCY_VERSION=$(BUILTIN_DEPENDENCY_VERSION) \
+		-t $(AGENT_IMAGE) .
 	docker tag $(AGENT_IMAGE) agent
 
 # 本地测试运行
@@ -93,32 +108,51 @@ warmup:
 	@./warmup/warmup.sh "$(AGENT_IMAGE)" $(WARMUP_REGIONS)
 
 # ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+# ComfyUI 多版本构建
+
 .PHONY: build-comfyui
-build-comfyui: build
-	@make -C src/code/comfyui build
+build-comfyui:
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) build
+	docker tag $(COMFYUI_LOCAL_IMAGE) $(AGENT_COMFYUI_IMAGE)
+	@$(MAKE) build \
+		COMFYUI_VERSION=$(COMFYUI_VERSION) \
+		AGENT_COMFYUI_IMAGE=$(AGENT_COMFYUI_IMAGE) \
+		BUILTIN_DEPENDENCY_VERSION=$(BUILTIN_DEPENDENCY_VERSION) \
+		AGENT_IMAGE=$(AGENT_IMAGE)
+
+.PHONY: build-comfyui-v0.3.77
+build-comfyui-v0.3.77:
+	@$(MAKE) build-comfyui COMFYUI_VERSION=v0.3.77
+
+.PHONY: build-comfyui-v0.16.4
+build-comfyui-v0.16.4:
+	@$(MAKE) build-comfyui COMFYUI_VERSION=v0.16.4
+
+.PHONY: build-comfyui-all
+build-comfyui-all: build-comfyui-v0.3.77 build-comfyui-v0.16.4
 
 .PHONY: run-comfyui
 run-comfyui:
-	@make -C src/code/comfyui run
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) run
 
 .PHONY: exec-comfyui
 exec-comfyui:
-	@make -C src/code/comfyui exec
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) exec
 
 .PHONY: pull-comfyui
 pull-comfyui:
-	@make -C src/code/comfyui pull
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) pull
 
 .PHONY: upload-comfyui-base
 upload-comfyui-base:
-	@make -C src/code/comfyui upload-base
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) upload-base
 
 # 根据已发布的snapshot构建comfyui生产镜像
 # BUILD_ENV_SNAPSHOT_DIR=/mnt/cap-models/4a34adf1-4b55-5ee7-b997-9f0414bb30c8/snapshots/prod-20250609-092136
 # make build-comfyui-from-snapshot
 .PHONY: build-comfyui-from-snapshot
 build-comfyui-from-snapshot: build
-	@make -C src/code/comfyui build-from-snapshot
+	@$(MAKE) -C src/code/comfyui/$(COMFYUI_VERSION) build-from-snapshot
 
 # ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 .PHONY: build-sd

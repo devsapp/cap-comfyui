@@ -2,24 +2,45 @@
 Monkey Patch for Server - User Isolation in HTTP Requests
 
 This module patches ComfyUI's server to automatically extract and set user_id from HTTP headers.
+Uses aiohttp middleware for reliable request interception across all aiohttp versions.
 """
+
+from aiohttp import web
 
 from .context import set_current_user, clear_current_user
 from .json_sanitize import install_json_sanitize
 
 _hook_installed = False
-_original_add_routes = None
+
+
+@web.middleware
+async def _user_context_middleware(request: web.Request, handler):
+    """
+    aiohttp middleware that sets user context for every request.
+    Extracts user_id from X-FunArt-Comfy-UserId header.
+    """
+    user_id = request.headers.get('X-FunArt-Comfy-UserId', 'default')
+    set_current_user(user_id)
+    try:
+        return await handler(request)
+    finally:
+        clear_current_user()
 
 
 def install_server_middleware():
     """
-    Install server hook to extract user_id from HTTP headers.
-    
-    Automatically wraps all route handlers to read user_id from request headers.
-    
+    Install aiohttp middleware to extract user_id from HTTP headers.
+
+    Strategy: PromptServer instance is already created by the time custom nodes load,
+    so we directly access PromptServer.instance.app and prepend our middleware.
+
+    For aiohttp, middleware can be added after app creation but MUST be added
+    before the app is started (before app.freeze()). Since custom nodes load
+    before server.start(), this timing is safe.
+
     Note: This function is safe to call multiple times (idempotent).
     """
-    global _hook_installed, _original_add_routes
+    global _hook_installed
 
     if _hook_installed:
         return
@@ -44,77 +65,41 @@ def install_server_middleware():
 
             return result
 
-        # Replace add_routes method
-        server.PromptServer.add_routes = patched_add_routes
+        instance = server.PromptServer.instance
+        if instance is None:
+            print("[ComfyUI-Multi-User] ⚠️ PromptServer instance not yet created, deferring middleware install")
+            _install_via_add_routes_patch(server)
+            return
+
+        instance.app.middlewares.insert(0, _user_context_middleware)
         _hook_installed = True
+        print(f"[ComfyUI-Multi-User] ✅ User context middleware installed (direct)")
 
     except Exception as e:
         print(f"[ComfyUI-Multi-User] Server hook 安装失败: {e}")
+        import traceback
+        traceback.print_exc()
 
 
-def wrap_route_handlers(app):
+def _install_via_add_routes_patch(server_module):
     """
-    Wrap all route handlers in the application.
-    
-    Makes each handler automatically extract user_id from request headers
-    and set it in the context.
-    
-    Design Philosophy:
-        - Keep it simple: 只检查标记，够用了
-        - contextvars 本身是线程安全的，不需要额外的锁
-        - ComfyUI 启动时只调用一次 add_routes，不用担心重复包装
-        - 即使万一重复包装，contextvars 也能正确处理（set 多次没问题）
-    
-    Args:
-        app: aiohttp Application instance
+    Fallback: if PromptServer.instance doesn't exist yet, patch add_routes
+    to install middleware when routes are being set up.
     """
-    wrapped_count = 0
-    skipped_count = 0
-    
-    for resource in app.router.resources():
-        for route in resource:
-            try:
-                # Get handler
-                if not hasattr(route, '_handler'):
-                    continue
-                
-                original_handler = route._handler
-                
-                # Skip if not callable
-                if not callable(original_handler):
-                    continue
-                
-                # Simple check: 如果已经包装过，跳过
-                if getattr(original_handler, '_comfyui_user_wrapped', False):
-                    skipped_count += 1
-                    continue
-                
-                # Create wrapper - 使用工厂函数确保正确的闭包
-                def make_wrapper(handler):
-                    """简单的包装器工厂 - 确保每个包装器捕获正确的 handler"""
-                    async def wrapped_handler(request):
-                        # Extract user_id from headers
-                        user_id = request.headers.get('X-FunArt-Comfy-UserId', 'default')
-                        
-                        # Set in context (contextvars 自动处理线程/协程隔离)
-                        set_current_user(user_id)
-                        
-                        try:
-                            return await handler(request)
-                        finally:
-                            clear_current_user()
-                    
-                    # Mark as wrapped
-                    wrapped_handler._comfyui_user_wrapped = True
-                    return wrapped_handler
-                
-                # Replace handler
-                route._handler = make_wrapper(original_handler)
-                wrapped_count += 1
-                    
-            except Exception:
-                # 静默失败，不影响其他路由
-                continue
+    global _hook_installed
+
+    _original_add_routes = server_module.PromptServer.add_routes
+
+    def patched_add_routes(self):
+        global _hook_installed
+        result = _original_add_routes(self)
+        if not _hook_installed:
+            self.app.middlewares.insert(0, _user_context_middleware)
+            _hook_installed = True
+            print(f"[ComfyUI-Multi-User] ✅ User context middleware installed (via add_routes)")
+        return result
+
+    server_module.PromptServer.add_routes = patched_add_routes
 
 
 __all__ = ['install_server_middleware']

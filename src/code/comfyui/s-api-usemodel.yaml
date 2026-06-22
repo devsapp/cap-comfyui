@@ -10,6 +10,7 @@ vars:
 #  role: 'acs:ram::1338904783509062:role/aliyundevsdefaultrole'
   gpuType: 'fc.gpu.tesla.1'
   backendType: 'comfyui'
+  comfyuiVersion: 'v0.3.77'
   baseVersion: 'v0.3.10-alpha'
   snapshotName: 'latest'
 
@@ -29,7 +30,7 @@ resources:
 #          - type: oss
 #            region: '${vars.region}'
 #            bucket: 'dipper-cache-${vars.region}'
-#            path: '/base/${vars.backendType}/${vars.baseVersion}/'
+#            path: '/base/${vars.backendType}/${vars.comfyuiVersion}-gamma/'
 #          - type: oss
 #            region: '${vars.region}'
 #            bucket: 'dipper-cache-${vars.region}'
@@ -38,6 +39,7 @@ resources:
       role: '${vars.role}'
       environmentVariables:
         BACKEND_TYPE: '${vars.backendType}'
+        COMFYUI_VERSION: '${vars.comfyuiVersion}'
         AUTO_LAUNCH_SNAPSHOT_NAME: '${vars.snapshotName}'
 
       # 挂载存储配置

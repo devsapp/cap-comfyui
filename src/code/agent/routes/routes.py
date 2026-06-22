@@ -262,12 +262,25 @@ class Routes:
             if user_id:
                 forward_headers[constants.HEADER_FUNART_COMFY_USERID] = user_id
 
+            # 对 POST /prompt 请求，将 user_id 注入到 extra_data 中
+            # 确保 ComfyUI 执行线程能正确获取用户上下文（execution_patch 从 extra_data 读取）
+            data = request.get_data()
+            if user_id and path in ('prompt', 'api/prompt') and request.method == 'POST':
+                try:
+                    json_data = json.loads(data)
+                    if 'extra_data' not in json_data:
+                        json_data['extra_data'] = {}
+                    json_data['extra_data'][constants.HEADER_FUNART_COMFY_USERID.lower()] = user_id
+                    data = json.dumps(json_data)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
             resp = requests.request(
                 method=request.method,
                 url=target_url,
                 headers=forward_headers,
                 params=request.args,
-                data=request.get_data(),
+                data=data,
                 cookies=request.cookies,
                 allow_redirects=False,
                 verify=False  # 如果需要验证SSL证书，将其设置为True

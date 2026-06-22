@@ -105,7 +105,7 @@ class ComfyUIDevSnapshotLoader(SnapshotLoader):
             link_path=f"{constants.COMFYUI_DIR}/custom_nodes",
             force=True
         )
-        
+
         # 新建 .cache 目录软链接
         mnt_cache_dir = f"{constants.MNT_DIR}/.cache"
         work_cache_dir = f"{constants.WORK_DIR}/.cache"

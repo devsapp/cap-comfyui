@@ -16,7 +16,7 @@ CAP_SYSTEM_VERSION ?= 2.0.3
 # 避免内置依赖指纹变化触发存量 ComfyUI 冷启动时重跑 install_all
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
 else
-CAP_SYSTEM_VERSION ?= 1.6.8
+CAP_SYSTEM_VERSION ?= 1.6.7
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
 endif
 AGENT_COMFYUI_IMAGE ?= cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v$(CAP_SYSTEM_VERSION)

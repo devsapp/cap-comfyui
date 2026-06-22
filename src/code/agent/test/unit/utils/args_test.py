@@ -5,6 +5,7 @@ import pytest
 from utils.args import (
     parse_extra_boot_args,
     filter_protected_args,
+    filter_allowed_args,
     build_boot_command,
 )
 
@@ -304,3 +305,108 @@ class TestBuildBootCommand:
             '--use-pytorch-cross-attention'
         ]
         assert result == expected
+
+
+class TestFilterAllowedArgs:
+    """测试 filter_allowed_args 白名单过滤（CPU 模式，allowed_specs 带 arity）"""
+
+    def test_keep_flag(self):
+        valid, excluded = filter_allowed_args(['--disable-api-nodes'], {'--disable-api-nodes': False})
+        assert valid == ['--disable-api-nodes']
+        assert excluded == []
+
+    def test_drop_non_allowlisted_arg(self):
+        valid, excluded = filter_allowed_args(['--highvram'], {'--disable-api-nodes': False})
+        assert valid == []
+        assert excluded == ['--highvram']
+
+    def test_mixed_keep_only_allowlisted(self):
+        valid, excluded = filter_allowed_args(
+            ['--disable-api-nodes', '--highvram'], {'--disable-api-nodes': False})
+        assert valid == ['--disable-api-nodes']
+        assert excluded == ['--highvram']
+
+    def test_flag_drops_trailing_value(self):
+        # 布尔开关后面的 token 不应被当成值保留（否则给 store_true 传值会让 argparse 启动失败）
+        valid, excluded = filter_allowed_args(
+            ['--disable-api-nodes', 'true'], {'--disable-api-nodes': False})
+        assert valid == ['--disable-api-nodes']
+        assert excluded == []
+
+    def test_flag_strips_eq_value(self):
+        # --key=value 对布尔开关规整为纯 flag
+        valid, excluded = filter_allowed_args(
+            ['--disable-api-nodes=1'], {'--disable-api-nodes': False})
+        assert valid == ['--disable-api-nodes']
+        assert excluded == []
+
+    def test_drop_non_allowlisted_arg_with_value(self):
+        # 非白名单参数及其值都应被丢弃
+        valid, excluded = filter_allowed_args(
+            ['--preview-method', 'auto'], {'--disable-api-nodes': False})
+        assert valid == []
+        assert excluded == ['--preview-method']
+
+    def test_value_taking_arg_keeps_value(self):
+        # arity=True 的白名单参数保留其后续值
+        valid, excluded = filter_allowed_args(['--foo', 'bar'], {'--foo': True})
+        assert valid == ['--foo', 'bar']
+        assert excluded == []
+
+    def test_value_taking_arg_keeps_eq_form(self):
+        valid, excluded = filter_allowed_args(['--foo=bar'], {'--foo': True})
+        assert valid == ['--foo=bar']
+        assert excluded == []
+
+    def test_empty(self):
+        valid, excluded = filter_allowed_args([], {'--disable-api-nodes': False})
+        assert valid == []
+        assert excluded == []
+
+
+class TestBuildBootCommandCpuAllowlist:
+    """测试 build_boot_command 的 CPU 白名单模式（allowed_args 带 arity）"""
+
+    CPU_SAFE = {'--disable-api-nodes': False}
+
+    def test_cpu_allowlist_keeps_safe_arg(self):
+        base = ['python', 'main.py', '--cpu']
+        protected = {'--cpu', '--listen'}
+        result = build_boot_command(base, '--disable-api-nodes', protected, allowed_args=self.CPU_SAFE)
+        assert result == base + ['--disable-api-nodes']
+
+    def test_cpu_allowlist_drops_gpu_arg(self):
+        # GPU 专属参数在 CPU 白名单模式下被丢弃，避免启动失败
+        base = ['python', 'main.py', '--cpu']
+        protected = {'--cpu', '--listen'}
+        result = build_boot_command(base, '--highvram', protected, allowed_args=self.CPU_SAFE)
+        assert result == base
+
+    def test_cpu_allowlist_flag_drops_trailing_value(self):
+        # --disable-api-nodes true → 只保留 flag，避免 argparse 启动失败（P2 修复）
+        base = ['python', 'main.py', '--cpu']
+        protected = {'--cpu', '--listen'}
+        result = build_boot_command(base, '--disable-api-nodes true', protected, allowed_args=self.CPU_SAFE)
+        assert result == base + ['--disable-api-nodes']
+
+    def test_cpu_allowlist_flag_strips_eq_value(self):
+        base = ['python', 'main.py', '--cpu']
+        protected = {'--cpu', '--listen'}
+        result = build_boot_command(base, '--disable-api-nodes=1', protected, allowed_args=self.CPU_SAFE)
+        assert result == base + ['--disable-api-nodes']
+
+    def test_cpu_allowlist_mixed(self):
+        base = ['python', 'main.py', '--cpu']
+        protected = {'--cpu', '--listen'}
+        result = build_boot_command(
+            base, '--disable-api-nodes --highvram --preview-method auto',
+            protected, allowed_args=self.CPU_SAFE)
+        assert result == base + ['--disable-api-nodes']
+
+    def test_gpu_path_unchanged_when_allowed_none(self):
+        # allowed_args=None（GPU 路径）与不传时行为完全一致
+        base = ['python', 'main.py']
+        protected = {'--listen'}
+        custom = '--highvram --preview-method auto'
+        assert build_boot_command(base, custom, protected, allowed_args=None) == \
+            build_boot_command(base, custom, protected)

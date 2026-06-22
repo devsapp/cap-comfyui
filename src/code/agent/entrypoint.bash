@@ -139,15 +139,35 @@ setup_comfyui_manager_config() {
 }
 
 MNT_DIR=${MODEL_ASSET_DIR:="/mnt/auto"}
+COMFYUI_DIR=${COMFYUI_DIR:-"/root/comfyui"}
 SKIP_SNAPSHOT_LOADING_LOWER=$(echo "${SKIP_SNAPSHOT_LOADING:-false}" | tr '[:upper:]' '[:lower:]')
+
+# Detect ComfyUI version from env or version file baked into the image
+COMFYUI_VERSION="${COMFYUI_VERSION:-}"
+if [ -z "${COMFYUI_VERSION}" ] && [ -f "${COMFYUI_DIR}/.funart-comfyui-version" ]; then
+    COMFYUI_VERSION="$(cat "${COMFYUI_DIR}/.funart-comfyui-version")"
+fi
+
 echo "[INFO] Configuration:"
 echo "  - Mount Directory: ${MNT_DIR}"
+echo "  - ComfyUI Version: ${COMFYUI_VERSION:-unknown}"
 echo "  - Skip Snapshot Loading: ${SKIP_SNAPSHOT_LOADING_LOWER}"
 
 if [ "${SKIP_SNAPSHOT_LOADING_LOWER}" != "true" ]; then
-    if [ ! -e "${MNT_DIR}/snapshots" ] || [ -z "$(find "${MNT_DIR}/snapshots" -type d -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
-        echo "[ERROR] Missing snapshots folder in your mount dir"
-        exit 1
+    # Version-aware snapshot directory
+    if [ -n "${COMFYUI_VERSION}" ]; then
+        SNAPSHOT_DIR="${MNT_DIR}/snapshots/${COMFYUI_VERSION}"
+    else
+        SNAPSHOT_DIR="${MNT_DIR}/snapshots"
+    fi
+    if [ ! -e "${SNAPSHOT_DIR}" ] || [ -z "$(find "${SNAPSHOT_DIR}" -type d -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
+        # Fallback to legacy unversioned path
+        SNAPSHOT_DIR="${MNT_DIR}/snapshots"
+        if [ ! -e "${SNAPSHOT_DIR}" ] || [ -z "$(find "${SNAPSHOT_DIR}" -type d -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
+            echo "[ERROR] Missing snapshots folder in your mount dir"
+            exit 1
+        fi
+        echo "[WARN] Using legacy snapshot path: ${SNAPSHOT_DIR}"
     fi
 fi
 

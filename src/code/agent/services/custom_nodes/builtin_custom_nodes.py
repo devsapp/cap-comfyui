@@ -21,11 +21,6 @@ def setup_builtin_custom_nodes(
     builtin_src_dir: str = constants.BUILTIN_NODES_DIR,
     builtin_delta_dir: str = constants.BUILTIN_DELTA_NODES_DIR,
 ) -> None:
-    if not os.path.exists(INSTALLED_VERSION_FILE):
-        # 首次启动时，版本文件不存在，跳过内置插件 setup
-        log("INFO", f"[BuiltinCustomNodes] Dependency version file not found at {INSTALLED_VERSION_FILE}, skipping built-in nodes setup.")
-        return
-
     if user_nodes_dir is None:
         user_nodes_dir = os.path.join(constants.MNT_DIR, "custom_nodes")
 
@@ -77,9 +72,11 @@ def setup_builtin_custom_nodes(
             f"[BuiltinCustomNodes] Delta dir ready: {linked} linked, {skipped} skipped (user overrides)",
         )
 
-    # 步骤 4：按需安装内置插件依赖（安装成功后再写入配置，避免依赖缺失时 ComfyUI 加载残缺的 delta 目录）
-    # TODO: 安装失败也会继续走到下一步
-    _install_builtin_dependencies_if_needed(user_nodes_dir, builtin_src_dir)
+    # 步骤 4：按需安装内置插件依赖（仅在版本文件存在时执行，首次部署跳过）
+    if os.path.exists(INSTALLED_VERSION_FILE):
+        _install_builtin_dependencies_if_needed(user_nodes_dir, builtin_src_dir)
+    else:
+        log("INFO", "[BuiltinCustomNodes] Dependency version file not found, skipping dependency install (delta dir still created).")
 
     # 步骤 5：写入 extra_model_paths.yaml
     _write_config(comfyui_dir, builtin_delta_dir)

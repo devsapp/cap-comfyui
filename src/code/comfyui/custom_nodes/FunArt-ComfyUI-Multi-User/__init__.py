@@ -31,6 +31,7 @@ License: MIT
 Version: 1.0.0
 """
 
+import json
 import os
 
 from .context import (
@@ -40,6 +41,7 @@ from .context import (
     UserContext,
 )
 
+from .path_proxy import DynamicPathProxy
 from .folder_paths_patch import install_folder_paths_patch
 from .execution_patch import install_execution_patch
 from .cache_signature_patch import install_cache_signature_patch
@@ -64,6 +66,14 @@ if ENABLE_PLUGIN:
         install_execution_patch()
         install_cache_signature_patch()
         install_server_middleware()
+
+        _original_json_default = json.JSONEncoder.default
+        def _json_default_with_proxy(self, obj):
+            if isinstance(obj, DynamicPathProxy):
+                return str(obj)
+            return _original_json_default(self, obj)
+        json.JSONEncoder.default = _json_default_with_proxy
+
         print(f"[ComfyUI-Multi-User] ✅ 插件已启用并安装成功 (v{__version__})")
     except Exception as e:
         print(f"[ComfyUI-Multi-User] ❌ 插件安装失败: {e}")

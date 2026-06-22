@@ -1,5 +1,10 @@
-ARG COMFYUI_IMAGE=cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v1.6.5
-FROM ${COMFYUI_IMAGE} AS comfyui_source
+ARG COMFYUI_IMAGE=cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/aliyunfc/funart-comfyui:v2.0.3
+ARG BUILTIN_DEPENDENCY_VERSION=2.0.3
+FROM ${COMFYUI_IMAGE} AS comfyui_source_raw
+
+# 确保 built-in/custom_nodes 目录存在（某些版本的源镜像可能缺少该路径）
+FROM comfyui_source_raw AS comfyui_source
+RUN mkdir -p /root/built-in/custom_nodes
 
 FROM python:3.10.16-slim
 
@@ -32,12 +37,14 @@ RUN curl -o ossutil-2.1.2-linux-amd64.zip https://gosspublic.alicdn.com/ossutil/
     cd .. && \
     rm -rf ossutil-2.1.2-linux-amd64 ossutil-2.1.2-linux-amd64.zip
 
-# 下载 transparent-background 模型
-RUN mkdir ~/.transparent-background && \
-    cd ~/.transparent-background && \
-    wget https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_base.pth && \
-    wget https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_fast.pth && \
-    wget https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_base_nightly.pth
+# 下载 transparent-background 模型（拆分层以利用 Docker 缓存，避免大文件下载中断后全部重来）
+RUN mkdir -p ~/.transparent-background
+RUN wget --retry-connrefused --tries=3 -P ~/.transparent-background \
+    https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_base.pth
+RUN wget --retry-connrefused --tries=3 -P ~/.transparent-background \
+    https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_fast.pth
+RUN wget --retry-connrefused --tries=3 -P ~/.transparent-background \
+    https://github.com/plemeri/transparent-background/releases/download/1.2.12/ckpt_base_nightly.pth
 
 
 # 下载 rembg 模型
@@ -50,7 +57,8 @@ COPY --from=comfyui_source /root/built-in/custom_nodes /root/built-in/custom_nod
 
 # 写入内置插件版本号，供启动时版本检查使用
 # 版本号需随内置插件列表的实质性变化（增删插件、升级版本）而更新
-RUN echo "1.6.5" > /root/built-in/version.txt
+ARG BUILTIN_DEPENDENCY_VERSION
+RUN echo "${BUILTIN_DEPENDENCY_VERSION}" > /root/built-in/version.txt
 
 ENV WORK_DIR='/root'
 ENV COMFYUI_DIR="${WORK_DIR}/comfyui"

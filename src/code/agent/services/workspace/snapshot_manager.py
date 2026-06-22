@@ -48,7 +48,14 @@ class SnapshotManager:
         if target_snapshot_name is None:  # 若找不到目标快照，则跳过
             return {"snapshot": self.cur_snapshot_name}
 
-        snapshot_path = os.path.join(constants.SNAPSHOT_DIR, target_snapshot_name)  # 若目标快照目录不存在，则跳过
+        snapshot_path = os.path.join(constants.SNAPSHOT_DIR, target_snapshot_name)
+        if not os.path.exists(snapshot_path) and constants.COMFYUI_VERSION:
+            legacy_path = os.path.join(constants.MNT_DIR, 'snapshots', target_snapshot_name)
+            if os.path.exists(legacy_path):
+                from utils.logger import log
+                log("WARNING", f"Loading snapshot from legacy path {legacy_path}; "
+                    f"writes will go to {constants.SNAPSHOT_DIR}.")
+                snapshot_path = legacy_path
         if not os.path.exists(snapshot_path):
             raise RuntimeError(f"Workspace snapshot '{target_snapshot_name}' not found")
 
@@ -216,26 +223,31 @@ class SnapshotManager:
 
     def find_valid_snapshots(self, snapshot_type: str):
         """
-        获取所有符合规范的快照目录列表
+        获取所有符合规范的快照目录列表。
+        新路径优先；仅当新路径为空时才扫描旧路径（fallback）。
 
         Returns:
             list[str]: 按时间排序的有效快照目录名称列表
         """
-        if not os.path.exists(constants.SNAPSHOT_DIR):
+        valid_snapshots = self._scan_dir_for_snapshots(constants.SNAPSHOT_DIR, snapshot_type)
+
+        if not valid_snapshots and constants.COMFYUI_VERSION:
+            legacy_dir = os.path.join(constants.MNT_DIR, 'snapshots')
+            if legacy_dir != constants.SNAPSHOT_DIR:
+                valid_snapshots = self._scan_dir_for_snapshots(legacy_dir, snapshot_type)
+
+        return sorted(valid_snapshots, reverse=True)
+
+    def _scan_dir_for_snapshots(self, directory: str, snapshot_type: str):
+        """扫描指定目录下符合规范的快照"""
+        if not os.path.exists(directory):
             return []
-
         try:
-            folders = (f for f in os.scandir(constants.SNAPSHOT_DIR) if f.is_dir())
-
-            # 过滤出符合格式的文件夹名
-            valid_snapshots = [
+            folders = (f for f in os.scandir(directory) if f.is_dir())
+            return [
                 f.name for f in folders
                 if self._is_valid_snapshot_name(snapshot_type, f.name)
             ]
-
-            # 按时间戳排序
-            return sorted(valid_snapshots, reverse=True)
-
         except OSError:
             return []
 

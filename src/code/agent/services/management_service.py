@@ -191,6 +191,9 @@ class ManagementService:
                     result_map.update(install_result)
                 result_map["time_install_process"] = round(t_install_process.elapsed, 2)
 
+            # ComfyUI v0.16.4+ sqlite 数据库目录（相对于 comfyui 源码根目录）
+            os.makedirs(f"{constants.COMFYUI_DIR}/user", exist_ok=True)
+
             # 启动ComfyUI服务子进程
             self.sub_status = StartingSubStatus.BOOTING.value
             with timer("Start process") as t_start_process:

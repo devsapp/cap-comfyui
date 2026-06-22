@@ -17,6 +17,18 @@ AUTO_LAUNCH_SNAPSHOT_NAME = os.getenv("AUTO_LAUNCH_SNAPSHOT_NAME", "latest-dev")
 
 WORK_DIR = os.getenv('WORK_DIR', '/root')
 MNT_DIR = os.getenv('MODEL_ASSET_DIR', '/mnt/auto')
+COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
+
+def _read_comfyui_version() -> str:
+    path = os.path.join(COMFYUI_DIR, ".funart-comfyui-version")
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except Exception:
+        return ''
+
+COMFYUI_VERSION = os.getenv('COMFYUI_VERSION') or _read_comfyui_version()
+
 VENV_DIR = os.getenv('VENV_DIR', WORK_DIR + '/venv')
 VENV_EXECUTABLE = VENV_DIR + '/bin/python'
 MODEL_DIR = os.getenv('MODEL_DIR', MNT_DIR + '/models')
@@ -40,9 +52,11 @@ PIP_FALLBACK_INDEX_URL = os.getenv('PIP_FALLBACK_INDEX_URL', 'https://mirrors.al
 PIP_TRUSTED_HOSTS = 'mirrors.aliyun.com pypi.tuna.tsinghua.edu.cn pypi.mirrors.ustc.edu.cn'
 BUILTIN_NODES_DIR = os.getenv("BUILTIN_NODES_DIR", "/root/built-in/custom_nodes")
 BUILTIN_DELTA_NODES_DIR = os.getenv("BUILTIN_DELTA_NODES_DIR", "/root/built-in/custom_nodes_delta")
-SNAPSHOT_DIR = MNT_DIR + '/snapshots'
+if COMFYUI_VERSION:
+    SNAPSHOT_DIR = f"{MNT_DIR}/snapshots/{COMFYUI_VERSION}"
+else:
+    SNAPSHOT_DIR = MNT_DIR + '/snapshots'
 SNAPSHOT_PATTERN = '%Y%m%d-%H%M%S'
-COMFYUI_DIR = os.getenv('COMFYUI_DIR', WORK_DIR + '/comfyui')
 COMFYUI_PROCESS_PORT = 8188
 
 # 自定义 ComfyUI 启动参数（空格分隔的命令行参数字符串）
@@ -62,6 +76,7 @@ _PROTECTED_ARGS = {
     '--user-directory',
     '--disable-metadata',
     '--cpu',  # CPU 模式由 COMFYUI_MODE 控制
+    '--multi-user',  # 与 FunArt-ComfyUI-Multi-User 多租 patch 冲突
 }
 
 # 根据 COMFYUI_MODE 构建启动命令

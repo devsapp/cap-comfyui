@@ -79,6 +79,13 @@ _PROTECTED_ARGS = {
     '--multi-user',  # 与 FunArt-ComfyUI-Multi-User 多租 patch 冲突
 }
 
+# CPU 模式允许消费的「CPU 安全」自定义启动参数白名单
+# 仅与 GPU 无关的纯功能参数；GPU 专属参数（如 --highvram）不在此列，避免 CPU 启动失败
+# value 声明该参数是否接收一个值（arity）：--disable-api-nodes 是布尔开关，不接值
+_CPU_SAFE_BOOT_ARGS = {
+    '--disable-api-nodes': False,  # 禁用 ComfyUI 官方 API 节点（Comfy Core api 节点），布尔开关
+}
+
 # 根据 COMFYUI_MODE 构建启动命令
 if COMFYUI_MODE == 'cpu':
     # CPU模式：输入目录默认使用 MNT_INPUT_DIR
@@ -122,7 +129,8 @@ else:
     ]
 
 # 构建最终的启动命令
-# CPU 模式不使用 CUSTOM_BOOT_ARGS，GPU 模式才使用
+# GPU 模式消费全部非受保护的 CUSTOM_BOOT_ARGS；
+# CPU 模式只放行「CPU 安全」白名单参数，避免 GPU 专属参数导致 ComfyUI 启动失败
 if COMFYUI_MODE == 'gpu':
     COMFYUI_BOOT_CMD = build_boot_command(
         base_cmd=_base_boot_cmd,
@@ -130,7 +138,12 @@ if COMFYUI_MODE == 'gpu':
         protected_args=_PROTECTED_ARGS
     )
 else:
-    COMFYUI_BOOT_CMD = _base_boot_cmd
+    COMFYUI_BOOT_CMD = build_boot_command(
+        base_cmd=_base_boot_cmd,
+        custom_boot_args=CUSTOM_BOOT_ARGS,
+        protected_args=_PROTECTED_ARGS,
+        allowed_args=_CPU_SAFE_BOOT_ARGS
+    )
 
 SD_DIR = os.getenv('SD_DIR', WORK_DIR + '/stable-diffusion-webui')
 SD_PROCESS_PORT = 7860

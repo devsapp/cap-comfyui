@@ -2,7 +2,7 @@
 参数解析工具函数
 """
 import shlex
-from typing import Tuple, List, Set
+from typing import Tuple, List, Set, Dict
 
 from utils.logger import log
 
@@ -75,35 +75,92 @@ def filter_protected_args(parsed_args: List[str], protected_args: Set[str]) -> T
     return valid_args, excluded_args
 
 
+def filter_allowed_args(parsed_args: List[str], allowed_specs: Dict[str, bool]) -> Tuple[List[str], List[str]]:
+    """
+    白名单过滤：仅保留 allowed_specs 中的参数，其余排除
+
+    用于 CPU 模式：只放行「CPU 安全」参数，丢弃 GPU 专属参数，避免 ComfyUI 启动失败。
+    allowed_specs 的 value 声明该参数是否接收一个值（arity）：
+      - False：布尔开关，不保留其后的值 token，并把 `--key=value` 规整为纯 `--key`
+               （避免给 store_true 开关传值导致 argparse 启动失败）
+      - True：接收一个值，保留紧随其后的值 token，或保留 `--key=value` 整体
+
+    Args:
+        parsed_args: 已解析的参数列表
+        allowed_specs: 白名单规格 {参数名: 是否接值}
+
+    Returns:
+        Tuple[List[str], List[str]]: (放行的参数列表, 被排除的参数名列表)
+    """
+    valid_args = []
+    excluded_args = []
+
+    i = 0
+    while i < len(parsed_args):
+        arg = parsed_args[i]
+
+        if arg.startswith('--'):
+            arg_name = arg.split('=')[0]
+            if arg_name in allowed_specs:
+                if '=' in arg:
+                    # --key=value 形式：接值则保留整体，布尔开关则规整为纯 flag
+                    valid_args.append(arg if allowed_specs[arg_name] else arg_name)
+                else:
+                    valid_args.append(arg)
+            else:
+                excluded_args.append(arg_name)
+            i += 1
+        else:
+            # 值 token：仅当前一个参数在白名单且声明接值（arity=True）时保留
+            if i > 0:
+                prev = parsed_args[i - 1]
+                prev_name = prev.split('=')[0] if prev.startswith('--') else None
+                if prev_name and allowed_specs.get(prev_name):
+                    valid_args.append(arg)
+            i += 1
+
+    return valid_args, excluded_args
+
+
 def build_boot_command(
     base_cmd: List[str],
     custom_boot_args: str,
-    protected_args: Set[str]
+    protected_args: Set[str],
+    allowed_args: Dict[str, bool] = None
 ) -> List[str]:
     """
     构建最终的启动命令
-    
+
     流程：
     1. 解析用户的自定义启动参数
-    2. 过滤掉与系统默认参数冲突的受保护参数
-    3. 将允许的自定义参数追加到默认命令后面
-    
+    2. 若提供 allowed_args（CPU 白名单模式），先收窄到白名单内参数
+    3. 过滤掉与系统默认参数冲突的受保护参数
+    4. 将允许的自定义参数追加到默认命令后面
+
     Args:
         base_cmd: 基础启动命令列表（系统默认参数，全部受保护）
         custom_boot_args: 自定义启动参数字符串
         protected_args: 受保护的参数名集合（不允许用户修改）
-        
+        allowed_args: 可选白名单规格 {参数名: 是否接值}；非 None 时仅放行白名单内参数（CPU 模式用）。
+                      默认 None 表示不启用白名单，GPU 模式行为不变
+
     Returns:
         List[str]: 最终的启动命令 = 默认命令 + 允许的自定义参数
     """
     # 1. 解析自定义启动参数
     parsed_args = parse_extra_boot_args(custom_boot_args)
-    
-    # 2. 过滤受保护的参数
+
+    # 2. CPU 白名单收窄（仅当传入 allowed_args 时；GPU 调用不传，跳过此步）
+    if allowed_args is not None:
+        parsed_args, denied_args = filter_allowed_args(parsed_args, allowed_args)
+        if denied_args:
+            log("WARNING", f"[CPU_SAFE_BOOT_ARGS] Dropped non-allowlisted arguments in CPU mode: {denied_args}. Only {sorted(allowed_args)} are allowed")
+
+    # 3. 过滤受保护的参数
     valid_args, excluded_args = filter_protected_args(parsed_args, protected_args)
     if excluded_args:
         log("WARNING", f"[CUSTOM_BOOT_ARGS] Provided arguments: {parsed_args}, excluded protected arguments: {excluded_args}, valid arguments: {valid_args}. Protected arguments cannot be overridden")
-    
-    # 3. 追加允许的自定义参数到默认命令
+
+    # 4. 追加允许的自定义参数到默认命令
     return base_cmd + valid_args
 

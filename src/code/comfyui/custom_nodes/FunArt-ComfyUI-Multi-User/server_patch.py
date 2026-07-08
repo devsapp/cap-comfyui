@@ -8,6 +8,7 @@ Uses aiohttp middleware for reliable request interception across all aiohttp ver
 from aiohttp import web
 
 from .context import set_current_user, clear_current_user
+from .json_sanitize import install_json_sanitize
 
 _hook_installed = False
 
@@ -46,6 +47,23 @@ def install_server_middleware():
 
     try:
         import server  # type: ignore
+
+        install_json_sanitize()
+
+        # Save original add_routes method
+        _original_add_routes = server.PromptServer.add_routes
+
+        def patched_add_routes(self):
+            """
+            Patched add_routes - wraps handlers after route registration.
+            """
+            # Call original add_routes first
+            result = _original_add_routes(self)
+
+            # Wrap all route handlers
+            wrap_route_handlers(self.app)
+
+            return result
 
         instance = server.PromptServer.instance
         if instance is None:

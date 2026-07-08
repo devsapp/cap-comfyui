@@ -18,27 +18,8 @@ from .management_routes import ManagementRoutes
 from .serverless_api_routes import ServerlessApiRoutes
 from .gateway_routes import GatewayRoutes
 from services.serverlessapi.serverless_api_service import ServerlessApiService
+from services.cleanup import OutputFileCleanupService
 
-
-def _start_cleanup_thread(clean_archived: bool, timeout: int = 300):
-    if constants.COMFYUI_MODE != "cpu":
-        return None
-    from services.cleanup import OutputFileCleanupService
-    cleanup_service = OutputFileCleanupService()
-
-    cleanup_thread = threading.Thread(
-        target=cleanup_service.cleanup,
-        args=(clean_archived, timeout),
-        daemon=True
-    )
-
-    cleanup_thread.start()
-    return cleanup_thread
-
-
-def _wait_cleanup_thread(cleanup_thread, timeout: int = 300):
-    if cleanup_thread:
-        cleanup_thread.join(timeout=timeout + 10)  # 等待最多timeout+10秒
 
 
 def parse_auto_install_nodes(raw):
@@ -83,6 +64,9 @@ class Routes:
         
         @self.app.route("/initialize", methods=["POST"])
         def initialize():
+            import time
+            start_time = time.time()
+
             # See FC docs for all the HTTP headers: https://www.alibabacloud.com/help/doc-detail/132044.htm#common-headers
             request_id = request.headers.get("x-fc-request-id", "")
             log("INFO", f"FC Initialize Start RequestId: {request_id}")
@@ -92,8 +76,17 @@ class Routes:
             # access_key_secret = request.headers['x-fc-access-key-secret']
             # access_security_token = request.headers['x-fc-security-token']
 
-            # 执行文件清理：只清理 serverless_api（在返回前等待完成，超时5分钟）
-            cleanup_thread = _start_cleanup_thread(clean_archived=False, timeout=300)
+            # 执行文件清理：只清理 serverless_api
+            cleanup_thread = None
+            cleanup_service = None
+            if constants.COMFYUI_MODE == "cpu":
+                cleanup_service = OutputFileCleanupService()
+                cleanup_thread = threading.Thread(
+                    target=cleanup_service.cleanup,
+                    args=(False,),  # clean_archived=False
+                    daemon=True
+                )
+                cleanup_thread.start()
 
             # API模式需要自动启动comfyui进程
             # TODO 防止抛出5xx导致函数计算一直重试产生大量费用
@@ -121,19 +114,39 @@ class Routes:
                 except Exception as e:
                     log("ERROR", f"prewarm models got exception:\n{e}")
 
-            # 等待清理线程完成
-            _wait_cleanup_thread(cleanup_thread, timeout=300)
+            # 检查是否已经耗时3分钟，如果超时立刻取消，否则等待剩余时间
+            if cleanup_thread:
+                elapsed_time = time.time() - start_time
+                if elapsed_time >= 300:
+                    cleanup_service.cancel()
+                else:
+                    remaining_time = 300 - elapsed_time
+                    cleanup_thread.join(timeout=remaining_time)
+                    if cleanup_thread.is_alive():
+                        cleanup_service.cancel()
 
             log("INFO", f"FC Initialize End RequestId: {request_id}")
             return "Function is initialized, request_id: " + request_id + "\n"
 
         @self.app.route("/pre-stop", methods=["GET"])
         def pre_stop():
+            import time
+            start_time = time.time()
+
             request_id = request.headers.get("x-fc-request-id", "")
             log("INFO", f"FC PreStop Start RequestId: {request_id}")
 
-            # 执行文件清理：清理 serverless_api 和 serverless_api_archived（在返回前等待完成，超时5分钟）
-            # cleanup_thread = _start_cleanup_thread(clean_archived=True, timeout=300)
+            # 执行文件清理：清理 serverless_api 和 serverless_api_archived
+            cleanup_thread = None
+            cleanup_service = None
+            if constants.COMFYUI_MODE == "cpu":
+                cleanup_service = OutputFileCleanupService()
+                cleanup_thread = threading.Thread(
+                    target=cleanup_service.cleanup,
+                    args=(True,),  # clean_archived=True
+                    daemon=True
+                )
+                cleanup_thread.start()
 
             service = ManagementService()  # singleton
 
@@ -230,8 +243,16 @@ class Routes:
             else:
                 log("INFO", "save completed successfully")
 
-            # 等待清理线程完成
-            # _wait_cleanup_thread(cleanup_thread, timeout=300)
+            # 检查是否已经耗时3分钟，如果超时立刻取消，否则等待剩余时间
+            if cleanup_thread:
+                elapsed_time = time.time() - start_time
+                if elapsed_time >= 300:
+                    cleanup_service.cancel()
+                else:
+                    remaining_time = 300 - elapsed_time
+                    cleanup_thread.join(timeout=remaining_time)
+                    if cleanup_thread.is_alive():
+                        cleanup_service.cancel()
 
             log("INFO", f"FC PreStop End RequestId: {request_id}")
             return "OK"

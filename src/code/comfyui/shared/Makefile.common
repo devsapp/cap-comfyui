@@ -1,5 +1,5 @@
 # Shared Makefile for versioned ComfyUI builds
-# Each version subdirectory (v0.3.77/, v0.16.4/) includes this file after setting:
+# Each version subdirectory (v0.3.77/, v0.16.4/, v0.27.0/) includes this file after setting:
 #   COMFYUI_VERSION, CUSTOM_NODES_JSON, OSS_COMFYUI_BASE_DIR, OSS_COMFYUI_DEEPGPU_BASE_DIR
 
 REGION ?= cn-hangzhou

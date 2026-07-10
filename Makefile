@@ -15,6 +15,9 @@ CAP_SYSTEM_VERSION ?= 2.0.4
 # 指纹只用裸系统版本号(不带 -vp 后缀),与存量实例 NAS 上记录的版本一致,
 # 避免内置依赖指纹变化触发存量 ComfyUI 冷启动时重跑 install_all
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
+else ifeq ($(COMFYUI_VERSION),v0.27.0)
+CAP_SYSTEM_VERSION ?= 3.0.0
+BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
 else
 CAP_SYSTEM_VERSION ?= 1.6.7
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
@@ -128,8 +131,12 @@ build-comfyui-v0.3.77:
 build-comfyui-v0.16.4:
 	@$(MAKE) build-comfyui COMFYUI_VERSION=v0.16.4
 
+.PHONY: build-comfyui-v0.27.0
+build-comfyui-v0.27.0:
+	@$(MAKE) build-comfyui COMFYUI_VERSION=v0.27.0
+
 .PHONY: build-comfyui-all
-build-comfyui-all: build-comfyui-v0.3.77 build-comfyui-v0.16.4
+build-comfyui-all: build-comfyui-v0.3.77 build-comfyui-v0.16.4 build-comfyui-v0.27.0
 
 .PHONY: run-comfyui
 run-comfyui:

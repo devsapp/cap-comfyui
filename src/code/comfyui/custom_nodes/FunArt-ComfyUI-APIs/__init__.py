@@ -1,5 +1,11 @@
 """Top-level package for funart_apis."""
 
+from .prompt_id_compat import install_prompt_id_compat
+
+# ComfyUI v0.27.0 restricts caller-supplied prompt IDs to UUIDs. FC task IDs
+# are opaque strings and must remain stable across Agent queue/history APIs.
+install_prompt_id_compat()
+
 # 从各个节点组导入并合并
 from .nodes_wan import NODE_CLASS_MAPPINGS as WAN_NODE_CLASS_MAPPINGS
 from .nodes_wan import NODE_DISPLAY_NAME_MAPPINGS as WAN_NODE_DISPLAY_NAME_MAPPINGS

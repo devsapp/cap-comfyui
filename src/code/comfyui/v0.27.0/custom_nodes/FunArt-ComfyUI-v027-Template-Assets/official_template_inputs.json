@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "source": {
+    "repository": "https://github.com/Comfy-Org/workflow_templates",
+    "workflow_templates_version": "0.11.1",
+    "revision": "5fac06d8edf9760e3a124a1b3ffdf4744d2f29b7"
+  },
+  "assets": [
+    {
+      "filename": "api_nano_banana_pro_input_image_1.png",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/workflow_templates/5fac06d8edf9760e3a124a1b3ffdf4744d2f29b7/input/api_nano_banana_pro_input_image_1.png",
+      "sha256": "c4bf8cb3b0a625601e509c9e56457674f13789c38b016f2568ea6b15bee6c97d",
+      "size": 1623398,
+      "mime_type": "image/png"
+    },
+    {
+      "filename": "api_nano_banana_pro_input_image_2.png",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/workflow_templates/5fac06d8edf9760e3a124a1b3ffdf4744d2f29b7/input/api_nano_banana_pro_input_image_2.png",
+      "sha256": "615f1d8a50d5ee55fb562cae106a1ff0c75c6be47994ba4707d5ff45a9ae97e4",
+      "size": 1539700,
+      "mime_type": "image/png"
+    }
+  ]
+}

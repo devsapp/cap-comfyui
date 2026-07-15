@@ -9,8 +9,8 @@ ARG BITFORGE_VERSION=0.2.3
 ARG VISION_PLAID_EXTRA_PACKAGES=""
 ARG BUILTIN_DEPENDENCY_VERSION=2.0.1
 
-# 安装 jq（用于解析 JSON）
-RUN apk add --no-cache jq
+# 安装构建期工具（解析插件清单、下载固定版本模板资源）
+RUN apk add --no-cache jq wget
 
 ENV COMFYUI_DIR="/root/comfyui"
 
@@ -91,6 +91,13 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
 # 版本: src/code/comfyui/<version>/custom_nodes/ (版本特化的插件代码,如不同 vision-plaid 版本的适配)
 COPY comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
 COPY comfyui/${COMFYUI_VERSION}/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
+
+# v0.27.0 ships a version-specific plugin with pinned official workflow inputs.
+# Other release lines do not contain the plugin and remain unchanged at runtime.
+RUN TEMPLATE_ASSET_INSTALLER="${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-v027-Template-Assets/download_official_template_assets.sh"; \
+    if [ -f "${TEMPLATE_ASSET_INSTALLER}" ]; then \
+        sh "${TEMPLATE_ASSET_INSTALLER}"; \
+    fi
 
 # 写入版本标识文件，供 agent 运行时探测
 RUN echo "${COMFYUI_VERSION}" > ${COMFYUI_DIR}/.funart-comfyui-version
@@ -221,6 +228,9 @@ RUN mkdir -p /root/built-in/custom_nodes && \
     cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-Multi-User /root/built-in/custom_nodes/ && \
     cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-APIs /root/built-in/custom_nodes/ && \
     cp -r ${COMFYUI_DIR}/custom_nodes/Comfy-VisionPlaid /root/built-in/custom_nodes/ && \
+    if [ -d "${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-v027-Template-Assets" ]; then \
+        cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-v027-Template-Assets /root/built-in/custom_nodes/; \
+    fi && \
     echo "${BUILTIN_DEPENDENCY_VERSION}" > /root/built-in/version.txt
 
 # ComfyUI v0.16.4+ 需要 user/ 目录存放 sqlite 数据库

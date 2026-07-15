@@ -64,11 +64,21 @@ upload-base:
 		echo "Overlaying version-specific custom_nodes from $(COMFYUI_VERSION)..."; \
 		cp -r $(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/custom_nodes/* ./tmp/custom_nodes/; \
 	fi
+	@# 版本专属模板资源在镜像构建时下载并校验；上传 OSS 时从镜像提取，
+	@# 避免把未校验的二进制文件提交到源码仓库。
+	@if [ -f "$(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/custom_nodes/FunArt-ComfyUI-v027-Template-Assets/official_template_inputs.json" ]; then \
+		echo "Extracting verified official template inputs from image..."; \
+		docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - \
+			-C /root/comfyui/custom_nodes/FunArt-ComfyUI-v027-Template-Assets bundled_template_assets | \
+			tar -x -C ./tmp/custom_nodes/FunArt-ComfyUI-v027-Template-Assets/; \
+	fi
 	@# 3) VisionPlaid 插件:从容器的 pip 包提取(版本自动匹配,无需手维护)
 	@echo "Extracting Comfy-VisionPlaid from pip package..."
 	docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - \
 		-C /root/venv/lib/python3.10/site-packages/vision_plaid Comfy-VisionPlaid | \
 		tar -x -C ./tmp/custom_nodes/
+	@# 本地测试可能生成 Python 缓存；不要把宿主机字节码上传到 OSS。
+	find ./tmp/custom_nodes -type d -name __pycache__ -prune -exec rm -rf {} +
 
 	@echo "Creating snapshot..."
 	tar -cf - -C ./tmp venv | zstd -10 -T0 -o ./tmp/venv.tar.zst

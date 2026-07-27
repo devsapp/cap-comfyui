@@ -227,6 +227,7 @@ RUN rm -rf ${COMFYUI_DIR}/custom_nodes/Comfy-VisionPlaid && \
 RUN mkdir -p /root/built-in/custom_nodes && \
     cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-Multi-User /root/built-in/custom_nodes/ && \
     cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-APIs /root/built-in/custom_nodes/ && \
+    cp -r ${COMFYUI_DIR}/custom_nodes/funart_prompt_id_compat /root/built-in/custom_nodes/ && \
     cp -r ${COMFYUI_DIR}/custom_nodes/Comfy-VisionPlaid /root/built-in/custom_nodes/ && \
     if [ -d "${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-v027-Template-Assets" ]; then \
         cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-v027-Template-Assets /root/built-in/custom_nodes/; \

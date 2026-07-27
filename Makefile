@@ -11,9 +11,9 @@ REGISTRY = cap-demo-public-registry.cn-hangzhou.cr.aliyuncs.com/cap-app
 AGENT_IMAGE ?= $(REGISTRY)/image-generation-comfyui-agent-dev:$(VERSION)
 COMFYUI_VERSION ?= v0.3.77
 ifeq ($(COMFYUI_VERSION),v0.16.4)
-CAP_SYSTEM_VERSION ?= 2.0.4
-# 指纹只用裸系统版本号(不带 -vp 后缀),与存量实例 NAS 上记录的版本一致,
-# 避免内置依赖指纹变化触发存量 ComfyUI 冷启动时重跑 install_all
+CAP_SYSTEM_VERSION ?= 2.0.5
+# 指纹只用裸系统版本号(不带 -vp 后缀),与存量实例 NAS 记录保持同一口径。
+# 内置插件代码或依赖实质变更时必须 bump，以触发存量项目更新。
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
 else ifeq ($(COMFYUI_VERSION),v0.27.0)
 CAP_SYSTEM_VERSION ?= 3.0.1

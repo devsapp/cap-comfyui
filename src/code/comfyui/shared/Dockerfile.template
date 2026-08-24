@@ -92,12 +92,13 @@ RUN cd ${COMFYUI_DIR}/custom_nodes && \
 COPY comfyui/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
 COPY comfyui/${COMFYUI_VERSION}/custom_nodes/ ${COMFYUI_DIR}/custom_nodes/
 
-# v0.27.0 ships a version-specific plugin with pinned official workflow inputs.
-# Other release lines do not contain the plugin and remain unchanged at runtime.
-RUN TEMPLATE_ASSET_INSTALLER="${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-v027-Template-Assets/download_official_template_assets.sh"; \
-    if [ -f "${TEMPLATE_ASSET_INSTALLER}" ]; then \
+# Newer release lines ship version-specific plugins with pinned official workflow inputs.
+# Release lines without one remain unchanged at runtime.
+RUN for TEMPLATE_ASSET_INSTALLER in \
+        ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-*-Template-Assets/download_official_template_assets.sh; do \
+        [ -f "${TEMPLATE_ASSET_INSTALLER}" ] || continue; \
         sh "${TEMPLATE_ASSET_INSTALLER}"; \
-    fi
+    done
 
 # 写入版本标识文件，供 agent 运行时探测
 RUN echo "${COMFYUI_VERSION}" > ${COMFYUI_DIR}/.funart-comfyui-version
@@ -107,6 +108,7 @@ FROM python:3.10.16-slim AS dependencies
 ARG VISION_PLAID_VERSION
 ARG BITFORGE_VERSION
 ARG VISION_PLAID_EXTRA_PACKAGES
+ARG NUNCHAKU_DEPENDENCY_CONSTRAINTS=""
 
 WORKDIR /root
 
@@ -164,14 +166,34 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     # /root/venv/bin/pip install flash_attn && \
     # 再次强制安装指定版本的 PyTorch，防止被插件依赖覆盖
     /root/venv/bin/pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --extra-index-url https://download.pytorch.org/whl/cu128 && \
-    /root/venv/bin/pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.0.2/nunchaku-1.0.2+torch2.9-cp310-cp310-linux_x86_64.whl && \
-    # 安装 vision-plaid 依赖
-    /root/venv/bin/pip install vision-plaid==${VISION_PLAID_VERSION} --extra-index-url=https://py-index.oss-cn-beijing.aliyuncs.com/simple && \
+    if [ -n "${NUNCHAKU_DEPENDENCY_CONSTRAINTS}" ]; then \
+        printf '%s\n' ${NUNCHAKU_DEPENDENCY_CONSTRAINTS} > /tmp/nunchaku.constraints && \
+        /root/venv/bin/pip install -c /tmp/nunchaku.constraints \
+            https://github.com/nunchaku-ai/nunchaku/releases/download/v1.0.2/nunchaku-1.0.2+torch2.9-cp310-cp310-linux_x86_64.whl; \
+    else \
+        /root/venv/bin/pip install \
+            https://github.com/nunchaku-ai/nunchaku/releases/download/v1.0.2/nunchaku-1.0.2+torch2.9-cp310-cp310-linux_x86_64.whl; \
+    fi && \
+    # 安装 vision-plaid 依赖。新版本线沿用同一份约束，避免它在
+    # Nunchaku 安装完成后再次覆盖 HuggingFace/Torch 依赖。
+    if [ -n "${NUNCHAKU_DEPENDENCY_CONSTRAINTS}" ]; then \
+        /root/venv/bin/pip install -c /tmp/nunchaku.constraints \
+            vision-plaid==${VISION_PLAID_VERSION} --extra-index-url=https://py-index.oss-cn-beijing.aliyuncs.com/simple; \
+    else \
+        /root/venv/bin/pip install \
+            vision-plaid==${VISION_PLAID_VERSION} --extra-index-url=https://py-index.oss-cn-beijing.aliyuncs.com/simple; \
+    fi && \
     /root/venv/bin/pip install bitforge==${BITFORGE_VERSION} --extra-index-url=https://py-index.oss-cn-beijing.aliyuncs.com/pytorch/cu128/ && \
     /root/venv/bin/pip uninstall -y flashinfer-cubin flashinfer-python && \
     # 安装 comfyui-impact-pack 依赖
     /root/venv/bin/pip install git+https://github.com/facebookresearch/sam2  && \
-    /root/venv/bin/pip install insightface
+    /root/venv/bin/pip install insightface && \
+    # v4+ release lines with explicit constraints must finish on the pinned
+    # ABI-compatible stack; older release lines retain their existing behavior.
+    if [ -n "${NUNCHAKU_DEPENDENCY_CONSTRAINTS}" ]; then \
+        /root/venv/bin/python -c \
+            "from importlib.metadata import version; from packaging.version import Version; expected={'torch':'2.9.1','torchvision':'0.24.1','torchaudio':'2.9.1','transformers':'4.56.2','diffusers':'0.35.1','huggingface-hub':'0.34.4','nunchaku':'1.0.2','vision-plaid':'${VISION_PLAID_VERSION}','bitforge':'${BITFORGE_VERSION}'}; actual={name:version(name) for name in expected}; assert all(Version(actual[name]).base_version == wanted for name, wanted in expected.items()), (actual, expected); assert 'torch2.9' in str(Version(actual['nunchaku']).local), actual['nunchaku']; print('Pinned dependency stack verified:', actual)"; \
+    fi
 
 
 FROM python:3.10.16-slim AS agent
@@ -229,9 +251,10 @@ RUN mkdir -p /root/built-in/custom_nodes && \
     cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-APIs /root/built-in/custom_nodes/ && \
     cp -r ${COMFYUI_DIR}/custom_nodes/funart_prompt_id_compat /root/built-in/custom_nodes/ && \
     cp -r ${COMFYUI_DIR}/custom_nodes/Comfy-VisionPlaid /root/built-in/custom_nodes/ && \
-    if [ -d "${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-v027-Template-Assets" ]; then \
-        cp -r ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-v027-Template-Assets /root/built-in/custom_nodes/; \
-    fi && \
+    for TEMPLATE_ASSET_PLUGIN in ${COMFYUI_DIR}/custom_nodes/FunArt-ComfyUI-*-Template-Assets; do \
+        [ -d "${TEMPLATE_ASSET_PLUGIN}" ] || continue; \
+        cp -r "${TEMPLATE_ASSET_PLUGIN}" /root/built-in/custom_nodes/; \
+    done && \
     echo "${BUILTIN_DEPENDENCY_VERSION}" > /root/built-in/version.txt
 
 # ComfyUI v0.16.4+ 需要 user/ 目录存放 sqlite 数据库

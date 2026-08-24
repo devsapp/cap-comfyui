@@ -1,5 +1,5 @@
 # Shared Makefile for versioned ComfyUI builds
-# Each version subdirectory (v0.3.77/, v0.16.4/, v0.27.0/) includes this file after setting:
+# Each version subdirectory (v0.3.77/, v0.16.4/, v0.27.0/, v0.33.1/) includes this file after setting:
 #   COMFYUI_VERSION, CUSTOM_NODES_JSON, OSS_COMFYUI_BASE_DIR, OSS_COMFYUI_DEEPGPU_BASE_DIR
 
 REGION ?= cn-hangzhou
@@ -11,6 +11,7 @@ VISION_PLAID_VERSION ?= 1.0.3
 BITFORGE_VERSION ?= 0.2.3
 VISION_PLAID_EXTRA_PACKAGES ?=
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
+NUNCHAKU_DEPENDENCY_CONSTRAINTS ?=
 
 # Build context is src/code/ (two levels up from version dir)
 BUILD_CONTEXT := $(shell cd ../.. && pwd)
@@ -26,6 +27,7 @@ build:
 		--build-arg BITFORGE_VERSION=$(BITFORGE_VERSION) \
 		--build-arg VISION_PLAID_EXTRA_PACKAGES="$(VISION_PLAID_EXTRA_PACKAGES)" \
 		--build-arg BUILTIN_DEPENDENCY_VERSION=$(BUILTIN_DEPENDENCY_VERSION) \
+		--build-arg NUNCHAKU_DEPENDENCY_CONSTRAINTS="$(NUNCHAKU_DEPENDENCY_CONSTRAINTS)" \
 		-f comfyui/shared/Dockerfile.template \
 		-t $(COMFYUI_IMAGE) .
 
@@ -65,13 +67,16 @@ upload-base:
 		cp -r $(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/custom_nodes/* ./tmp/custom_nodes/; \
 	fi
 	@# 版本专属模板资源在镜像构建时下载并校验；上传 OSS 时从镜像提取，
-	@# 避免把未校验的二进制文件提交到源码仓库。
-	@if [ -f "$(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/custom_nodes/FunArt-ComfyUI-v027-Template-Assets/official_template_inputs.json" ]; then \
-		echo "Extracting verified official template inputs from image..."; \
+	@# 避免把未校验的二进制文件提交到源码仓库。目录名带 ComfyUI 版本，
+	@# 因此按约定匹配，支持多个独立 release line。
+	@for plugin_dir in $(BUILD_CONTEXT)/comfyui/$(COMFYUI_VERSION)/custom_nodes/FunArt-ComfyUI-*-Template-Assets; do \
+		[ -f "$$plugin_dir/official_template_inputs.json" ] || continue; \
+		plugin_name=$$(basename "$$plugin_dir"); \
+		echo "Extracting verified official template inputs for $$plugin_name..."; \
 		docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - \
-			-C /root/comfyui/custom_nodes/FunArt-ComfyUI-v027-Template-Assets bundled_template_assets | \
-			tar -x -C ./tmp/custom_nodes/FunArt-ComfyUI-v027-Template-Assets/; \
-	fi
+			-C "/root/comfyui/custom_nodes/$$plugin_name" bundled_template_assets | \
+			tar -x -C "./tmp/custom_nodes/$$plugin_name/"; \
+	done
 	@# 3) VisionPlaid 插件:从容器的 pip 包提取(版本自动匹配,无需手维护)
 	@echo "Extracting Comfy-VisionPlaid from pip package..."
 	docker run --rm --entrypoint tar $(COMFYUI_IMAGE) -cf - \

@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """Exercise the real Agent HTTP -> ComfyUI WS/prompt/history/view path.
 
-Run in the source image with Agent sources mounted read-only and its requirements
-installed in the disposable container (the source image is not the Agent image):
+Run in the source image with Agent sources mounted read-only. Use the image's
+separate existing ComfyUI and Agent virtual environments without installing or
+changing any packages:
 
-  docker run --rm --entrypoint /bin/bash \
+  docker run --rm --entrypoint /root/agent/venv/bin/python \
     -v "$PWD/src/code/agent:/tmp/agent:ro" \
     -v "$PWD/src/code/comfyui/v0.42.1/tests:/tmp/smoke-tests:ro" \
     -e AGENT_SMOKE_SOURCE_DIR=/tmp/agent \
-    comfyui:v5.0.0-comfyui-v0.42.1 -c \
-    '/root/venv/bin/pip install -r /tmp/agent/requirements.txt && \
-     /root/venv/bin/python /tmp/smoke-tests/smoke_agent_api.py'
+    comfyui:v5.0.0-comfyui-v0.42.1 /tmp/smoke-tests/smoke_agent_api.py
 
 All network requests are real loopback requests. No requests monkeypatches,
 credential injection, FC calls, OSS calls, model downloads, or NAS mounts.
@@ -21,6 +20,8 @@ default. Set FUNART_SMOKE_DEVICE=gpu and --gpus all for CUDA tensors.
 This deliberately checks returned bytes against each tenant's output, not just
 PNG magic: otherwise a default-tenant PNG could mask wrong-tenant retrieval.
 This does not test snapshot restore or the CPU gateway/FC invocation chain.
+Override COMFY_PYTHON or AGENT_PYTHON only for another image layout. The driver
+itself uses only the standard library and can run under either interpreter.
 """
 
 import base64
@@ -39,6 +40,8 @@ import uuid
 
 
 COMFYUI = Path(os.environ.get("COMFYUI_DIR", "/root/comfyui"))
+COMFY_PYTHON = os.environ.get("COMFY_PYTHON", "/root/venv/bin/python")
+AGENT_PYTHON = os.environ.get("AGENT_PYTHON", "/root/agent/venv/bin/python")
 BACKEND = "http://127.0.0.1:18188"
 AGENT = "http://127.0.0.1:19000"
 PLUGINS = ["FunArt-ComfyUI-Multi-User", "funart_prompt_id_compat",
@@ -162,7 +165,7 @@ def main():
                    ALIBABA_CLOUD_ACCESS_KEY_ID="", ALIBABA_CLOUD_ACCESS_KEY_SECRET="",
                    ALIBABA_CLOUD_SECURITY_TOKEN="", OSS_BUCKET_DOMAIN="", NO_PROXY="127.0.0.1,localhost")
         env.pop("AUTO_LAUNCH_SNAPSHOT_NAME", None)
-        command = [sys.executable, "main.py", "--cpu" if device == "cpu" else "--gpu-only",
+        command = [COMFY_PYTHON, "main.py", "--cpu" if device == "cpu" else "--gpu-only",
                    "--listen", "127.0.0.1", "--port", "18188", "--offline", "--disable-auto-launch",
                    "--disable-all-custom-nodes", "--whitelist-custom-nodes", *PLUGINS]
         for name in ("input", "output", "temp", "user"):
@@ -175,7 +178,7 @@ def main():
                 processes.append(backend)
                 stats = await_ready(backend, BACKEND + "/system_stats", 240)
                 assert stats["system"]["comfyui_version"] == "0.42.1", stats
-                agent = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "--serve-agent"],
+                agent = subprocess.Popen([AGENT_PYTHON, str(Path(__file__).resolve()), "--serve-agent"],
                                          cwd=source, env=env, stdout=agent_log, stderr=subprocess.STDOUT)
                 processes.append(agent)
                 await_ready(agent, AGENT + "/smoke-ready", 30)

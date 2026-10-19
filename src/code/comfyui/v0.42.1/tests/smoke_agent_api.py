@@ -150,7 +150,13 @@ def infer_case(workspace, tenant, color):
 
 
 def main():
-    source = Path(os.environ.get("AGENT_SMOKE_SOURCE_DIR", Path(__file__).resolve().parents[3] / "agent"))
+    source_hint = os.environ.get("AGENT_SMOKE_SOURCE_DIR")
+    if source_hint:
+        source = Path(source_hint)
+    else:
+        parents = Path(__file__).resolve().parents
+        assert len(parents) > 3, "Set AGENT_SMOKE_SOURCE_DIR when running outside the repository"
+        source = parents[3] / "agent"
     assert (source / "routes/serverless_api_routes.py").is_file(), source
     device = os.environ.get("FUNART_SMOKE_DEVICE", "cpu")
     assert device in ("cpu", "gpu")

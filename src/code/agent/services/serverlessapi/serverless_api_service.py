@@ -252,7 +252,7 @@ class ServerlessApiService:
         """
         return requests.get(os.path.join(self.endpoint, "history", prompt_id)).json()
 
-    def api_view_image(self, filename: str, img_type: str, sub_folder: str):
+    def api_view_image(self, filename: str, img_type: str, sub_folder: str, user_id: str = "default"):
         """
         下载生成的图片/视频文件
         
@@ -260,19 +260,23 @@ class ServerlessApiService:
             filename: 文件名
             img_type: 文件类型（如 "output", "temp"）
             sub_folder: 子目录名
+            user_id: 提交任务的租户 ID；未指定时保持 default 租户
             
         Returns:
             bytes: 文件二进制内容
         """
-        return requests.get(
+        response = requests.get(
             os.path.join(self.endpoint, "view"),
+            headers={constants.HEADER_FUNART_COMFY_USERID: user_id or "default"},
             params={
                 "filename": filename,
                 "type": img_type,
                 "subfolder": sub_folder,
                 "rand": random.random(),
             },
-        ).content
+        )
+        response.raise_for_status()
+        return response.content
 
     def api_clear_history(self):
         """
@@ -423,7 +427,7 @@ class ServerlessApiService:
 
         return prompt
 
-    def get_history_result(self, prompt_id: str, output_base64=False, output_oss=False):
+    def get_history_result(self, prompt_id: str, output_base64=False, output_oss=False, user_id: str = "default"):
         """
         获取任务执行结果并处理输出文件
         
@@ -435,6 +439,7 @@ class ServerlessApiService:
             prompt_id: 任务 ID
             output_base64: 是否将输出文件转换为 Base64 编码
             output_oss: 是否上传输出文件到 OSS
+            user_id: 提交任务的租户 ID，显式传递以兼容请求外的工作线程
             
         Returns:
             dict: 包含所有输出结果的字典，格式：
@@ -483,7 +488,7 @@ class ServerlessApiService:
 
                     if output_base64 or output_oss:
                         log("DEBUG", f"get file: {filename} (type={img_type}, subfolder={sub_folder})")
-                        img_bytes = self.api_view_image(filename, img_type, sub_folder)
+                        img_bytes = self.api_view_image(filename, img_type, sub_folder, user_id=user_id)
                         log("DEBUG", f"get {len(img_bytes)} bytes")
 
                         if output_base64:
@@ -690,6 +695,7 @@ class ServerlessApiService:
             
             # 提取 extra_data（包含 user_id 等信息）
             extra_data = request_body.get("extra_data", {})
+            user_id = extra_data.get(constants.HEADER_FUNART_COMFY_USERID.lower(), "default")
             
             # 解析请求中是否存在 base64、http url 形式的图片
             prompt = self.parse_prompt(prompt, extra_data)
@@ -878,7 +884,8 @@ class ServerlessApiService:
 
             log("DEBUG", f"fetching results for prompt_id: {prompt_id}")
             result = self.get_history_result(
-                prompt_id, output_base64=output_base64, output_oss=output_oss
+                prompt_id, output_base64=output_base64, output_oss=output_oss,
+                user_id=user_id,
             )
 
             # 添加执行时间到结果数据中

@@ -7,7 +7,8 @@ docker run --rm --entrypoint /root/venv/bin/python \
 
 The default isolates the production builtin compatibility plugins from the
 community plugin catalog. Set FUNART_SMOKE_ALL_CUSTOM_NODES=1 for full startup.
-No GPU, model download, NAS mount, credentials or production resources needed.
+For actual CUDA tensor execution, add --gpus all -e FUNART_SMOKE_DEVICE=gpu.
+No model download, NAS mount, credentials or production resources needed.
 """
 
 import hashlib
@@ -68,6 +69,8 @@ def output_file(workspace, tenant, item):
 
 
 def main():
+    device = os.environ.get("FUNART_SMOKE_DEVICE", "cpu")
+    assert device in ("cpu", "gpu"), "FUNART_SMOKE_DEVICE must be cpu or gpu"
     assert (COMFYUI / ".funart-comfyui-version").read_text().strip() == "v0.42.1"
     assert Path("/root/built-in/version.txt").read_text().strip() == "5.0.0"
     manifest = json.loads((COMFYUI / "custom_nodes/FunArt-ComfyUI-v0421-Template-Assets/official_template_inputs.json").read_text())
@@ -76,7 +79,8 @@ def main():
         workspace = Path(tmp)
         for kind in ("input", "output", "temp", "user"):
             (workspace / kind).mkdir()
-        command = [sys.executable, "main.py", "--cpu", "--listen", "127.0.0.1", "--port", "18188", "--offline", "--disable-auto-launch"]
+        # --gpu-only puts intermediate tensors (including EmptyImage) on CUDA.
+        command = [sys.executable, "main.py", "--cpu" if device == "cpu" else "--gpu-only", "--listen", "127.0.0.1", "--port", "18188", "--offline", "--disable-auto-launch"]
         for kind in ("input", "output", "temp", "user"):
             command.extend([f"--{kind}-directory", str(workspace / kind)])
         all_plugins = os.environ.get("FUNART_SMOKE_ALL_CUSTOM_NODES") == "1"
@@ -98,6 +102,8 @@ def main():
                 else:
                     raise AssertionError("ComfyUI startup timed out")
                 assert stats["system"]["comfyui_version"] == "0.42.1", stats
+                if device == "gpu":
+                    assert any(item["type"] == "cuda" for item in stats["devices"]), stats
                 nodes = request("/object_info", "tenant-a")
                 assert all(name in nodes for name in ("EmptyImage", "LoadImage", "SaveImage"))
 
@@ -134,7 +140,8 @@ def main():
                 assert tenant_input.read_bytes() == before
                 other_input = workspace / "input/users/tenant-b" / asset["filename"]
                 assert hashlib.sha256(other_input.read_bytes()).hexdigest() == asset["sha256"]
-                print(json.dumps({"result": "PASS", "comfyui": "0.42.1", "cap": "5.0.0", "all_custom_nodes": all_plugins, "checks": ["startup/system_stats", "object_info", "non-UUID task IDs", "EmptyImage->SaveImage CPU inference", "two-tenant output/cache isolation", "official template preview and LoadImage", "tenant input no-clobber"]}))
+                startup_warnings = [line for line in log_path.read_text(errors="replace").splitlines() if "IMPORT FAILED" in line or "Cannot import" in line]
+                print(json.dumps({"result": "PASS", "comfyui": "0.42.1", "cap": "5.0.0", "device": device, "devices": stats["devices"], "all_custom_nodes": all_plugins, "startup_import_warnings": startup_warnings, "checks": ["startup/system_stats", "object_info", "non-UUID task IDs", f"EmptyImage->SaveImage {device} tensor inference", "two-tenant output/cache isolation", "official template preview and LoadImage", "tenant input no-clobber"]}))
             except BaseException:
                 print(log_path.read_text(errors="replace")[-40000:], file=sys.stderr)
                 raise

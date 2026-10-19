@@ -1,10 +1,11 @@
 # Shared Makefile for versioned ComfyUI builds
-# Each version subdirectory (v0.3.77/, v0.16.4/, v0.27.0/, v0.33.1/) includes this file after setting:
+# Each version subdirectory includes this file after setting:
 #   COMFYUI_VERSION, CUSTOM_NODES_JSON, OSS_COMFYUI_BASE_DIR, OSS_COMFYUI_DEEPGPU_BASE_DIR
 
 REGION ?= cn-hangzhou
 OSS_BUCKET ?= dipper-cache-$(REGION)
 CAP_SYSTEM_VERSION ?= 2.0.1
+COMFYUI_REVISION ?=
 COMFYUI_IMAGE ?= comfyui:v$(CAP_SYSTEM_VERSION)-comfyui-$(COMFYUI_VERSION)
 COMFYUI_DEEPGPU_IMAGE ?= comfyui:deepgpu-v2.0.0-comfyui-$(COMFYUI_VERSION)
 VISION_PLAID_VERSION ?= 1.0.3
@@ -22,6 +23,7 @@ build:
 	cd $(BUILD_CONTEXT) && docker build \
 		--platform linux/amd64 \
 		--build-arg COMFYUI_VERSION=$(COMFYUI_VERSION) \
+		--build-arg COMFYUI_REVISION=$(COMFYUI_REVISION) \
 		--build-arg CUSTOM_NODES_JSON=$(CUSTOM_NODES_JSON) \
 		--build-arg VISION_PLAID_VERSION=$(VISION_PLAID_VERSION) \
 		--build-arg BITFORGE_VERSION=$(BITFORGE_VERSION) \

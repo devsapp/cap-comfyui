@@ -21,6 +21,9 @@ BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
 else ifeq ($(COMFYUI_VERSION),v0.33.1)
 CAP_SYSTEM_VERSION ?= 4.0.0
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
+else ifeq ($(COMFYUI_VERSION),v0.42.1)
+CAP_SYSTEM_VERSION ?= 5.0.0
+BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
 else
 CAP_SYSTEM_VERSION ?= 1.6.7
 BUILTIN_DEPENDENCY_VERSION ?= $(CAP_SYSTEM_VERSION)
@@ -143,7 +146,11 @@ build-comfyui-v0.33.1:
 	@$(MAKE) build-comfyui COMFYUI_VERSION=v0.33.1
 
 .PHONY: build-comfyui-all
-build-comfyui-all: build-comfyui-v0.3.77 build-comfyui-v0.16.4 build-comfyui-v0.27.0 build-comfyui-v0.33.1
+build-comfyui-all: build-comfyui-v0.3.77 build-comfyui-v0.16.4 build-comfyui-v0.27.0 build-comfyui-v0.33.1 build-comfyui-v0.42.1
+
+.PHONY: build-comfyui-v0.42.1
+build-comfyui-v0.42.1:
+	@$(MAKE) build-comfyui COMFYUI_VERSION=v0.42.1
 
 .PHONY: run-comfyui
 run-comfyui:
